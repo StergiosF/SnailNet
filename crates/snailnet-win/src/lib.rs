@@ -3,6 +3,7 @@
 //! high-resolution sleep. All `unsafe` FFI for these lives here.
 #![cfg(windows)]
 
+pub mod fs;
 pub mod ports;
 pub mod process;
 pub mod timer;

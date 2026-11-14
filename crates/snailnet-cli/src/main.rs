@@ -2,7 +2,6 @@
 //! that proves download shaping works before any UI exists (PLAN.md §21).
 
 mod check;
-mod events;
 mod rules;
 mod spike;
 

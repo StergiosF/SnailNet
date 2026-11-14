@@ -37,7 +37,7 @@ pub fn run(seconds: u64, max_events: usize) -> Result<()> {
         stopper.shutdown_recv();
     });
 
-    let attribution = crate::events::new_attribution();
+    let attribution = snailnet_service::shaper::new_attribution();
     let mut families: HashMap<String, usize> = HashMap::new();
     let mut batch = RecvBatch::new(16);
     let (mut seen, mut named) = (0usize, 0usize);

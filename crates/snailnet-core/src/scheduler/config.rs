@@ -10,7 +10,20 @@ use super::shares::{OTHER_FLOOR_BP, TOTAL_BP};
 
 /// Who goes first (PLAN.md D8). Priority decides dequeue order, never
 /// long-run bandwidth: a class can only spend credit its share has earned.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum Priority {
     Low,
     #[default]

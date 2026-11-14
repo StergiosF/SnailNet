@@ -139,11 +139,31 @@ ones come first.
    39–42 / 58–61 while both ran (b's curl stopped at ~21 s again); ping
    idle 10 ms, loaded avg 22 / max 47, 0 lost (one sample; the last run
    was 38/221 — less connection churn this time, not a classify effect).
-   **Start at step 5 next.**
-5. **Windows service** (`snailnet-service`, §4, §17): `windows-service`
-   crate, `install` / `uninstall` / `run --console`; config TOML in
-   `C:\ProgramData\SnailNet\` with atomic writes + `.bak` (§13); `tracing`
-   logs with 7-day rotation; safe mode after 3 crashes in 10 minutes.
+5. ~~**Windows service**~~ **Done (2026-11-14), not yet run as a real
+   service.** `crates/snailnet-service` (bin `snailnet-service`):
+   `install` (LocalSystem, auto start, recovery restart 5 s / 30 s / none,
+   also on non-crash failure; re-running updates it) / `uninstall
+   [--remove-data]` / `run --console [--data-dir]` / hidden `service`.
+   `store`: `config.toml` in `%ProgramData%\SnailNet` (ACL: SYSTEM + Admins
+   full, Users read, `snailnet-win::fs::protect_dir`), saved via tmp +
+   fsync + `ReplaceFileW` (old file → `.bak`); load falls back to `.bak`,
+   then defaults; a broken file is kept as `.bad`; a newer-version file is
+   left alone. `snailnet-core::rules`: the config model (profiles, rules
+   with family/exe targets, share bp, priority, ceilings, line speed,
+   low-latency factors) → `Plan` (scheduler classes). `crashguard`:
+   `running` marker + `crashes.txt`; 3 crashes or fail-opens in 10 min →
+   Safe mode (no handles). `runner`: load → guard → shape → on fail-open
+   count it, wait 10 s, retry; no line speed → monitor only. `logging`:
+   `logs\service.YYYY-MM-DD.log`, 7 kept, `SNAILNET_LOG` filter; a panic
+   logs then aborts. `shaper` (moved out of the CLI's `events.rs`):
+   sniffers + classifier + fast path; `spike` and `check` now use it.
+   19 tests (store, crash guard, runner with a scripted fake engine).
+   **First thing next session:** run `scripts/service-smoke.ps1` elevated
+   (install, start on defaults, start with `down_mbps = 25`, stop, dump
+   logs, uninstall `--remove-data`) and check the report: service
+   RUNNING/STOPPED, config written, ACL, "shaping down at …" in the log, no
+   `running` marker left. The user declined the UAC prompt on 2026-11-14,
+   so ask before launching it.
 6. **IPC** (`snailnet-ipc`, §12): named pipe `\\.\pipe\snailnet.v1` with
    the ACL, length-prefixed MessagePack, protocol v1 messages; make
    `snailnet-cli` a client (`status`, `rules`, `top`).
@@ -157,10 +177,11 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
 | Crate | Role | Tests |
 |---|---|---|
-| `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking, `classify` (flow table, app families, pending window). No OS deps. | 83 |
+| `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking, `classify` (flow table, app families, pending window), `rules` (config model → scheduler plan). No OS deps. | 93 |
 | `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers, `pool` (pre-allocated packet buffers), `fastpath` (rx / scheduler / watchdog threads), `MockEngine` | 10 + 7 |
-| `snailnet-win` | process facts (`WinProcesses`: path, creation time, parent, command line, package, publisher, description), PID-by-local-port snapshot (IP Helper), high-res waitable timer | 8 |
-| `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID/family test), `spike` (shaping), `events` (FLOW/SOCKET/port threads) | 5 |
+| `snailnet-win` | process facts (`WinProcesses`: path, creation time, parent, command line, package, publisher, description), PID-by-local-port snapshot (IP Helper), high-res waitable timer, `fs` (atomic replace with backup, data-folder ACL) | 10 |
+| `snailnet-service` (bin `snailnet-service`) | Windows service: install/uninstall, config store, crash guard + Safe mode, logs, supervisor, `shaper` (FLOW/SOCKET/port threads + classifier + fast path) | 19 |
+| `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID/family test), `spike` (shaping via `snailnet_service::shaper`) | 5 |
 | `snailnet-sim` (bin `snailnet-sim`) | closed-loop traffic models + ISP link on `SimClock`; §19.1 property tests; shaping-factor sweep | 5 + 10 |
 
 `assets/families.toml` is the app-family pack (compiled into core with

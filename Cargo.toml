@@ -11,6 +11,7 @@ publish = false
 [workspace.dependencies]
 snailnet-core = { path = "crates/snailnet-core" }
 snailnet-engine = { path = "crates/snailnet-engine" }
+snailnet-service = { path = "crates/snailnet-service" }
 snailnet-win = { path = "crates/snailnet-win" }
 
 [workspace.lints.rust]

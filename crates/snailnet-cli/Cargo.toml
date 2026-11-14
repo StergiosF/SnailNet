@@ -12,6 +12,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 ctrlc = "3.5.2"
 snailnet-core = { version = "0.0.1", path = "../snailnet-core" }
 snailnet-engine = { version = "0.0.1", path = "../snailnet-engine" }
+snailnet-service = { version = "0.0.1", path = "../snailnet-service" }
 snailnet-win = { version = "0.0.1", path = "../snailnet-win" }
 
 [lints]

@@ -1,29 +1,21 @@
 //! `snailnet spike`: the Phase 0 experiment (PLAN.md §21), now running on
-//! the Phase 1 fast path (`snailnet_engine::fastpath`).
+//! the service's shaper (`snailnet_service::shaper`).
 //!
 //! Divert traffic with WinDivert, attribute each packet to an app, queue it
 //! in that app's class, and release it at the shaped line rate. Ctrl+C (or a
 //! crash, or a stalled scheduler) closes the handles and traffic flows
 //! normally again.
 
-use std::collections::HashMap;
-use std::hash::{BuildHasher, RandomState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use snailnet_core::classify::{AppId, FlowKey, Miss, Pending, Source};
-use snailnet_core::clock::{Clock, MonotonicClock};
-use snailnet_core::parse::ip::PacketInfo;
-use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
-use snailnet_engine::fastpath::{
-    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot,
-};
-use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib};
-use snailnet_win::timer::HighResTimer;
+use snailnet_core::classify::App;
+use snailnet_core::scheduler::{ClassId, Priority, SchedulerConfig};
+use snailnet_engine::fastpath::{Counters, DirectionStats, Snapshot};
+use snailnet_service::shaper::{Rules, Shaper, Spec};
 
-use crate::events::{self, Sniffers, WinAttribution};
 use crate::rules::{self, AppRule};
 
 #[derive(clap::Args, Debug)]
@@ -69,82 +61,23 @@ fn direction(rules: &[AppRule], line_mbps: f64, factor: f64) -> Result<Scheduler
     })
 }
 
-/// How packets were attributed to an app (packet counts), plus flows whose
-/// first packets beat their FLOW/SOCKET event.
-#[derive(Default)]
-struct WhoCounters {
-    by_flow: AtomicU64,
-    by_socket: AtomicU64,
-    by_port: AtomicU64,
-    pending: AtomicU64,
-    unknown: AtomicU64,
-    late_flows: AtomicU64,
-}
+/// `--app` rules in order, then Everything else.
+struct AppRules(Vec<AppRule>);
 
-/// Packet → app → rule. Each rx thread has its own clone (caches and
-/// pending list); the attribution behind it is shared.
-#[derive(Clone)]
-struct AppClassifier {
-    attribution: Arc<WinAttribution>,
-    who: Arc<WhoCounters>,
-    rules: Arc<[AppRule]>,
-    other_class: ClassId,
-    /// App ids are never reused (a reused PID is a new process key and is
-    /// resolved afresh), so this needs no expiry. One entry per app.
-    app_class: HashMap<AppId, ClassId>,
-    pending: Pending,
-    clock: Arc<MonotonicClock>,
-    /// Keyed per run, so nobody on the internet can aim flows at one bucket.
-    /// Clones share the keys, so every rx thread hashes a flow the same.
-    flow_hasher: RandomState,
-}
-
-impl AppClassifier {
-    fn class_of(&mut self, app: AppId) -> ClassId {
-        let (rules, other, attribution) = (&self.rules, self.other_class, &self.attribution);
-        *self.app_class.entry(app).or_insert_with(|| {
-            let app = attribution.app(app);
-            rules.iter().position(|r| r.matches(&app)).unwrap_or(other)
-        })
+impl Rules for AppRules {
+    fn class_of(&self, app: &App) -> ClassId {
+        self.0
+            .iter()
+            .position(|r| r.matches(app))
+            .unwrap_or(self.0.len())
     }
-}
 
-impl Classifier for AppClassifier {
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta {
-        let key = FlowKey::from_packet(info, outbound);
-        let who = self.who.clone();
-        let class = match self.attribution.lookup(&key) {
-            Some((owner, source)) => {
-                if self.pending.hit(&key) {
-                    who.late_flows.fetch_add(1, Relaxed);
-                }
-                match source {
-                    Source::Flow => who.by_flow.fetch_add(1, Relaxed),
-                    Source::Socket => who.by_socket.fetch_add(1, Relaxed),
-                    Source::Port => who.by_port.fetch_add(1, Relaxed),
-                };
-                self.class_of(owner.app)
-            }
-            None => {
-                match self.pending.miss(key, self.clock.now()) {
-                    Miss::Pending => who.pending.fetch_add(1, Relaxed),
-                    Miss::Unknown => who.unknown.fetch_add(1, Relaxed),
-                };
-                self.other_class
-            }
-        };
-        PacketMeta {
-            prio: self.rules.get(class).map_or(Priority::Normal, |r| r.prio),
-            ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
-        }
+    fn prio_of(&self, class: ClassId) -> Priority {
+        self.0.get(class).map_or(Priority::Normal, |r| r.prio)
     }
-}
 
-struct TimerNap(HighResTimer);
-
-impl Nap for TimerNap {
-    fn nap(&mut self, d: Duration) {
-        self.0.sleep(d);
+    fn other_class(&self) -> ClassId {
+        self.0.len()
     }
 }
 
@@ -169,73 +102,26 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         .map(|m| direction(&args.apps, m, args.factor))
         .transpose()?;
 
-    let lib = WinDivertLib::load()?;
-    let mut filter = String::from(
-        "!loopback and !impostor and (tcp or udp) and remotePort != 53 and localPort != 53",
-    );
-    match (down.is_some(), up.is_some()) {
-        (true, false) => filter.push_str(" and inbound"),
-        (false, true) => filter.push_str(" and outbound"),
-        _ => {}
-    }
-
-    // Start the sniff-only FLOW/SOCKET threads first so no new flow is missed.
-    let attribution = Arc::new(events::new_attribution());
-    let sniffers = Sniffers::start(&lib, attribution.clone())?;
-    let net = Arc::new(
-        WinDivert::open(&lib, &filter, Layer::Network, 0, 0)
-            .context("opening the NETWORK layer")?,
-    );
+    let shaper = Shaper::start(Spec {
+        down,
+        up,
+        rules: Arc::new(AppRules(args.apps.clone())),
+        shape_lan: args.shape_lan,
+        rx_threads: args.rx_threads.into(),
+    })?;
 
     print_header(&args);
 
     let stop = Arc::new(AtomicBool::new(false));
     {
-        let (stop, net, stop_sniffers) = (stop.clone(), net.clone(), sniffers.stopper());
-        ctrlc::set_handler(move || {
-            stop.store(true, Relaxed);
-            net.shutdown_recv();
-            stop_sniffers();
-        })
-        .context("installing the Ctrl+C handler")?;
+        let stop = stop.clone();
+        ctrlc::set_handler(move || stop.store(true, Relaxed))
+            .context("installing the Ctrl+C handler")?;
     }
 
-    let who = Arc::new(WhoCounters::default());
-    let classifier = AppClassifier {
-        attribution: attribution.clone(),
-        who: who.clone(),
-        rules: args.apps.clone().into(),
-        other_class: args.apps.len(),
-        app_class: HashMap::new(),
-        pending: Pending::default(),
-        clock: Arc::new(MonotonicClock::new()),
-        flow_hasher: RandomState::new(),
-    };
-    let timer = HighResTimer::new().context("creating a high-resolution timer")?;
-    let fast_path = FastPath::start(
-        net.clone(),
-        down,
-        up,
-        classifier,
-        Box::new(TimerNap(timer)),
-        FastPathConfig {
-            rx_threads: args.rx_threads.into(),
-            shape_lan: args.shape_lan,
-            ..FastPathConfig::default()
-        },
-    );
-
-    let failure = match fast_path {
-        Ok(fp) => {
-            report_until_stopped(&fp, &args, &stop, &who, &attribution);
-            // Stops receiving, flushes every queued packet, joins threads.
-            fp.stop()
-        }
-        Err(e) => Some(format!("could not start shaping: {e}")),
-    };
-
-    stop.store(true, Relaxed);
-    sniffers.stop();
+    report_until_stopped(&shaper, &args, &stop);
+    // Stops receiving, flushes every queued packet, closes every handle.
+    let failure = shaper.stop();
     println!("\nStopped. Handles closed; traffic flows normally again.");
     match failure {
         Some(reason) => bail!("failed open: {reason}"),
@@ -268,30 +154,18 @@ fn print_header(args: &SpikeArgs) {
 
 /// Print a stats line every `--interval` until Ctrl+C, `--duration`, or the
 /// fast path fails open.
-fn report_until_stopped(
-    fp: &FastPath<WinDivert>,
-    args: &SpikeArgs,
-    stop: &AtomicBool,
-    who: &WhoCounters,
-    attribution: &WinAttribution,
-) {
+fn report_until_stopped(shaper: &Shaper, args: &SpikeArgs, stop: &AtomicBool) {
     let started = Instant::now();
     let every = Duration::from_secs(args.interval.max(1));
     let mut next = started + every;
-    let mut stats = Stats::new(&fp.snapshot(), fp.counters());
-    while !stop.load(Relaxed) && fp.failure().is_none() {
+    let mut stats = Stats::new(&shaper.snapshot(), shaper.counters());
+    while !stop.load(Relaxed) && shaper.failure().is_none() {
         if args.duration > 0 && started.elapsed() >= Duration::from_secs(args.duration) {
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
         if Instant::now() >= next {
-            stats.print(
-                started.elapsed(),
-                &fp.snapshot(),
-                fp.counters(),
-                who,
-                attribution,
-            );
+            stats.print(started.elapsed(), shaper);
             next += every;
         }
     }
@@ -327,14 +201,8 @@ impl Stats {
         }
     }
 
-    fn print(
-        &mut self,
-        at: Duration,
-        snap: &Snapshot,
-        counters: Counters,
-        who: &WhoCounters,
-        attribution: &WinAttribution,
-    ) {
+    fn print(&mut self, at: Duration, shaper: &Shaper) {
+        let snap = shaper.snapshot();
         let secs = (at - self.last_at).as_secs_f64().max(1e-3);
         for (arrow, d, last) in [
             ("↓", snap.down.as_ref(), &mut self.last_down),
@@ -369,6 +237,7 @@ impl Stats {
             println!("{line}");
             *last = now;
         }
+        let who = shaper.who();
         let take = |c: &AtomicU64| c.swap(0, Relaxed);
         let counts = [
             ("flow", take(&who.by_flow)),
@@ -378,12 +247,13 @@ impl Stats {
             ("unknown", take(&who.unknown)),
         ];
         let n = counts.iter().map(|(_, v)| v).sum::<u64>().max(1) as f64;
-        let c = counters;
+        let c = shaper.counters();
         let l = self.last_counters;
         let mut line = String::from("         who:");
         for (name, v) in counts {
             line += &format!(" {name} {:.0}% ·", v as f64 * 100.0 / n);
         }
+        let attribution = shaper.attribution();
         let (flows, sockets, ports, full) = attribution.sizes();
         line += &format!(
             " late flows {} · passthrough {} pkts · tracking {flows} flows, {sockets} sockets, {ports} ports, {} apps",

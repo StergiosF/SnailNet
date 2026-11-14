@@ -1,0 +1,29 @@
+[package]
+name = "snailnet-service"
+description = "The SnailNet Windows service: config, logs, crash guard, shaping supervisor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+ctrlc = "3.5.2"
+snailnet-core = { version = "0.0.1", path = "../snailnet-core" }
+snailnet-engine = { version = "0.0.1", path = "../snailnet-engine" }
+snailnet-win = { version = "0.0.1", path = "../snailnet-win" }
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+windows-service = "0.8.1"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "snailnet-service"
+path = "src/main.rs"
