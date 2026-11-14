@@ -49,7 +49,7 @@ cargo build --release
 .\target\release\snailnet.exe check
 # 2. Measure your line first (e.g. a browser speed test), then:
 .\target\release\snailnet.exe spike --down <your Mbps> `
-    --app steam.exe,steamwebhelper.exe=40 --app chrome.exe=60
+    --app steam.exe,steamwebhelper.exe=40 --app brave.exe=60
 # Ctrl+C stops it; networking returns to normal immediately.
 ```
 
@@ -69,19 +69,21 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 
 | Item | Value |
 |---|---|
-| Windows edition / build | |
-| CPU | |
+| Windows edition / build | Windows 11 Pro, build 26300 |
+| CPU | AMD Ryzen 5 9600X (6 cores) |
 | Line (ISP speed test ↓/↑, idle ping) | |
-| Memory integrity (HVCI) | on / off |
-| Security software | |
+| Memory integrity (HVCI) | **on** (`SecurityServicesRunning` = 2) |
+| Security software | Windows Defender |
 
 ### Compatibility
 
 | Check | Result | Notes |
 |---|---|---|
-| `snailnet check` loads the driver | | error code if not |
-| …with HVCI on | | |
-| Security software silent? | | |
+| `snailnet check` loads the driver | ✅ 2026-11-14 | driver reports version 2.2 |
+| …with HVCI on | ✅ | loaded with Memory integrity running |
+| Security software silent? | ✅ | Defender raised nothing |
+| PID mapping (FLOW layer) | ✅ | 28/28 new flows attributed to the right exe (svchost DNS, brave, node, powershell) |
+| FLOW address decoding (IPv4 + IPv6) | ✅ | `words_to_ip` confirmed: e.g. `192.168.1.26`, `140.82.121.4` (GitHub), `2606:4700::…` (Cloudflare) |
 | Anti-cheat: game 1 (name, AC) | | does it refuse to launch / kick? |
 | Anti-cheat: game 2 | | |
 | Coexists with VPN client | | |
@@ -115,7 +117,7 @@ Run `ping -t 1.1.1.1` while a big download runs.
 
 ## Go / No-go
 
-- [ ] Driver loads on this machine with HVCI on
+- [x] Driver loads on this machine with HVCI on
 - [ ] Games you play tolerate it (or Game-safe mode is enough)
 - [ ] Split within ±5% while both apps saturate
 - [ ] Ping under load clearly better than without SnailNet

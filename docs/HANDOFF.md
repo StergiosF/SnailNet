@@ -6,10 +6,17 @@ Paste this into a fresh session, or say "read docs/HANDOFF.md and continue".
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
 - **Branch:** `phase0-spike` (off `main`). Phase 0 code is committed there.
-- **Phase 0 status:** spike built and unit-tested. The real-machine runs
-  (driver load, anti-cheat, split accuracy, ping under load) are **not done**.
-  They need an elevated terminal. Results go in `docs/phase0-report.md`, which
-  also has the how-to and the tables to fill in.
+- **Phase 0 status:** spike built and unit-tested. `snailnet check` has run
+  elevated on the real machine: the driver loads **with HVCI on**, Defender is
+  silent, and PID mapping and IPv4/IPv6 address decoding are confirmed
+  (28/28 flows attributed). **Still to do:** run `spike` with real traffic
+  (split accuracy, ping under load) and the anti-cheat checks. Results go in
+  `docs/phase0-report.md`, which also has the how-to and the tables.
+- The user's browser is **Brave** (`brave.exe`), not Chrome.
+- Elevated runs: this shell isn't elevated. Launch one elevated process with
+  `Start-Process powershell -Verb RunAs -Wait -ArgumentList '-File script.ps1'`,
+  have the script redirect output to a file in scratch, then read it. The
+  user has to click Yes on the UAC prompt.
 
 ## What exists
 
@@ -31,16 +38,13 @@ cargo fmt --all --check; cargo clippy --workspace --all-targets -- -D warnings; 
 cargo build --release
 # elevated:
 .\target\release\snailnet.exe check
-.\target\release\snailnet.exe spike --down <Mbps> --app steam.exe,steamwebhelper.exe=40 --app chrome.exe=60
+.\target\release\snailnet.exe spike --down <Mbps> --app steam.exe,steamwebhelper.exe=40 --app brave.exe=60
 ```
 
 ## Known gaps and open questions
 
-- **FLOW-layer address decoding is unverified on a live system.**
-  `address.rs::words_to_ip` assumes WinDivert stores IPv6 as 4 host-order
-  words, least significant first (IPv4 as `::ffff:a.b.c.d`). If the spike's
-  `who:` line shows `flow ≈ 0%` under traffic, this is the suspect. The
-  port-table fallback still attributes most traffic in that case.
+- The shaping path (`spike`: NETWORK-layer divert, reinject, pacing) has not
+  run on a live system yet. Only the sniff-only `check` path has.
 - Phase 0 simplifications (Phase 1 replaces them): no priority, ceilings,
   CoDel/ECN or real express lane (only DNS and pure TCP control packets
   bypass); tail drop at ~50 ms of the class's share; a `Vec` allocated per
@@ -51,7 +55,8 @@ cargo build --release
 
 ## Next steps
 
-1. Run `check`, then `spike`, as Administrator; fill in `docs/phase0-report.md`.
+1. Run `spike` as Administrator with real traffic, plus the anti-cheat
+   checks; fill in `docs/phase0-report.md` (`check` is done).
 2. Go/No-go on D4 (WinDivert) from that report.
 3. If Go → Phase 1 (PLAN.md §21): full scheduler (priority, ceilings,
    FQ inside Everything else, CoDel/ECN, express lane), `snailnet-sim`, flow
