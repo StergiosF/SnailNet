@@ -560,7 +560,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
- "crossbeam-channel",
  "ctrlc",
  "snailnet-core",
  "snailnet-engine",
@@ -579,6 +578,7 @@ dependencies = [
 name = "snailnet-engine"
 version = "0.0.1"
 dependencies = [
+ "crossbeam-channel",
  "libloading",
  "snailnet-core",
  "thiserror",

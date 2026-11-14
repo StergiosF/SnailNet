@@ -1,11 +1,16 @@
 //! Packet interception (PLAN.md §6).
 //!
-//! [`PacketEngine`] is the seam the scheduler talks to. [`windivert`] is the
-//! only implementation today; a WFP driver or a test mock can slot in later.
+//! [`PacketEngine`] is the seam the scheduler talks to: [`windivert`] is
+//! the real implementation, [`mock`] the in-memory one for tests; a WFP
+//! driver can slot in later. [`fastpath`] runs the rx, scheduler and
+//! watchdog threads on top of any engine, with buffers from [`pool`].
 //! All WinDivert `unsafe` is confined to this crate.
 
 pub mod address;
 pub mod batch;
+pub mod fastpath;
+pub mod mock;
+pub mod pool;
 #[cfg(windows)]
 pub mod windivert;
 

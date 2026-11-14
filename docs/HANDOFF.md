@@ -52,8 +52,8 @@ ones come first.
    proptests for share lists and random op sequences (deficits bounded,
    no packet leaked or duplicated). `spike` uses it: flow hashes, ECN, and
    `--app exe=40:low` / `:high` priority suffixes.
-2. ~~**`snailnet-sim` crate**~~ **Done (2026-11-14, not committed
-   yet).** `crates/snailnet-sim`: closed-loop traffic models (Reno AIMD TCP
+2. ~~**`snailnet-sim` crate**~~ **Done (2026-11-14, commit 5d19690,
+   pushed).** `crates/snailnet-sim`: closed-loop traffic models (Reno AIMD TCP
    with optional ECN, paced QUIC-like with 0.7 backoff, CBR game/ping, web
    transfers with slow start and think times) on `SimClock`, behind a
    modelled ISP link (line rate, 150 ms FIFO buffer). Every drop is
@@ -64,7 +64,7 @@ ones come first.
    scheduler at 92% load (also with a 1 ms timer, also as a High app in
    Everything else); Low class and the 5% floor hold; live weight change
    and rule removal lose nothing and converge within 500 ms; runs are
-   repeatable. **Start at step 3 next.**
+   repeatable.
 
    Findings worth knowing:
    - A class whose only sender is **one Reno flow** can't fill its share
@@ -83,9 +83,26 @@ ones come first.
      Without the browsing flow, p99 is ~3 ms. Lower factors shrink the tail
      (0.85: +11.5 ms; 0.80: +6.8 ms p99). Compare with the real
      `--factor 0.85` run in step 1.
-3. **Fast path** (§4, §6.3): slab buffer pool (no per-packet `Vec`), 1–2 rx
-   threads, scheduler thread, watchdog that closes the NETWORK handle if the
-   scheduler stalls > 500 ms.
+3. ~~**Fast path**~~ **Done (2026-11-14).** In `snailnet-engine`:
+   `pool` (two shelves of pre-allocated buffers, 8192 × 2 KiB + 64 × 64 KiB;
+   a `PacketBuf` returns itself on drop; empty shelf → the packet passes
+   straight through instead of allocating), `fastpath` (`FastPath::start`
+   over any `PacketEngine`: 1–2 `rx` threads → bounded channel → one
+   `scheduler` thread per process with a scheduler per shaped direction →
+   `SendEx`; a `watchdog` that fails open when the scheduler's heartbeat is
+   older than 500 ms), and `mock::MockEngine`. Fail-open is
+   `WinDivertShutdown(RECV)`: per the WinDivert docs, new packets stop
+   being queued (so they bypass us) while already-queued ones still drain,
+   and the rx threads forward those unshaped. On stop or fail-open the
+   scheduler flushes its queues at full speed, so nothing we hold is lost.
+   Pure TCP control packets now take the core's express lane (`control`)
+   instead of bypassing. `spike` runs on it (`--rx-threads 1|2`; it exits
+   with "failed open: …" if the watchdog fired). 7 real-thread tests in
+   `crates/snailnet-engine/tests/fastpath.rs` (rate, 40/60 split, ACK
+   jumps the queue, LAN/unshaped bypass, stop flushes, stalled scheduler
+   fails open and loses nothing, empty pool passes through), stable over
+   15 repeated runs. **Not yet run on the real driver**: re-run the
+   synthetic recipe below elevated to confirm, then start at step 4.
 4. **Classification** (§6.3, §7): flow table keyed by (pid, process
    creation time), SOCKET-layer early mapping, 50 ms pending window, app
    families (packs in `assets/`, same-folder+publisher fallback, parent chain
@@ -108,7 +125,7 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 | Crate | Role | Tests |
 |---|---|---|
 | `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking. No OS deps. | 58 |
-| `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers | 6 |
+| `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers, `pool` (pre-allocated packet buffers), `fastpath` (rx / scheduler / watchdog threads), `MockEngine` | 10 + 7 |
 | `snailnet-win` | exe name by PID, PID-by-local-port snapshot (IP Helper), high-res waitable timer | 4 |
 | `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID test), `spike` (shaping) | 6 |
 | `snailnet-sim` (bin `snailnet-sim`) | closed-loop traffic models + ISP link on `SimClock`; §19.1 property tests; shaping-factor sweep | 5 + 10 |
@@ -143,12 +160,14 @@ stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
   RUNNING), which locks `third_party/windivert/x64/WinDivert64.sys`. Git
   can't rewrite that file until it's unloaded: `sc stop WinDivert`
   (elevated) or reboot. Avoid checkouts that touch it.
-- `spike` shortcuts still left for Phase 1 steps 3–4: pure TCP control
-  packets bypass the scheduler in the rx thread (the core's express lane
-  isn't used by `spike` yet; DNS is excluded by the filter); a `Vec`
-  allocated per packet; no SOCKET layer. The Phase 0 numbers in the report
-  were measured with the *old* scheduler (tail drop, no CoDel); re-run the
-  synthetic test to see what CoDel does to the ping gap.
+- `spike` shortcuts still left for Phase 1 step 4: attribution is the
+  Phase 0 FLOW map + port snapshot (no SOCKET layer, no pending window, no
+  app families); DNS is excluded by the filter rather than sent express.
+  The Phase 0 numbers in the report were measured with the *old*
+  scheduler and rx loop (tail drop, no CoDel, ACKs bypassed); re-run the
+  synthetic test to see what CoDel and the express lane do to the ping gap.
+- With `--rx-threads 2`, two receive batches can overtake each other, so
+  packets of one flow may be reordered. Keep 1 unless rx is the bottleneck.
 - "Everything else" keeps a 5% floor, so 40/60 rules now shape as exactly
   38/57/5 (`shares::normalize`; the old scheduler gave 38.1/57.1/4.8).
 - The driver's signing cert (a Chengdu company, the one upstream used for

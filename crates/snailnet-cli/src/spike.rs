@@ -1,8 +1,10 @@
-//! `snailnet spike`: the Phase 0 experiment (PLAN.md §21).
+//! `snailnet spike`: the Phase 0 experiment (PLAN.md §21), now running on
+//! the Phase 1 fast path (`snailnet_engine::fastpath`).
 //!
 //! Divert traffic with WinDivert, attribute each packet to an app, queue it
-//! in that app's class, and release it at the shaped line rate using DRR.
-//! Ctrl+C (or a crash) closes the handles and traffic flows normally again.
+//! in that app's class, and release it at the shaped line rate. Ctrl+C (or a
+//! crash, or a stalled scheduler) closes the handles and traffic flows
+//! normally again.
 
 use std::collections::HashMap;
 use std::hash::{BuildHasher, RandomState};
@@ -11,15 +13,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
-use snailnet_core::clock::{Clock, MonotonicClock, NANOS_PER_MILLI, Nanos};
-use snailnet_core::parse::ip::{self, PROTO_TCP, is_local_network};
-use snailnet_core::scheduler::{
-    ClassId, Dequeue, Packet, PacketMeta, Priority, Scheduler, SchedulerConfig,
-};
+use snailnet_core::parse::ip::PacketInfo;
+use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
+use snailnet_engine::RecvBatch;
 use snailnet_engine::batch::DEFAULT_BATCH;
+use snailnet_engine::fastpath::{
+    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot,
+};
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
-use snailnet_engine::{Address, EngineError, RecvBatch, SendBatch};
 use snailnet_win::timer::HighResTimer;
 
 use crate::attrib::{Attribution, FlowKey, Source};
@@ -44,6 +45,9 @@ pub struct SpikeArgs {
     /// Also shape traffic to your local network (printers, NAS, casting).
     #[arg(long)]
     shape_lan: bool,
+    /// Receive threads (1 or 2). 2 can reorder packets within a flow.
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
+    rx_threads: u8,
     /// Seconds between stats lines.
     #[arg(long, default_value_t = 1)]
     interval: u64,
@@ -52,60 +56,79 @@ pub struct SpikeArgs {
     duration: u64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Dir {
-    Down,
-    Up,
+/// One direction's config. Queue management (CoDel + ECN and the hard
+/// limit) is the scheduler's own (PLAN.md §9.4).
+fn direction(rules: &[AppRule], line_mbps: f64, factor: f64) -> Result<SchedulerConfig> {
+    let rate = (line_mbps * factor * 1e6 / 8.0) as u64;
+    Ok(SchedulerConfig {
+        rate_bytes_per_sec: rate,
+        // ~2 ms of line rate keeps the release smooth.
+        burst_bytes: (rate / 500).max(2 * 1514),
+        classes: rules::classes(rules).map_err(anyhow::Error::msg)?,
+    })
 }
 
-struct Queued {
-    data: Vec<u8>,
-    addr: Address,
-}
-
-impl Packet for Queued {
-    fn wire_len(&self) -> usize {
-        self.data.len()
-    }
-
-    fn mark_ce(&mut self) -> bool {
-        ip::set_ce(&mut self.data)
-    }
-}
-
-struct Item {
-    dir: Dir,
-    meta: PacketMeta,
-    packet: Queued,
-}
-
+/// How packets were attributed to an app.
 #[derive(Default)]
-struct Counters {
+struct WhoCounters {
     by_flow: AtomicU64,
     by_port: AtomicU64,
     unattributed: AtomicU64,
-    bypassed: AtomicU64,
 }
 
-/// Build one direction's scheduler. Queue management (CoDel + ECN and the
-/// hard limit) is the scheduler's own (PLAN.md §9.4).
-fn direction(
-    rules: &[AppRule],
-    line_mbps: f64,
-    factor: f64,
-    now: Nanos,
-) -> Result<Scheduler<Queued>> {
-    let rate = (line_mbps * factor * 1e6 / 8.0) as u64;
-    let classes = rules::classes(rules).map_err(anyhow::Error::msg)?;
-    Ok(Scheduler::new(
-        SchedulerConfig {
-            rate_bytes_per_sec: rate,
-            // ~2 ms of line rate keeps the release smooth.
-            burst_bytes: (rate / 500).max(2 * 1514),
-            classes,
-        },
-        now,
-    )?)
+/// Packet → app → rule. Each rx thread has its own clone (and PID cache).
+#[derive(Clone)]
+struct AppClassifier {
+    attribution: Arc<Attribution>,
+    who: Arc<WhoCounters>,
+    rules: Arc<[AppRule]>,
+    other_class: ClassId,
+    /// PID → class, refreshed every few seconds to survive PID reuse.
+    pid_class: HashMap<u32, ClassId>,
+    cache_born: Instant,
+    /// Keyed per run, so nobody on the internet can aim flows at one bucket.
+    /// Clones share the keys, so every rx thread hashes a flow the same.
+    flow_hasher: RandomState,
+}
+
+impl Classifier for AppClassifier {
+    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta {
+        if self.cache_born.elapsed() > Duration::from_secs(5) {
+            self.pid_class.clear();
+            self.cache_born = Instant::now();
+        }
+        let key = FlowKey::from_packet(info, outbound);
+        let class = match self.attribution.lookup(&key) {
+            Some((pid, source)) => {
+                match source {
+                    Source::Flow => self.who.by_flow.fetch_add(1, Relaxed),
+                    Source::Port => self.who.by_port.fetch_add(1, Relaxed),
+                };
+                let (rules, other) = (&self.rules, self.other_class);
+                *self.pid_class.entry(pid).or_insert_with(|| {
+                    snailnet_win::process::exe_name(pid)
+                        .and_then(|exe| rules.iter().position(|r| r.matches(&exe)))
+                        .unwrap_or(other)
+                })
+            }
+            None => {
+                self.who.unattributed.fetch_add(1, Relaxed);
+                self.other_class
+            }
+        };
+        PacketMeta {
+            prio: self.rules.get(class).map_or(Priority::Normal, |r| r.prio),
+            ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
+        }
+    }
+}
+
+struct TimerNap(HighResTimer);
+
+impl Nap for TimerNap {
+    fn nap(&mut self, d: Duration) {
+        self.0.sleep(d);
+    }
 }
 
 pub fn run(args: SpikeArgs) -> Result<()> {
@@ -120,17 +143,14 @@ pub fn run(args: SpikeArgs) -> Result<()> {
             bail!("line speed {v} Mbps is out of range");
         }
     }
-
-    let clock = MonotonicClock::new();
-    let mut down = args
+    let down = args
         .down
-        .map(|m| direction(&args.apps, m, args.factor, clock.now()))
+        .map(|m| direction(&args.apps, m, args.factor))
         .transpose()?;
-    let mut up = args
+    let up = args
         .up
-        .map(|m| direction(&args.apps, m, args.factor, clock.now()))
+        .map(|m| direction(&args.apps, m, args.factor))
         .transpose()?;
-    let other_class = args.apps.len();
 
     let lib = WinDivertLib::load()?;
     let mut filter = String::from(
@@ -173,9 +193,6 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         .context("installing the Ctrl+C handler")?;
     }
 
-    let counters = Arc::new(Counters::default());
-    let (tx, rx) = bounded::<Item>(16_384);
-
     let flow_thread = {
         let (flow, attribution) = (flow.clone(), attribution.clone());
         std::thread::Builder::new()
@@ -193,50 +210,54 @@ pub fn run(args: SpikeArgs) -> Result<()> {
                 }
             })?
     };
-    let rx_thread = {
-        let ctx = RxContext {
-            net: net.clone(),
-            attribution: attribution.clone(),
-            counters: counters.clone(),
-            rules: args.apps.clone(),
-            other_class,
-            shape_lan: args.shape_lan,
-            shape_down: down.is_some(),
-            shape_up: up.is_some(),
-        };
-        std::thread::Builder::new()
-            .name("rx".into())
-            .spawn(move || rx_loop(ctx, tx))?
-    };
 
-    let result = schedule_loop(
-        &clock,
-        &net,
-        &rx,
-        &mut down,
-        &mut up,
-        &counters,
-        &attribution,
-        &args,
-        &stop,
+    let who = Arc::new(WhoCounters::default());
+    let classifier = AppClassifier {
+        attribution: attribution.clone(),
+        who: who.clone(),
+        rules: args.apps.clone().into(),
+        other_class: args.apps.len(),
+        pid_class: HashMap::new(),
+        cache_born: Instant::now(),
+        flow_hasher: RandomState::new(),
+    };
+    let timer = HighResTimer::new().context("creating a high-resolution timer")?;
+    let fast_path = FastPath::start(
+        net.clone(),
+        down,
+        up,
+        classifier,
+        Box::new(TimerNap(timer)),
+        FastPathConfig {
+            rx_threads: args.rx_threads.into(),
+            shape_lan: args.shape_lan,
+            ..FastPathConfig::default()
+        },
     );
 
-    // Shut down in an order that never strands a packet: stop receiving,
-    // flush everything still queued, then close the handles.
+    let failure = match fast_path {
+        Ok(fp) => {
+            report_until_stopped(&fp, &args, &stop, &who, &attribution);
+            // Stops receiving, flushes every queued packet, joins threads.
+            fp.stop()
+        }
+        Err(e) => Some(format!("could not start shaping: {e}")),
+    };
+
     stop.store(true, Relaxed);
-    net.shutdown_recv();
     flow.shutdown_recv();
-    let _ = rx_thread.join();
-    flush_all(&net, &rx, &mut down, &mut up);
     let _ = flow_thread.join();
     let _ = port_thread.join();
     println!("\nStopped. Handles closed; traffic flows normally again.");
-    result
+    match failure {
+        Some(reason) => bail!("failed open: {reason}"),
+        None => Ok(()),
+    }
 }
 
 fn print_header(args: &SpikeArgs) {
-    let classes = rules::classes(&args.apps).expect("validated when the schedulers were built");
-    println!("SnailNet Phase 0 spike. Ctrl+C to stop (traffic returns to normal).");
+    let classes = rules::classes(&args.apps).expect("validated when the configs were built");
+    println!("SnailNet spike. Ctrl+C to stop (traffic returns to normal).");
     for (dir, line) in [("down", args.down), ("up", args.up)] {
         if let Some(m) = line {
             println!(
@@ -276,301 +297,134 @@ fn flow_loop(flow: &WinDivert, attribution: &Attribution) {
     }
 }
 
-struct RxContext {
-    net: Arc<WinDivert>,
-    attribution: Arc<Attribution>,
-    counters: Arc<Counters>,
-    rules: Vec<AppRule>,
-    other_class: ClassId,
-    shape_lan: bool,
-    shape_down: bool,
-    shape_up: bool,
-}
-
-fn rx_loop(ctx: RxContext, tx: Sender<Item>) {
-    let mut batch = RecvBatch::new(DEFAULT_BATCH);
-    let mut bypass = SendBatch::new(DEFAULT_BATCH);
-    // PID → class, refreshed every few seconds to survive PID reuse.
-    let mut pid_class: HashMap<u32, ClassId> = HashMap::new();
-    let mut cache_born = Instant::now();
-    // Keyed per run, so nobody on the internet can aim flows at one bucket.
-    let flow_hasher = RandomState::new();
-
-    loop {
-        match ctx.net.recv(&mut batch) {
-            Ok(_) => {}
-            Err(EngineError::Shutdown) => break,
-            Err(e) => {
-                eprintln!("recv error: {e}");
-                break;
-            }
-        }
-        if cache_born.elapsed() > Duration::from_secs(5) {
-            pid_class.clear();
-            cache_born = Instant::now();
-        }
-        for (data, addr) in batch.iter() {
-            let outbound = addr.outbound();
-            let dir = if outbound { Dir::Up } else { Dir::Down };
-            let shaped_dir = match dir {
-                Dir::Down => ctx.shape_down,
-                Dir::Up => ctx.shape_up,
-            };
-            let info = ip::parse(data);
-            // Pass straight through: unparseable, unshaped direction, LAN,
-            // and pure TCP control packets (SYN/ACK/FIN/RST; delaying upload
-            // ACKs would slow downloads, PLAN.md §9.5).
-            let bypass_it = match &info {
-                None => true,
-                Some(p) => {
-                    !shaped_dir
-                        || (!ctx.shape_lan
-                            && is_local_network(if outbound { p.dst } else { p.src }))
-                        || (p.protocol == PROTO_TCP && p.tcp_payload_len == Some(0))
-                }
-            };
-            if bypass_it {
-                ctx.counters.bypassed.fetch_add(1, Relaxed);
-                bypass.push(data, addr);
-                if bypass.is_full() {
-                    send_or_log(&ctx.net, &mut bypass);
-                }
-                continue;
-            }
-            let info = info.expect("checked above");
-            let key = FlowKey::from_packet(&info, outbound);
-            let class = match ctx.attribution.lookup(&key) {
-                Some((pid, source)) => {
-                    match source {
-                        Source::Flow => ctx.counters.by_flow.fetch_add(1, Relaxed),
-                        Source::Port => ctx.counters.by_port.fetch_add(1, Relaxed),
-                    };
-                    *pid_class.entry(pid).or_insert_with(|| {
-                        snailnet_win::process::exe_name(pid)
-                            .and_then(|exe| ctx.rules.iter().position(|r| r.matches(&exe)))
-                            .unwrap_or(ctx.other_class)
-                    })
-                }
-                None => {
-                    ctx.counters.unattributed.fetch_add(1, Relaxed);
-                    ctx.other_class
-                }
-            };
-            let meta = PacketMeta {
-                prio: ctx.rules.get(class).map_or(Priority::Normal, |r| r.prio),
-                ..PacketMeta::new(class, flow_hasher.hash_one(key))
-            };
-            let item = Item {
-                dir,
-                meta,
-                packet: Queued {
-                    data: data.to_vec(),
-                    addr: *addr,
-                },
-            };
-            if tx.send(item).is_err() {
-                return;
-            }
-        }
-        send_or_log(&ctx.net, &mut bypass);
-    }
-    send_or_log(&ctx.net, &mut bypass);
-}
-
-fn send_or_log(net: &WinDivert, batch: &mut SendBatch) {
-    if let Err(e) = net.send(batch) {
-        eprintln!("send error: {e}");
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn schedule_loop(
-    clock: &MonotonicClock,
-    net: &WinDivert,
-    rx: &Receiver<Item>,
-    down: &mut Option<Scheduler<Queued>>,
-    up: &mut Option<Scheduler<Queued>>,
-    counters: &Counters,
-    attribution: &Attribution,
+/// Print a stats line every `--interval` until Ctrl+C, `--duration`, or the
+/// fast path fails open.
+fn report_until_stopped(
+    fp: &FastPath<WinDivert>,
     args: &SpikeArgs,
     stop: &AtomicBool,
-) -> Result<()> {
-    let timer = HighResTimer::new().context("creating a high-resolution timer")?;
-    let mut out = SendBatch::new(DEFAULT_BATCH);
+    who: &WhoCounters,
+    attribution: &Attribution,
+) {
     let started = Instant::now();
-    let mut stats = Stats::new(down.as_ref(), up.as_ref());
-    let mut next_stats = Instant::now() + Duration::from_secs(args.interval.max(1));
-
-    let enqueue =
-        |item: Item, down: &mut Option<Scheduler<Queued>>, up: &mut Option<Scheduler<Queued>>| {
-            let s = match item.dir {
-                Dir::Down => down.as_mut(),
-                Dir::Up => up.as_mut(),
-            };
-            if let Some(s) = s {
-                s.enqueue(clock.now(), item.meta, item.packet);
-            }
-        };
-
-    while !stop.load(Relaxed) {
+    let every = Duration::from_secs(args.interval.max(1));
+    let mut next = started + every;
+    let mut stats = Stats::new(&fp.snapshot(), fp.counters());
+    while !stop.load(Relaxed) && fp.failure().is_none() {
         if args.duration > 0 && started.elapsed() >= Duration::from_secs(args.duration) {
             break;
         }
-        let idle =
-            down.as_ref().is_none_or(|s| s.is_empty()) && up.as_ref().is_none_or(|s| s.is_empty());
-        if idle {
-            match rx.recv_timeout(Duration::from_millis(50)) {
-                Ok(item) => enqueue(item, down, up),
-                Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => break,
-            }
-        }
-        for item in rx.try_iter().take(4096) {
-            enqueue(item, down, up);
-        }
-
-        let now = clock.now();
-        let mut wake: Option<Nanos> = None;
-        for s in [down.as_mut(), up.as_mut()].into_iter().flatten() {
-            loop {
-                match s.dequeue(now) {
-                    Dequeue::Packet { packet, .. } => {
-                        out.push(&packet.data, &packet.addr);
-                        if out.is_full() {
-                            send_or_log(net, &mut out);
-                        }
-                    }
-                    Dequeue::WaitUntil(t) => {
-                        wake = Some(wake.map_or(t, |w| w.min(t)));
-                        break;
-                    }
-                    Dequeue::Empty => break,
-                }
-            }
-        }
-        send_or_log(net, &mut out);
-
-        if let Some(t) = wake {
-            // Cap the nap so newly arrived packets are queued promptly.
-            let nap = t.saturating_sub(clock.now()).min(NANOS_PER_MILLI);
-            if nap > 0 {
-                timer.sleep(Duration::from_nanos(nap));
-            }
-        }
-
-        if Instant::now() >= next_stats {
+        std::thread::sleep(Duration::from_millis(50));
+        if Instant::now() >= next {
             stats.print(
                 started.elapsed(),
-                down.as_ref(),
-                up.as_ref(),
-                counters,
+                &fp.snapshot(),
+                fp.counters(),
+                who,
                 attribution,
             );
-            next_stats += Duration::from_secs(args.interval.max(1));
+            next += every;
         }
     }
-    Ok(())
 }
 
-/// Send everything still queued, ignoring the rate, so Ctrl+C never drops.
-fn flush_all(
-    net: &WinDivert,
-    rx: &Receiver<Item>,
-    down: &mut Option<Scheduler<Queued>>,
-    up: &mut Option<Scheduler<Queued>>,
-) {
-    let mut out = SendBatch::new(DEFAULT_BATCH);
-    let mut push = |p: &Queued| {
-        out.push(&p.data, &p.addr);
-        if out.is_full() {
-            send_or_log(net, &mut out);
-        }
-    };
-    for s in [down.as_mut(), up.as_mut()].into_iter().flatten() {
-        for (_, p) in s.drain_all() {
-            push(&p);
-        }
-    }
-    for item in rx.try_iter() {
-        push(&item.packet);
-    }
-    send_or_log(net, &mut out);
-}
+/// (sent bytes, dropped packets) per class.
+type Totals = Vec<(u64, u64)>;
 
-struct Stats {
-    last_at: Duration,
-    last_down: Vec<(u64, u64)>,
-    last_up: Vec<(u64, u64)>,
-}
-
-fn snapshot(s: Option<&Scheduler<Queued>>) -> Vec<(u64, u64)> {
-    s.map(|s| {
-        (0..s.class_count())
-            .map(|i| (s.stats(i).sent_bytes, s.stats(i).dropped_packets))
+fn totals(d: Option<&DirectionStats>) -> Totals {
+    d.map(|d| {
+        d.classes
+            .iter()
+            .map(|(_, s)| (s.sent_bytes, s.dropped_packets))
             .collect()
     })
     .unwrap_or_default()
 }
 
+struct Stats {
+    last_at: Duration,
+    last_down: Totals,
+    last_up: Totals,
+    last_counters: Counters,
+}
+
 impl Stats {
-    fn new(down: Option<&Scheduler<Queued>>, up: Option<&Scheduler<Queued>>) -> Self {
+    fn new(snap: &Snapshot, counters: Counters) -> Self {
         Self {
             last_at: Duration::ZERO,
-            last_down: snapshot(down),
-            last_up: snapshot(up),
+            last_down: totals(snap.down.as_ref()),
+            last_up: totals(snap.up.as_ref()),
+            last_counters: counters,
         }
     }
 
     fn print(
         &mut self,
         at: Duration,
-        down: Option<&Scheduler<Queued>>,
-        up: Option<&Scheduler<Queued>>,
-        c: &Counters,
+        snap: &Snapshot,
+        counters: Counters,
+        who: &WhoCounters,
         attribution: &Attribution,
     ) {
         let secs = (at - self.last_at).as_secs_f64().max(1e-3);
-        for (arrow, s, last) in [
-            ("↓", down, &mut self.last_down),
-            ("↑", up, &mut self.last_up),
+        for (arrow, d, last) in [
+            ("↓", snap.down.as_ref(), &mut self.last_down),
+            ("↑", snap.up.as_ref(), &mut self.last_up),
         ] {
-            let Some(s) = s else { continue };
-            let now = snapshot(Some(s));
+            let Some(d) = d else { continue };
+            let now = totals(Some(d));
+            // The first snapshot may land after we started counting.
+            last.resize(now.len(), (0, 0));
             let mbps: Vec<f64> = now
                 .iter()
                 .zip(last.iter())
-                .map(|(n, l)| (n.0 - l.0) as f64 * 8.0 / secs / 1e6)
+                .map(|(n, l)| n.0.saturating_sub(l.0) as f64 * 8.0 / secs / 1e6)
                 .collect();
             let total: f64 = mbps.iter().sum();
-            let drops: u64 = now.iter().zip(last.iter()).map(|(n, l)| n.1 - l.1).sum();
+            let drops: u64 = now
+                .iter()
+                .zip(last.iter())
+                .map(|(n, l)| n.1.saturating_sub(l.1))
+                .sum();
             let mut line = format!(
                 "[{:>5.0}s] {arrow} {:>6.1}/{:.1} Mbps |",
                 at.as_secs_f64(),
                 total,
-                s.rate_bytes_per_sec() as f64 * 8.0 / 1e6
+                d.rate_bytes_per_sec as f64 * 8.0 / 1e6
             );
-            for (i, m) in mbps.iter().enumerate() {
+            for ((name, _), m) in d.classes.iter().zip(&mbps) {
                 let share = if total > 0.0 { m / total * 100.0 } else { 0.0 };
-                line += &format!(" {} {:.1} ({:.0}%) |", s.class_name(i), m, share);
+                line += &format!(" {name} {m:.1} ({share:.0}%) |");
             }
             line += &format!(" drops {drops}");
             println!("{line}");
             *last = now;
         }
         let (f, p, u) = (
-            c.by_flow.swap(0, Relaxed),
-            c.by_port.swap(0, Relaxed),
-            c.unattributed.swap(0, Relaxed),
+            who.by_flow.swap(0, Relaxed),
+            who.by_port.swap(0, Relaxed),
+            who.unattributed.swap(0, Relaxed),
         );
-        let b = c.bypassed.swap(0, Relaxed);
         let n = (f + p + u).max(1) as f64;
-        println!(
-            "         who: flow {:.0}% · port {:.0}% · unknown {:.0}% · passthrough {b} pkts · {} flows tracked",
+        let c = counters;
+        let l = self.last_counters;
+        let mut line = format!(
+            "         who: flow {:.0}% · port {:.0}% · unknown {:.0}% · passthrough {} pkts · {} flows tracked",
             f as f64 * 100.0 / n,
             p as f64 * 100.0 / n,
             u as f64 * 100.0 / n,
+            c.bypassed - l.bypassed,
             attribution.flow_count()
         );
+        let overflow = (c.pool_exhausted - l.pool_exhausted) + (c.channel_full - l.channel_full);
+        if overflow > 0 {
+            line += &format!(" · overflow passthrough {overflow} pkts");
+        }
+        if c.send_errors > l.send_errors {
+            line += &format!(" · SEND ERRORS {}", c.send_errors - l.send_errors);
+        }
+        println!("{line}");
+        self.last_counters = c;
         self.last_at = at;
     }
 }
