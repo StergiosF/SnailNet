@@ -2,7 +2,7 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Where things stand (2026-11-14)
+## Where things stand (2026-11-14, later)
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
 - **Git:** everything is on **`main`**. The user works only on `main`: no
@@ -52,10 +52,37 @@ ones come first.
    proptests for share lists and random op sequences (deficits bounded,
    no packet leaked or duplicated). `spike` uses it: flow hashes, ECN, and
    `--app exe=40:low` / `:high` priority suffixes.
-2. **`snailnet-sim` crate** (§5, §19.1). **Start here next.** Traffic models (AIMD TCP, CBR
-   game UDP, bursty web, QUIC-like) on `SimClock`; asserts p99 queueing delay
-   ≤ 2 ms for a light High-priority flow at 92% load, plus convergence
-   < 500 ms after a weight change.
+2. ~~**`snailnet-sim` crate**~~ **Done (2026-11-14, not committed
+   yet).** `crates/snailnet-sim`: closed-loop traffic models (Reno AIMD TCP
+   with optional ECN, paced QUIC-like with 0.7 backoff, CBR game/ping, web
+   transfers with slow start and think times) on `SimClock`, behind a
+   modelled ISP link (line rate, 150 ms FIFO buffer). Every drop is
+   signalled to its sender; each run checks `sent = delivered + lost + in
+   network`. `tests/plan.rs` proves the §19.1 list: 40/60 within ±3% over
+   every 2 s window with RTTs 15–120 ms; idle share redistributed by
+   weight; ceiling within one burst; light High flow p99 ≤ 2 ms in the
+   scheduler at 92% load (also with a 1 ms timer, also as a High app in
+   Everything else); Low class and the 5% floor hold; live weight change
+   and rule removal lose nothing and converge within 500 ms; runs are
+   repeatable. **Start at step 3 next.**
+
+   Findings worth knowing:
+   - A class whose only sender is **one Reno flow** can't fill its share
+     (its window drops below the BDP after each halving; CoDel keeps ~5 ms
+     queued). The slack goes to other classes, so 40/60 reads ~44/56 with
+     one flow each; with 4 flows per class it's exact. Pinned by
+     `a_lone_reno_flow_underfills_its_share_and_the_rest_is_not_wasted`.
+     100 ms windows swing with the TCP sawtooth; judge splits over ≥ 500 ms.
+   - `cargo run --release -p snailnet-sim` sweeps the shaping factor for
+     the Phase 0 scenario (25 Mbps, Steam 4×TCP + YouTube QUIC + browsing,
+     ping). At 1.00 the ISP buffer fills (ping +131 ms, split 59/41, wrong
+     way round). At 0.92: split exact, ping +1.4 ms p50 but **+28 ms p99**;
+     the scheduler's part is ≤ 0.6 ms. The tail is **slow-start bursts of
+     new connections** (each ack releases two packets, about twice the
+     shaped rate) overflowing the ISP buffer before the shaper sees them.
+     Without the browsing flow, p99 is ~3 ms. Lower factors shrink the tail
+     (0.85: +11.5 ms; 0.80: +6.8 ms p99). Compare with the real
+     `--factor 0.85` run in step 1.
 3. **Fast path** (§4, §6.3): slab buffer pool (no per-packet `Vec`), 1–2 rx
    threads, scheduler thread, watchdog that closes the NETWORK handle if the
    scheduler stalls > 500 ms.
@@ -84,6 +111,7 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 | `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers | 6 |
 | `snailnet-win` | exe name by PID, PID-by-local-port snapshot (IP Helper), high-res waitable timer | 4 |
 | `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID test), `spike` (shaping) | 6 |
+| `snailnet-sim` (bin `snailnet-sim`) | closed-loop traffic models + ISP link on `SimClock`; §19.1 property tests; shaping-factor sweep | 5 + 10 |
 
 WinDivert 2.2.2 is pinned in `third_party/windivert/` (hashes and signature
 notes in its README). The DLL is found via `$SNAILNET_WINDIVERT_DIR`, then

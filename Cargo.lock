@@ -585,6 +585,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "snailnet-sim"
+version = "0.0.1"
+dependencies = [
+ "snailnet-core",
+]
+
+[[package]]
 name = "snailnet-win"
 version = "0.0.1"
 dependencies = [

@@ -1,0 +1,13 @@
+[package]
+name = "snailnet-sim"
+description = "Offline simulator: closed-loop traffic models against the SnailNet scheduler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+snailnet-core = { version = "0.0.1", path = "../snailnet-core" }
+
+[lints]
+workspace = true
