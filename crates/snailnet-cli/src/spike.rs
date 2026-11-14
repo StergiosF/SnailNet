@@ -5,6 +5,7 @@
 //! Ctrl+C (or a crash) closes the handles and traffic flows normally again.
 
 use std::collections::HashMap;
+use std::hash::{BuildHasher, RandomState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant};
@@ -13,7 +14,9 @@ use anyhow::{Context, Result, bail};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use snailnet_core::clock::{Clock, MonotonicClock, NANOS_PER_MILLI, Nanos};
 use snailnet_core::parse::ip::{self, PROTO_TCP, is_local_network};
-use snailnet_core::scheduler::{ClassId, Dequeue, Packet, Scheduler, SchedulerConfig};
+use snailnet_core::scheduler::{
+    ClassId, Dequeue, Packet, PacketMeta, Priority, Scheduler, SchedulerConfig,
+};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
 use snailnet_engine::{Address, EngineError, RecvBatch, SendBatch};
@@ -24,8 +27,8 @@ use crate::rules::{self, AppRule};
 
 #[derive(clap::Args, Debug)]
 pub struct SpikeArgs {
-    /// App rule EXE[,EXE…]=PERCENT, repeatable. Example:
-    /// --app steam.exe,steamwebhelper.exe=40 --app chrome.exe=60
+    /// App rule EXE[,EXE…]=PERCENT[:high|normal|low], repeatable. Example:
+    /// --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60
     #[arg(long = "app", value_name = "EXE=PERCENT", value_parser = rules::parse_rule, required = true)]
     apps: Vec<AppRule>,
     /// Your line's download speed in Mbps. Turns on download shaping.
@@ -64,11 +67,15 @@ impl Packet for Queued {
     fn wire_len(&self) -> usize {
         self.data.len()
     }
+
+    fn mark_ce(&mut self) -> bool {
+        ip::set_ce(&mut self.data)
+    }
 }
 
 struct Item {
     dir: Dir,
-    class: ClassId,
+    meta: PacketMeta,
     packet: Queued,
 }
 
@@ -80,9 +87,8 @@ struct Counters {
     bypassed: AtomicU64,
 }
 
-/// Build one direction's scheduler. Queue limit ≈ 50 ms at the class's
-/// guaranteed rate (min 64 KB): enough to absorb bursts, small enough that
-/// TCP feels the drops quickly (CoDel replaces this in Phase 1).
+/// Build one direction's scheduler. Queue management (CoDel + ECN and the
+/// hard limit) is the scheduler's own (PLAN.md §9.4).
 fn direction(
     rules: &[AppRule],
     line_mbps: f64,
@@ -90,10 +96,7 @@ fn direction(
     now: Nanos,
 ) -> Result<Scheduler<Queued>> {
     let rate = (line_mbps * factor * 1e6 / 8.0) as u64;
-    let classes = rules::classes(rules, |pct| {
-        ((rate as f64 * pct as f64 / 100.0 * 0.05) as u64).max(64 * 1024)
-    })
-    .map_err(anyhow::Error::msg)?;
+    let classes = rules::classes(rules).map_err(anyhow::Error::msg)?;
     Ok(Scheduler::new(
         SchedulerConfig {
             rate_bytes_per_sec: rate,
@@ -232,9 +235,7 @@ pub fn run(args: SpikeArgs) -> Result<()> {
 }
 
 fn print_header(args: &SpikeArgs) {
-    let classes =
-        rules::classes(&args.apps, |_| 0).expect("validated when the schedulers were built");
-    let pct = rules::effective_percent(&classes);
+    let classes = rules::classes(&args.apps).expect("validated when the schedulers were built");
     println!("SnailNet Phase 0 spike. Ctrl+C to stop (traffic returns to normal).");
     for (dir, line) in [("down", args.down), ("up", args.up)] {
         if let Some(m) = line {
@@ -245,8 +246,13 @@ fn print_header(args: &SpikeArgs) {
             );
         }
     }
-    for (i, c) in classes.iter().enumerate() {
-        println!("  slice {:>5.1}%  {}", pct[i], c.name);
+    for c in &classes {
+        println!(
+            "  slice {:>5.1}%  {} ({:?})",
+            c.share_bp as f64 / 100.0,
+            c.name,
+            c.prio
+        );
     }
     println!();
 }
@@ -287,6 +293,8 @@ fn rx_loop(ctx: RxContext, tx: Sender<Item>) {
     // PID → class, refreshed every few seconds to survive PID reuse.
     let mut pid_class: HashMap<u32, ClassId> = HashMap::new();
     let mut cache_born = Instant::now();
+    // Keyed per run, so nobody on the internet can aim flows at one bucket.
+    let flow_hasher = RandomState::new();
 
     loop {
         match ctx.net.recv(&mut batch) {
@@ -330,10 +338,8 @@ fn rx_loop(ctx: RxContext, tx: Sender<Item>) {
                 continue;
             }
             let info = info.expect("checked above");
-            let class = match ctx
-                .attribution
-                .lookup(&FlowKey::from_packet(&info, outbound))
-            {
+            let key = FlowKey::from_packet(&info, outbound);
+            let class = match ctx.attribution.lookup(&key) {
                 Some((pid, source)) => {
                     match source {
                         Source::Flow => ctx.counters.by_flow.fetch_add(1, Relaxed),
@@ -350,9 +356,13 @@ fn rx_loop(ctx: RxContext, tx: Sender<Item>) {
                     ctx.other_class
                 }
             };
+            let meta = PacketMeta {
+                prio: ctx.rules.get(class).map_or(Priority::Normal, |r| r.prio),
+                ..PacketMeta::new(class, flow_hasher.hash_one(key))
+            };
             let item = Item {
                 dir,
-                class,
+                meta,
                 packet: Queued {
                     data: data.to_vec(),
                     addr: *addr,
@@ -398,8 +408,7 @@ fn schedule_loop(
                 Dir::Up => up.as_mut(),
             };
             if let Some(s) = s {
-                // A full queue drops the packet: that's TCP's signal to slow down.
-                let _ = s.enqueue(item.class, item.packet);
+                s.enqueue(clock.now(), item.meta, item.packet);
             }
         };
 

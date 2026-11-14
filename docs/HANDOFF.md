@@ -24,7 +24,7 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
 | Task | How | Done when |
 |---|---|---|
-| Real scenario | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40 --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
+| Real scenario | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
 | Lower factor | Same run with `--factor 0.85` plus `ping -t 1.1.1.1` | loaded ping recorded; is it ≤ 21 ms? |
 | Anti-cheat | Run `spike` (or `check`) while launching the user's games | per-game result in the report |
 | CPU | Task Manager → `snailnet.exe` during the real run | % recorded |
@@ -39,15 +39,20 @@ the real-app and anti-cheat runs need the user to drive the apps.
 Suggested order: each step stays testable on its own, and the pure-Rust
 ones come first.
 
-1. **Scheduler, full version** (`snailnet-core::scheduler`, §9): priority
-   ordering with the deficit cap (`burst_c`), per-class ceilings (token
-   bucket), per-flow fair queues inside "Everything else" (weights 4:2:1),
-   CoDel (5 ms / 100 ms) with ECN marking, express lane, live weight swap
-   (`arc-swap`) with no packet loss. Tests from §19.1 + `proptest`
-   (shares sum to 10000, floors hold, deficits bounded).
-   **Start here:** it's pure Rust, needs no admin, and is the most likely
-   fix for the ping gap.
-2. **`snailnet-sim` crate** (§5, §19.1): traffic models (AIMD TCP, CBR
+1. ~~**Scheduler, full version**~~ **Done (2026-11-14, uncommitted until
+   the user asks).** `snailnet-core::scheduler` now has priority-ordered
+   DRR with a burst cap (idle classes bank ≤ 30 ms of credit, which is
+   what lets a light High flow go first), per-class ceilings, fq_codel-style
+   per-flow queues in every class (4:2:1 weights, new-flow list), CoDel
+   5 ms/100 ms with ECN (`parse::ip::set_ce`), the express lane (credit
+   charged on entry, so it can't dodge a share), `shares` (basis points,
+   5% floor, proportional removal), and `LiveConfig` (`ArcSwap`) +
+   `Scheduler::sync`/`reconfigure` (classes matched by name; removed rules'
+   packets move to Everything else; nothing lost). 58 core tests, including
+   proptests for share lists and random op sequences (deficits bounded,
+   no packet leaked or duplicated). `spike` uses it: flow hashes, ECN, and
+   `--app exe=40:low` / `:high` priority suffixes.
+2. **`snailnet-sim` crate** (§5, §19.1). **Start here next.** Traffic models (AIMD TCP, CBR
    game UDP, bursty web, QUIC-like) on `SimClock`; asserts p99 queueing delay
    ≤ 2 ms for a light High-priority flow at 92% load, plus convergence
    < 500 ms after a weight change.
@@ -75,7 +80,7 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
 | Crate | Role | Tests |
 |---|---|---|
-| `snailnet-core` | `Clock` (real + sim), root token bucket + weighted DRR scheduler, IPv4/IPv6/TCP/UDP parser. No OS deps. | 23 |
+| `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking. No OS deps. | 58 |
 | `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers | 6 |
 | `snailnet-win` | exe name by PID, PID-by-local-port snapshot (IP Helper), high-res waitable timer | 4 |
 | `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID test), `spike` (shaping) | 6 |
@@ -110,10 +115,14 @@ stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
   RUNNING), which locks `third_party/windivert/x64/WinDivert64.sys`. Git
   can't rewrite that file until it's unloaded: `sc stop WinDivert`
   (elevated) or reboot. Avoid checkouts that touch it.
-- Phase 0 shortcuts, which Phase 1 replaces: no priority, ceilings or
-  CoDel/ECN; only DNS and pure TCP control packets bypass the queues; tail
-  drop at ~50 ms of share; a `Vec` allocated per packet; no SOCKET layer.
-- "Everything else" keeps a 5% floor, so 40/60 rules shape as 38.1/57.1/4.8.
+- `spike` shortcuts still left for Phase 1 steps 3–4: pure TCP control
+  packets bypass the scheduler in the rx thread (the core's express lane
+  isn't used by `spike` yet; DNS is excluded by the filter); a `Vec`
+  allocated per packet; no SOCKET layer. The Phase 0 numbers in the report
+  were measured with the *old* scheduler (tail drop, no CoDel); re-run the
+  synthetic test to see what CoDel does to the ping gap.
+- "Everything else" keeps a 5% floor, so 40/60 rules now shape as exactly
+  38/57/5 (`shares::normalize`; the old scheduler gave 38.1/57.1/4.8).
 - The driver's signing cert (a Chengdu company, the one upstream used for
   2.2.2) has expired; its timestamp keeps it valid, but some AVs block it.
 - The user's browser is **Brave**. The line is about 25 Mbps down; upload

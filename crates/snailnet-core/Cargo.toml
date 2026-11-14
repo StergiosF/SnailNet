@@ -7,6 +7,10 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+arc-swap = "1.9.5"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+proptest = "1.12.0"

@@ -151,9 +151,103 @@ pub fn canonical(addr: IpAddr) -> IpAddr {
     }
 }
 
+/// Set ECN "Congestion Experienced" on the IP packet at the start of `buf`,
+/// if it is ECN-capable (ECT(0) or ECT(1)) — CoDel's gentler alternative to a
+/// drop (PLAN.md §9.4). Returns false for Not-ECT or unparseable packets,
+/// which the caller should drop instead. The IPv4 header checksum is patched
+/// incrementally (RFC 1624), so it stays valid.
+pub fn set_ce(buf: &mut [u8]) -> bool {
+    const CE: u8 = 0b11;
+    if packet_len(buf).is_none() {
+        return false;
+    }
+    match buf[0] >> 4 {
+        4 => {
+            if buf.len() < 20 {
+                return false;
+            }
+            let ecn = buf[1] & 0b11;
+            if ecn == 0 {
+                return false;
+            }
+            if ecn == CE {
+                return true;
+            }
+            let old = u16::from_be_bytes([buf[0], buf[1]]);
+            buf[1] |= CE;
+            let new = u16::from_be_bytes([buf[0], buf[1]]);
+            // HC' = ~(~HC + ~m + m')  (RFC 1624, eqn. 3)
+            let hc = u16::from_be_bytes([buf[10], buf[11]]);
+            let mut sum = (!hc) as u32 + (!old) as u32 + new as u32;
+            while sum > 0xffff {
+                sum = (sum & 0xffff) + (sum >> 16);
+            }
+            buf[10..12].copy_from_slice(&(!(sum as u16)).to_be_bytes());
+            true
+        }
+        6 => {
+            // Traffic class straddles bytes 0–1; ECN is bits 4–5 of byte 1.
+            let ecn = (buf[1] >> 4) & 0b11;
+            if ecn == 0 {
+                return false;
+            }
+            buf[1] |= CE << 4;
+            true
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Full IPv4 header checksum, for checking the incremental update.
+    fn v4_checksum(h: &[u8]) -> u16 {
+        let mut sum: u32 = h[..20]
+            .chunks(2)
+            .enumerate()
+            .filter(|&(i, _)| i != 5)
+            .map(|(_, w)| u16::from_be_bytes([w[0], w[1]]) as u32)
+            .sum();
+        while sum > 0xffff {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+        !(sum as u16)
+    }
+
+    #[test]
+    fn set_ce_ipv4_keeps_checksum_valid() {
+        for ect in [0b01u8, 0b10] {
+            let mut p = v4_tcp(10);
+            p[1] = 0xb8 | ect; // DSCP EF + ECT
+            let c = v4_checksum(&p);
+            p[10..12].copy_from_slice(&c.to_be_bytes());
+            assert!(set_ce(&mut p));
+            assert_eq!(p[1] & 0b11, 0b11);
+            assert_eq!(p[1] & !0b11, 0xb8, "DSCP must be untouched");
+            assert_eq!(u16::from_be_bytes([p[10], p[11]]), v4_checksum(&p));
+        }
+    }
+
+    #[test]
+    fn set_ce_refuses_not_ect() {
+        let mut p = v4_tcp(10);
+        assert!(!set_ce(&mut p));
+        assert_eq!(p, v4_tcp(10));
+        let mut q = v6_udp();
+        assert!(!set_ce(&mut q));
+        assert!(!set_ce(&mut [0x45, 0x01]));
+    }
+
+    #[test]
+    fn set_ce_ipv6() {
+        let mut p = v6_udp();
+        p[1] = 0x2a; // TC low nibble ECT(0), flow label bits 0xa
+        assert!(set_ce(&mut p));
+        assert_eq!(p[1], 0x3a);
+        assert_eq!(p[0], 0x60);
+    }
 
     fn v4_tcp(payload: usize) -> Vec<u8> {
         let total = 20 + 20 + payload;

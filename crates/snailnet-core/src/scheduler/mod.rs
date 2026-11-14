@@ -1,73 +1,104 @@
-//! Phase 0 scheduler: a root token bucket (the shaped line rate) in front of
-//! weighted Deficit Round Robin across N classes (PLAN.md §9.2, minus
-//! priority, ceilings and CoDel, which arrive in Phase 1).
+//! The scheduler: percentages + priorities (PLAN.md §9).
 //!
-//! Properties:
-//! - **Shares.** Saturated classes get bandwidth in proportion to their weights.
-//! - **Work-conserving.** Idle classes accrue no credit, so their share goes to
-//!   backlogged classes in proportion to the latter's weights.
-//! - **Byte-fair.** Credit is in bytes, so small-packet flows aren't penalised.
+//! One [`Scheduler`] shapes one direction. A root token bucket gates total
+//! output at the shaped line rate; under it, classes (one per rule, then
+//! "Everything else") share the line by weighted Deficit Round Robin, served
+//! in priority order:
+//!
+//! - **Shares.** Credit (`deficit`) is handed out in rounds in proportion to
+//!   each class's share. A class may send only while it has credit, so over
+//!   time every backlogged class gets its share, whatever its priority.
+//! - **Priority = who goes first.** Among classes with credit, the highest
+//!   priority sends first; ties go round-robin.
+//! - **Work-conserving.** Rounds happen only when no backlogged class has
+//!   credit left, so an idle class's share flows to the busy ones in
+//!   proportion to their weights.
+//! - **Burst cap.** Idle classes keep earning credit, but only up to
+//!   `burst_c` (~30 ms at their share). That's what lets a light game flow
+//!   send the moment its packet arrives, and it bounds how far any class can
+//!   run ahead of its share.
+//! - **Ceilings.** An optional per-class token bucket; a class over its
+//!   ceiling simply isn't eligible.
+//! - **Inside a class**, flows are fair-queued with CoDel + ECN ([`fq`],
+//!   [`codel`]).
+//! - **Express lane** (§9.5): DNS, pure TCP control packets and small packets
+//!   of High-priority flows skip the queues. They still pay root tokens, and
+//!   class credit as they enter the lane, so they can't be used to dodge a
+//!   share: a class more than one burst in debt queues normally.
+//! - **Live changes** (§9.6): [`Scheduler::reconfigure`] swaps shares, rates
+//!   and rules without dropping a packet.
 
+mod codel;
+mod config;
+mod fq;
+pub mod shares;
 mod token_bucket;
 
+#[cfg(test)]
+mod tests;
+
+pub use config::{ClassConfig, ConfigError, LiveConfig, Priority, SchedulerConfig};
 pub use token_bucket::TokenBucket;
 
-use crate::clock::Nanos;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
-/// Anything the scheduler can queue: it only needs the on-wire size.
+use crate::clock::{NANOS_PER_MILLI, NANOS_PER_SEC, Nanos};
+use codel::Verdicts;
+use fq::FlowQueues;
+
+/// Anything the scheduler can queue.
 pub trait Packet {
+    /// On-wire size in bytes.
     fn wire_len(&self) -> usize;
+    /// Set ECN Congestion Experienced if the packet is ECN-capable and return
+    /// true; return false if it isn't, and CoDel will drop it instead.
+    fn mark_ce(&mut self) -> bool {
+        false
+    }
 }
 
 pub type ClassId = usize;
 
-/// Bytes of DRR credit handed out per round, split across classes by weight.
-/// Eight full-size Ethernet frames keeps interleaving fine-grained.
-const ROUND_QUANTUM_BYTES: u64 = 8 * 1514;
-
-#[derive(Debug, Clone)]
-pub struct ClassConfig {
-    pub name: String,
-    /// Relative weight (e.g. basis points). Must be > 0.
-    pub weight: u32,
-    /// Tail-drop limit for this class's queue.
-    pub queue_limit_bytes: u64,
+/// What the classifier knows about a packet, handed over with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PacketMeta {
+    /// Class to queue in. Out of range (a rule removed since the packet was
+    /// classified) means Everything else.
+    pub class: ClassId,
+    /// Hash of the flow's 5-tuple: picks the fair-queue bucket in the class.
+    pub flow: u64,
+    /// The flow's per-app priority: flow weight inside the class, and
+    /// express eligibility for small packets.
+    pub prio: Priority,
+    /// DNS, or a pure TCP control packet (SYN, FIN, RST, ACK-only ≤ 80 B).
+    /// Always takes the express lane.
+    pub control: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct SchedulerConfig {
-    /// Shaped rate of the whole direction.
-    pub rate_bytes_per_sec: u64,
-    pub burst_bytes: u64,
-    pub classes: Vec<ClassConfig>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConfigError {
-    NoClasses,
-    ZeroWeight(String),
-    ZeroRate,
-}
-
-impl std::fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoClasses => write!(f, "at least one class is required"),
-            Self::ZeroWeight(n) => write!(f, "class {n:?} has weight 0"),
-            Self::ZeroRate => write!(f, "rate must be greater than zero"),
+impl PacketMeta {
+    /// A Normal-priority, non-control packet of flow `flow` in `class`.
+    pub fn new(class: ClassId, flow: u64) -> Self {
+        Self {
+            class,
+            flow,
+            prio: Priority::Normal,
+            control: false,
         }
     }
 }
-
-impl std::error::Error for ConfigError {}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ClassStats {
     pub sent_packets: u64,
     pub sent_bytes: u64,
+    /// Dropped by CoDel or the hard queue limit.
     pub dropped_packets: u64,
     pub dropped_bytes: u64,
+    pub ecn_marked: u64,
+    /// Sent through the express lane (included in `sent_*`).
+    pub express_packets: u64,
+    /// Bytes waiting in this class's queues (express lane not included).
     pub queued_bytes: u64,
 }
 
@@ -75,63 +106,188 @@ pub struct ClassStats {
 pub enum Dequeue<P> {
     /// Send this packet now.
     Packet { class: ClassId, packet: P },
-    /// Packets are waiting, but the line rate says not before this time.
+    /// Packets are waiting, but the line rate (or every waiting class's
+    /// ceiling) says not before this time.
     WaitUntil(Nanos),
     /// Nothing queued.
     Empty,
 }
 
+/// Largest packet that can take the express lane for being High priority.
+pub const EXPRESS_MAX_LEN: usize = 300;
+/// Express lane capacity; beyond this, packets queue normally.
+const EXPRESS_LIMIT_BYTES: u64 = 64 * 1024;
+/// Credit handed out per DRR round, split across classes by weight.
+const ROUND_QUANTUM_BYTES: u64 = 8 * 1514;
+const MTU: u64 = 1514;
+/// How far ahead of its share a class may run: its burst cap is this much
+/// time at its guaranteed rate (PLAN.md §9.2: 20–50 ms).
+const BURST_WINDOW: Nanos = 30 * NANOS_PER_MILLI;
+const CEIL_BURST_WINDOW: Nanos = 10 * NANOS_PER_MILLI;
+/// Hard queue limit: 150 ms at the rate the class can reach, within bounds.
+const QUEUE_WINDOW: Nanos = 150 * NANOS_PER_MILLI;
+const QUEUE_MIN_BYTES: u64 = 64 * 1024;
+const QUEUE_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Per-class numbers derived from the config and the line rate.
+#[derive(Debug, Clone, Copy)]
+struct Params {
+    prio: Priority,
+    quantum: i64,
+    burst: i64,
+    limit_bytes: u64,
+    ceil: Option<(u64, u64)>,
+}
+
+fn bytes_in(rate: u64, window: Nanos) -> u64 {
+    (rate as u128 * window as u128 / NANOS_PER_SEC as u128) as u64
+}
+
+fn derive(config: &SchedulerConfig) -> Vec<Params> {
+    // A 0% class still needs a non-zero weight to make progress.
+    let weight = |c: &ClassConfig| c.share_bp.max(1) as u64;
+    let total: u64 = config.classes.iter().map(weight).sum();
+    let rate = config.rate_bytes_per_sec;
+    config
+        .classes
+        .iter()
+        .map(|c| {
+            let w = weight(c);
+            let quantum = (ROUND_QUANTUM_BYTES * w / total).max(1);
+            let guaranteed = (rate as u128 * w as u128 / total as u128) as u64;
+            let burst = bytes_in(guaranteed, BURST_WINDOW).max(2 * MTU).max(quantum);
+            let reach = c.ceil_bytes_per_sec.map_or(rate, |ceil| ceil.min(rate));
+            Params {
+                prio: if c.share_bp == 0 {
+                    Priority::Low
+                } else {
+                    c.prio
+                },
+                quantum: quantum as i64,
+                burst: burst as i64,
+                limit_bytes: bytes_in(reach, QUEUE_WINDOW).clamp(QUEUE_MIN_BYTES, QUEUE_MAX_BYTES),
+                ceil: c
+                    .ceil_bytes_per_sec
+                    .map(|ceil| (ceil, bytes_in(ceil, CEIL_BURST_WINDOW).max(2 * MTU))),
+            }
+        })
+        .collect()
+}
+
 struct Class<P> {
     name: String,
-    quantum: u64,
-    deficit: u64,
-    queue: VecDeque<P>,
-    limit_bytes: u64,
+    p: Params,
+    /// DRR credit in bytes. Between `-(burst + largest packet)` and `burst`.
+    deficit: i64,
+    ceil: Option<TokenBucket>,
+    fq: FlowQueues<P>,
     stats: ClassStats,
+}
+
+impl<P: Packet> Class<P> {
+    fn new(name: String, p: Params, now: Nanos) -> Self {
+        Self {
+            name,
+            p,
+            deficit: 0,
+            ceil: p.ceil.map(|(r, b)| TokenBucket::new(r, b, now)),
+            fq: FlowQueues::new(),
+            stats: ClassStats::default(),
+        }
+    }
+
+    fn update(&mut self, p: Params, now: Nanos) {
+        // Keep the same fraction of a round's credit.
+        self.deficit = (self.deficit as i128 * p.quantum as i128 / self.p.quantum as i128) as i64;
+        self.deficit = self.deficit.clamp(-p.burst, p.burst);
+        self.ceil = match (self.ceil.take(), p.ceil) {
+            (Some(mut b), Some((r, burst))) => {
+                b.set_rate(r, burst, now);
+                Some(b)
+            }
+            (None, Some((r, burst))) => Some(TokenBucket::new(r, burst, now)),
+            (_, None) => None,
+        };
+        self.p = p;
+    }
+
+    fn under_ceiling(&mut self, now: Nanos) -> Result<(), Nanos> {
+        match &mut self.ceil {
+            None => Ok(()),
+            Some(b) => {
+                b.refill(now);
+                if b.ready() {
+                    Ok(())
+                } else {
+                    Err(b.time_until_ready().unwrap_or(Nanos::MAX))
+                }
+            }
+        }
+    }
+
+    fn charge(&mut self, len: u64) {
+        if let Some(b) = &mut self.ceil {
+            b.consume(len);
+        }
+        self.stats.sent_packets += 1;
+        self.stats.sent_bytes += len;
+    }
+
+    fn tally(&mut self, v: Verdicts) {
+        self.stats.dropped_packets += v.dropped_packets;
+        self.stats.dropped_bytes += v.dropped_bytes;
+        self.stats.ecn_marked += v.marked;
+    }
 }
 
 pub struct Scheduler<P> {
     root: TokenBucket,
     classes: Vec<Class<P>>,
+    express: VecDeque<(ClassId, P)>,
+    express_bytes: u64,
     /// Round-robin position: the class served last.
     cursor: usize,
+    /// Bytes in class queues (express lane not included).
     backlog_bytes: u64,
+    config: Arc<SchedulerConfig>,
 }
 
 impl<P: Packet> Scheduler<P> {
     pub fn new(config: SchedulerConfig, now: Nanos) -> Result<Self, ConfigError> {
-        if config.classes.is_empty() {
-            return Err(ConfigError::NoClasses);
-        }
-        if config.rate_bytes_per_sec == 0 {
-            return Err(ConfigError::ZeroRate);
-        }
-        if let Some(c) = config.classes.iter().find(|c| c.weight == 0) {
-            return Err(ConfigError::ZeroWeight(c.name.clone()));
-        }
-        let total: u64 = config.classes.iter().map(|c| c.weight as u64).sum();
+        Self::with_config(Arc::new(config), now)
+    }
+
+    /// Start from the current config of a [`LiveConfig`].
+    pub fn from_live(live: &LiveConfig, now: Nanos) -> Self {
+        Self::with_config(live.load(), now).expect("LiveConfig only holds valid configs")
+    }
+
+    fn with_config(config: Arc<SchedulerConfig>, now: Nanos) -> Result<Self, ConfigError> {
+        config.validate()?;
         let classes = config
             .classes
-            .into_iter()
-            .map(|c| Class {
-                quantum: (ROUND_QUANTUM_BYTES * c.weight as u64 / total).max(1),
-                name: c.name,
-                deficit: 0,
-                queue: VecDeque::new(),
-                limit_bytes: c.queue_limit_bytes,
-                stats: ClassStats::default(),
-            })
+            .iter()
+            .zip(derive(&config))
+            .map(|(c, p)| Class::new(c.name.clone(), p, now))
             .collect();
         Ok(Self {
             root: TokenBucket::new(config.rate_bytes_per_sec, config.burst_bytes, now),
             classes,
+            express: VecDeque::new(),
+            express_bytes: 0,
             cursor: 0,
             backlog_bytes: 0,
+            config,
         })
     }
 
     pub fn class_count(&self) -> usize {
         self.classes.len()
+    }
+
+    /// Everything else: always the last class.
+    pub fn other_class(&self) -> ClassId {
+        self.classes.len() - 1
     }
 
     pub fn class_name(&self, class: ClassId) -> &str {
@@ -142,63 +298,223 @@ impl<P: Packet> Scheduler<P> {
         self.classes[class].stats
     }
 
+    pub fn config(&self) -> &SchedulerConfig {
+        &self.config
+    }
+
     pub fn rate_bytes_per_sec(&self) -> u64 {
         self.root.rate_bytes_per_sec()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.backlog_bytes == 0
+        self.backlog_bytes == 0 && self.express.is_empty()
     }
 
-    /// Queue a packet. Returns it back if the class queue is full (tail drop).
-    ///
-    /// # Panics
-    /// If `class` is out of range.
-    pub fn enqueue(&mut self, class: ClassId, packet: P) -> Result<(), P> {
+    /// Queue a packet that arrived at `now`. Never fails: if the class is
+    /// over its hard limit, the head of its fattest flow is dropped instead.
+    pub fn enqueue(&mut self, now: Nanos, meta: PacketMeta, packet: P) {
+        if self.is_empty() {
+            // Nobody was waiting, so nobody was wronged: forgive debts left
+            // over from the last busy period.
+            for c in &mut self.classes {
+                c.deficit = c.deficit.max(0);
+            }
+        }
+        let class = meta.class.min(self.other_class());
         let len = packet.wire_len() as u64;
         let c = &mut self.classes[class];
-        if c.stats.queued_bytes + len > c.limit_bytes && !c.queue.is_empty() {
-            c.stats.dropped_packets += 1;
-            c.stats.dropped_bytes += len;
-            return Err(packet);
+        let urgent = packet.wire_len() <= EXPRESS_MAX_LEN
+            && (c.p.prio == Priority::High || meta.prio == Priority::High);
+        if (meta.control || urgent)
+            // Express traffic is paid for up front, as it enters the lane. A
+            // class that keeps it up past its share runs out of credit and
+            // falls back to its queue, where its share holds it.
+            && c.deficit > -c.p.burst
+            && self.express_bytes + len <= EXPRESS_LIMIT_BYTES
+        {
+            c.deficit -= len as i64;
+            self.express.push_back((class, packet));
+            self.express_bytes += len;
+            return;
         }
-        c.queue.push_back(packet);
+        c.fq.push(meta.flow, meta.prio.flow_weight(), packet, now);
         c.stats.queued_bytes += len;
         self.backlog_bytes += len;
-        Ok(())
+        while c.fq.bytes() > c.p.limit_bytes && c.fq.packets() > 1 {
+            let Some(dropped) = c.fq.drop_fattest() else {
+                break;
+            };
+            c.stats.dropped_packets += 1;
+            c.stats.dropped_bytes += dropped;
+            c.stats.queued_bytes -= dropped;
+            self.backlog_bytes -= dropped;
+        }
     }
 
     pub fn dequeue(&mut self, now: Nanos) -> Dequeue<P> {
-        self.root.refill(now);
-        let Some(i) = self.select() else {
+        if self.is_empty() {
             return Dequeue::Empty;
-        };
+        }
+        self.root.refill(now);
         if !self.root.ready() {
             let wait = self.root.time_until_ready().unwrap_or(Nanos::MAX);
             return Dequeue::WaitUntil(now.saturating_add(wait));
         }
-        let c = &mut self.classes[i];
-        let packet = c.queue.pop_front().expect("selected class has a packet");
-        let len = packet.wire_len() as u64;
-        c.deficit -= len;
-        c.stats.queued_bytes -= len;
-        c.stats.sent_packets += 1;
-        c.stats.sent_bytes += len;
-        if c.queue.is_empty() {
-            // Idle classes keep no credit: this is what makes DRR work-conserving.
-            c.deficit = 0;
+
+        if let Some((class, packet)) = self.express.pop_front() {
+            let len = packet.wire_len() as u64;
+            self.express_bytes -= len;
+            let c = &mut self.classes[class];
+            // Credit was taken at enqueue.
+            c.charge(len);
+            c.stats.express_packets += 1;
+            self.root.consume(len);
+            return Dequeue::Packet { class, packet };
         }
-        self.backlog_bytes -= len;
-        self.root.consume(len);
-        Dequeue::Packet { class: i, packet }
+
+        loop {
+            if self.backlog_bytes == 0 {
+                return Dequeue::Empty;
+            }
+            let n = self.classes.len();
+            let mut best: Option<(usize, Priority)> = None;
+            let mut any_eligible = false;
+            let mut ceil_wait = Nanos::MAX;
+            for k in 1..=n {
+                let i = (self.cursor + k) % n;
+                let c = &mut self.classes[i];
+                if c.fq.is_empty() {
+                    continue;
+                }
+                if let Err(wait) = c.under_ceiling(now) {
+                    ceil_wait = ceil_wait.min(wait);
+                    continue;
+                }
+                any_eligible = true;
+                if c.deficit > 0 && best.is_none_or(|(_, p)| c.p.prio > p) {
+                    best = Some((i, c.p.prio));
+                }
+            }
+            if !any_eligible {
+                return Dequeue::WaitUntil(now.saturating_add(ceil_wait));
+            }
+            let Some((i, _)) = best else {
+                self.replenish(now);
+                continue;
+            };
+
+            let c = &mut self.classes[i];
+            let before = c.fq.bytes();
+            let mut v = Verdicts::default();
+            let got = c.fq.pop(now, &mut v);
+            let removed = before - c.fq.bytes();
+            c.stats.queued_bytes -= removed;
+            self.backlog_bytes -= removed;
+            c.tally(v);
+            // CoDel may have dropped everything this class had; pick again.
+            let Some(packet) = got else { continue };
+            let len = packet.wire_len() as u64;
+            c.deficit -= len as i64;
+            c.charge(len);
+            self.root.consume(len);
+            self.cursor = i;
+            return Dequeue::Packet { class: i, packet };
+        }
     }
 
-    /// Remove everything that's queued, ignoring the rate. Used on shutdown so
-    /// no packet is lost.
+    /// One DRR top-up: the fewest rounds that give some eligible class
+    /// credit. Every class earns those rounds, capped at its burst, so idle
+    /// classes bank a little credit and nobody banks a lot.
+    fn replenish(&mut self, now: Nanos) {
+        let rounds = self
+            .classes
+            .iter_mut()
+            .filter(|c| !c.fq.is_empty())
+            .filter_map(|c| {
+                c.under_ceiling(now).ok()?;
+                // Eligible classes have no credit here (deficit ≤ 0), so the
+                // shortfall to reach 1 byte of credit is positive.
+                let short = (1 - c.deficit) as u64;
+                Some(short.div_ceil(c.p.quantum as u64) as i64)
+            })
+            .min()
+            .expect("called only when some class is eligible");
+        for c in &mut self.classes {
+            c.deficit = c
+                .deficit
+                .saturating_add(rounds.saturating_mul(c.p.quantum))
+                .min(c.p.burst);
+        }
+    }
+
+    /// Apply the latest [`LiveConfig`] if it changed since the last call.
+    /// Cheap enough to call on every scheduler loop iteration.
+    pub fn sync(&mut self, live: &LiveConfig, now: Nanos) {
+        let latest = live.load();
+        if !Arc::ptr_eq(&latest, &self.config) {
+            self.reconfigure(latest, now)
+                .expect("LiveConfig only holds valid configs");
+        }
+    }
+
+    /// Switch to a new config without losing a packet (PLAN.md §9.6).
+    /// Classes are matched by name: kept classes keep their queues, with
+    /// credit rescaled to the new share; new classes start empty; packets of
+    /// removed classes move to Everything else. Class ids may change, so
+    /// callers must classify against the new config from here on.
+    pub fn reconfigure(
+        &mut self,
+        config: Arc<SchedulerConfig>,
+        now: Nanos,
+    ) -> Result<(), ConfigError> {
+        config.validate()?;
+        self.root
+            .set_rate(config.rate_bytes_per_sec, config.burst_bytes, now);
+        let params = derive(&config);
+        let mut old: Vec<Option<Class<P>>> = std::mem::take(&mut self.classes)
+            .into_iter()
+            .map(Some)
+            .collect();
+        let mut moved_to = vec![usize::MAX; old.len()];
+        for (j, (cc, p)) in config.classes.iter().zip(params).enumerate() {
+            let kept = old
+                .iter()
+                .position(|o| o.as_ref().is_some_and(|c| c.name == cc.name));
+            let class = match kept {
+                Some(k) => {
+                    moved_to[k] = j;
+                    let mut c = old[k].take().expect("matched above");
+                    c.update(p, now);
+                    c
+                }
+                None => Class::new(cc.name.clone(), p, now),
+            };
+            self.classes.push(class);
+        }
+        let other = self.other_class();
+        for (k, removed) in old.into_iter().enumerate() {
+            if let Some(c) = removed {
+                moved_to[k] = other;
+                let o = &mut self.classes[other];
+                o.stats.queued_bytes += c.fq.bytes();
+                o.fq.absorb(c.fq);
+            }
+        }
+        for (class, _) in &mut self.express {
+            *class = moved_to[*class];
+        }
+        self.cursor = self.cursor.min(other);
+        self.config = config;
+        Ok(())
+    }
+
+    /// Remove everything that's queued, ignoring the rate. Used on shutdown
+    /// so no packet is lost.
     pub fn drain_all(&mut self) -> Vec<(ClassId, P)> {
-        let mut out = Vec::new();
+        let mut out: Vec<(ClassId, P)> = self.express.drain(..).collect();
+        self.express_bytes = 0;
         for (i, c) in self.classes.iter_mut().enumerate() {
-            out.extend(c.queue.drain(..).map(|p| (i, p)));
+            c.fq.drain_into(&mut out, |p| (i, p));
             c.stats.queued_bytes = 0;
             c.deficit = 0;
         }
@@ -206,273 +522,24 @@ impl<P: Packet> Scheduler<P> {
         out
     }
 
-    /// Pick the next class to serve, topping up DRR credit if nobody can
-    /// afford their head packet. Doesn't remove anything.
-    fn select(&mut self) -> Option<ClassId> {
-        if self.backlog_bytes == 0 {
-            return None;
-        }
-        let n = self.classes.len();
-        for _ in 0..2 {
-            for k in 0..n {
-                let i = (self.cursor + k) % n;
-                let c = &self.classes[i];
-                if let Some(head) = c.queue.front()
-                    && c.deficit >= head.wire_len() as u64
-                {
-                    self.cursor = i;
-                    return Some(i);
-                }
-            }
-            // Nobody can afford their head packet. Give every backlogged class
-            // the smallest number of rounds that lets at least one of them.
-            let rounds = self
-                .classes
-                .iter()
-                .filter_map(|c| {
-                    let head = c.queue.front()?.wire_len() as u64;
-                    Some((head - c.deficit).div_ceil(c.quantum))
-                })
-                .min()?;
-            for c in self.classes.iter_mut().filter(|c| !c.queue.is_empty()) {
-                c.deficit += rounds * c.quantum;
-            }
-            // Credit was handed out together, so restart the scan at the next
-            // class to keep service order round-robin.
-            self.cursor = (self.cursor + 1) % n;
-        }
-        unreachable!("after a top-up at least one class can send");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::clock::{NANOS_PER_MILLI, NANOS_PER_SEC};
-
-    #[derive(Debug)]
-    struct P(usize);
-    impl Packet for P {
-        fn wire_len(&self) -> usize {
-            self.0
-        }
-    }
-
-    const MB: u64 = 1_000_000;
-
-    fn sched(rate: u64, weights: &[u32]) -> Scheduler<P> {
-        Scheduler::new(
-            SchedulerConfig {
-                rate_bytes_per_sec: rate,
-                burst_bytes: 3_028,
-                classes: weights
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &w)| ClassConfig {
-                        name: format!("c{i}"),
-                        weight: w,
-                        queue_limit_bytes: 256 * 1024,
-                    })
-                    .collect(),
-            },
-            0,
-        )
-        .unwrap()
-    }
-
-    /// Run the scheduler on simulated time. `active[i]` says whether class i
-    /// is kept backlogged with packets of `sizes[i]` bytes. Returns bytes sent
-    /// per class in the window [warmup, warmup + measure).
-    fn run(
-        s: &mut Scheduler<P>,
-        active: &[bool],
-        sizes: &[usize],
-        warmup: Nanos,
-        measure: Nanos,
-    ) -> Vec<u64> {
-        let mut now: Nanos = 0;
-        let mut sent = vec![0u64; s.class_count()];
-        while now < warmup + measure {
-            for (i, &on) in active.iter().enumerate() {
-                // Keep a modest backlog so drops don't happen.
-                while on && s.stats(i).queued_bytes < 64 * 1024 {
-                    s.enqueue(i, P(sizes[i])).unwrap();
-                }
-            }
-            match s.dequeue(now) {
-                Dequeue::Packet { class, packet } => {
-                    if now >= warmup {
-                        sent[class] += packet.0 as u64;
-                    }
-                }
-                Dequeue::WaitUntil(t) => now = t,
-                Dequeue::Empty => now += NANOS_PER_MILLI,
-            }
-        }
-        sent
-    }
-
-    fn assert_share(sent: &[u64], expected: &[f64], tol: f64) {
-        let total: u64 = sent.iter().sum();
-        for (i, &e) in expected.iter().enumerate() {
-            let got = sent[i] as f64 / total as f64;
+    #[cfg(test)]
+    fn check_invariants(&self, max_packet: i64) {
+        let mut backlog = 0;
+        for c in &self.classes {
+            c.fq.check_invariants();
+            assert_eq!(c.stats.queued_bytes, c.fq.bytes(), "{}", c.name);
+            backlog += c.fq.bytes();
             assert!(
-                (got - e).abs() <= tol,
-                "class {i}: got {got:.4}, expected {e:.4} (sent {sent:?})"
+                c.deficit <= c.p.burst && c.deficit >= -(c.p.burst + max_packet),
+                "{}: deficit {} outside ±{} (+{max_packet})",
+                c.name,
+                c.deficit,
+                c.p.burst
             );
         }
-    }
-
-    #[test]
-    fn rejects_bad_config() {
-        let cfg = |classes| SchedulerConfig {
-            rate_bytes_per_sec: 1,
-            burst_bytes: 0,
-            classes,
-        };
-        assert_eq!(
-            Scheduler::<P>::new(cfg(vec![]), 0).err(),
-            Some(ConfigError::NoClasses)
-        );
-        let zero = vec![ClassConfig {
-            name: "x".into(),
-            weight: 0,
-            queue_limit_bytes: 1,
-        }];
-        assert_eq!(
-            Scheduler::<P>::new(cfg(zero), 0).err(),
-            Some(ConfigError::ZeroWeight("x".into()))
-        );
-    }
-
-    #[test]
-    fn saturated_40_60_split_within_3_percent() {
-        let mut s = sched(10 * MB, &[40, 60]);
-        let sent = run(
-            &mut s,
-            &[true, true],
-            &[1500, 1500],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        assert_share(&sent, &[0.40, 0.60], 0.03);
-    }
-
-    #[test]
-    fn total_rate_matches_root() {
-        let mut s = sched(10 * MB, &[40, 60]);
-        let sent = run(
-            &mut s,
-            &[true, true],
-            &[1500, 1500],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        let total: u64 = sent.iter().sum();
-        let expected = 20 * MB;
-        assert!(total.abs_diff(expected) <= expected / 100, "total {total}");
-    }
-
-    #[test]
-    fn lone_class_gets_the_whole_line() {
-        let mut s = sched(10 * MB, &[40, 60]);
-        let sent = run(
-            &mut s,
-            &[true, false],
-            &[1500, 1500],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        assert_eq!(sent[1], 0);
-        assert!(sent[0].abs_diff(20 * MB) <= 20 * MB / 100, "sent {sent:?}");
-    }
-
-    #[test]
-    fn idle_share_is_redistributed_by_weight() {
-        // Steam 40, YouTube 45 (idle), Other 15 → Steam:Other = 40:15.
-        let mut s = sched(10 * MB, &[40, 45, 15]);
-        let sent = run(
-            &mut s,
-            &[true, false, true],
-            &[1500, 1500, 1500],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        assert_eq!(sent[1], 0);
-        let a = sent[0] as f64 / (sent[0] + sent[2]) as f64;
-        assert!((a - 40.0 / 55.0).abs() <= 0.03, "steam share {a:.4}");
-    }
-
-    #[test]
-    fn fairness_is_in_bytes_not_packets() {
-        let mut s = sched(10 * MB, &[50, 50]);
-        let sent = run(
-            &mut s,
-            &[true, true],
-            &[1500, 100],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        assert_share(&sent, &[0.5, 0.5], 0.03);
-    }
-
-    #[test]
-    fn tiny_weight_still_progresses_and_stays_small() {
-        let mut s = sched(10 * MB, &[9_900, 100]);
-        let sent = run(
-            &mut s,
-            &[true, true],
-            &[1500, 1500],
-            NANOS_PER_SEC / 2,
-            2 * NANOS_PER_SEC,
-        );
-        assert!(sent[1] > 0, "low-weight class starved");
-        assert_share(&sent, &[0.99, 0.01], 0.01);
-    }
-
-    #[test]
-    fn oversized_packets_pass() {
-        // A coalesced 64 KB receive is bigger than burst and quantum.
-        let mut s = sched(10 * MB, &[1, 1]);
-        let sent = run(&mut s, &[true, true], &[65_000, 1500], 0, NANOS_PER_SEC);
-        assert!(sent[0] > 0 && sent[1] > 0, "sent {sent:?}");
-    }
-
-    #[test]
-    fn tail_drop_when_queue_full() {
-        let mut s = sched(MB, &[1]);
-        let limit = 256 * 1024;
-        let mut accepted = 0;
-        while s.enqueue(0, P(1500)).is_ok() {
-            accepted += 1500;
-        }
-        assert!(accepted <= limit + 1500);
-        assert_eq!(s.stats(0).dropped_packets, 1);
-    }
-
-    #[test]
-    fn empty_and_wait_states() {
-        let mut s = sched(1_000, &[1]);
-        assert!(matches!(s.dequeue(0), Dequeue::Empty));
-        s.enqueue(0, P(5_000)).unwrap();
-        s.enqueue(0, P(1_000)).unwrap();
-        assert!(matches!(s.dequeue(0), Dequeue::Packet { .. }));
-        // 5000 B against a 3028 B burst at 1000 B/s → wait ~1.97 s.
-        match s.dequeue(0) {
-            Dequeue::WaitUntil(t) => assert_eq!(t, 1_972_000_000),
-            other => panic!("expected wait, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn drain_all_returns_everything() {
-        let mut s = sched(1, &[1, 1]);
-        s.enqueue(0, P(10)).unwrap();
-        s.enqueue(1, P(20)).unwrap();
-        s.enqueue(1, P(30)).unwrap();
-        let drained = s.drain_all();
-        assert_eq!(drained.len(), 3);
-        assert!(s.is_empty());
-        assert!(matches!(s.dequeue(0), Dequeue::Empty));
+        assert_eq!(backlog, self.backlog_bytes);
+        let express: u64 = self.express.iter().map(|(_, p)| p.wire_len() as u64).sum();
+        assert_eq!(express, self.express_bytes);
+        assert!(self.express.iter().all(|&(c, _)| c < self.classes.len()));
     }
 }

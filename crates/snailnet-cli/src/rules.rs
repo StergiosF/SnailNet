@@ -1,9 +1,7 @@
-//! `--app steam.exe,steamwebhelper.exe=40` rules → scheduler classes.
+//! `--app steam.exe,steamwebhelper.exe=40[:low]` rules → scheduler classes.
 
-use snailnet_core::scheduler::ClassConfig;
+use snailnet_core::scheduler::{ClassConfig, Priority, shares};
 
-/// "Everything else" never drops below this (PLAN.md §9.7).
-pub const OTHER_FLOOR_PERCENT: u32 = 5;
 pub const OTHER_NAME: &str = "everything else";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +9,7 @@ pub struct AppRule {
     /// Lowercased exe file names, e.g. `["steam.exe", "steamwebhelper.exe"]`.
     pub exes: Vec<String>,
     pub percent: u32,
+    pub prio: Priority,
 }
 
 impl AppRule {
@@ -23,11 +22,15 @@ impl AppRule {
     }
 }
 
-/// clap value parser for `--app`.
+/// clap value parser for `--app`: `EXE[,EXE…]=PERCENT[:high|normal|low]`.
 pub fn parse_rule(s: &str) -> Result<AppRule, String> {
-    let (names, pct) = s
+    let (names, rest) = s
         .rsplit_once('=')
         .ok_or_else(|| format!("expected EXE=PERCENT, got {s:?}"))?;
+    let (pct, prio) = match rest.split_once(':') {
+        None => (rest, Priority::Normal),
+        Some((pct, p)) => (pct, parse_prio(p)?),
+    };
     let percent: u32 = pct
         .trim()
         .trim_end_matches('%')
@@ -51,17 +54,28 @@ pub fn parse_rule(s: &str) -> Result<AppRule, String> {
     if exes.is_empty() {
         return Err(format!("no executable names in {s:?}"));
     }
-    Ok(AppRule { exes, percent })
+    Ok(AppRule {
+        exes,
+        percent,
+        prio,
+    })
 }
 
-/// One class per rule, in order, then "everything else" last. Weights are
-/// basis points. If the rules leave less than the floor, "everything else"
-/// still gets the floor and all shares shrink proportionally (DRR weights are
-/// relative, so that falls out naturally).
-pub fn classes(
-    rules: &[AppRule],
-    queue_limit: impl Fn(u32) -> u64,
-) -> Result<Vec<ClassConfig>, String> {
+fn parse_prio(s: &str) -> Result<Priority, String> {
+    match s.trim().to_lowercase().as_str() {
+        "high" => Ok(Priority::High),
+        "normal" => Ok(Priority::Normal),
+        "low" => Ok(Priority::Low),
+        other => Err(format!(
+            "priority must be high, normal or low, got {other:?}"
+        )),
+    }
+}
+
+/// One class per rule, in order, then "everything else" last. If the rules
+/// leave Everything else less than its 5% floor, all rules shrink
+/// proportionally (PLAN.md §9.7).
+pub fn classes(rules: &[AppRule]) -> Result<Vec<ClassConfig>, String> {
     let sum: u32 = rules.iter().map(|r| r.percent).sum();
     if sum > 100 {
         return Err(format!("shares add up to {sum}%, more than 100%"));
@@ -73,30 +87,18 @@ pub fn classes(
             }
         }
     }
-    let other = (100 - sum).max(OTHER_FLOOR_PERCENT);
+    let asked: Vec<u32> = rules.iter().map(|r| r.percent * 100).collect();
+    let bp = shares::normalize(&asked);
     let mut out: Vec<ClassConfig> = rules
         .iter()
-        .map(|r| ClassConfig {
-            name: r.label(),
-            weight: r.percent * 100,
-            queue_limit_bytes: queue_limit(r.percent),
+        .zip(&bp)
+        .map(|(r, &share_bp)| ClassConfig {
+            prio: r.prio,
+            ..ClassConfig::new(r.label(), share_bp)
         })
         .collect();
-    out.push(ClassConfig {
-        name: OTHER_NAME.into(),
-        weight: other * 100,
-        queue_limit_bytes: queue_limit(other),
-    });
+    out.push(ClassConfig::new(OTHER_NAME, bp[rules.len()]));
     Ok(out)
-}
-
-/// Effective share of each class in percent after normalisation.
-pub fn effective_percent(classes: &[ClassConfig]) -> Vec<f64> {
-    let total: u32 = classes.iter().map(|c| c.weight).sum();
-    classes
-        .iter()
-        .map(|c| c.weight as f64 * 100.0 / total as f64)
-        .collect()
 }
 
 #[cfg(test)]
@@ -109,9 +111,13 @@ mod tests {
             parse_rule("Steam.exe, steamwebhelper=40%").unwrap(),
             AppRule {
                 exes: vec!["steam.exe".into(), "steamwebhelper.exe".into()],
-                percent: 40
+                percent: 40,
+                prio: Priority::Normal,
             }
         );
+        assert_eq!(parse_rule("game=10:High").unwrap().prio, Priority::High);
+        assert_eq!(parse_rule("steam=40%:low").unwrap().prio, Priority::Low);
+        assert!(parse_rule("game=10:urgent").is_err());
         assert!(parse_rule("steam.exe").is_err());
         assert!(parse_rule("steam.exe=0").is_err());
         assert!(parse_rule("steam.exe=96").is_err());
@@ -122,9 +128,9 @@ mod tests {
     #[test]
     fn other_gets_the_remainder() {
         let r = [parse_rule("a=40").unwrap(), parse_rule("b=45").unwrap()];
-        let c = classes(&r, |_| 1).unwrap();
+        let c = classes(&r).unwrap();
         assert_eq!(
-            c.iter().map(|c| c.weight).collect::<Vec<_>>(),
+            c.iter().map(|c| c.share_bp).collect::<Vec<_>>(),
             [4000, 4500, 1500]
         );
         assert_eq!(c[2].name, OTHER_NAME);
@@ -134,23 +140,22 @@ mod tests {
     fn other_floor_scales_everyone_down() {
         // The plan's 40/60 spike example leaves 0% → floor 5%.
         let r = [
-            parse_rule("steam=40").unwrap(),
-            parse_rule("chrome=60").unwrap(),
+            parse_rule("steam=40:low").unwrap(),
+            parse_rule("brave=60").unwrap(),
         ];
-        let c = classes(&r, |_| 1).unwrap();
-        let p = effective_percent(&c);
-        assert!(
-            (p[0] - 38.095).abs() < 0.01
-                && (p[1] - 57.143).abs() < 0.01
-                && (p[2] - 4.762).abs() < 0.01
+        let c = classes(&r).unwrap();
+        assert_eq!(
+            c.iter().map(|c| c.share_bp).collect::<Vec<_>>(),
+            [3800, 5700, 500]
         );
+        assert_eq!(c[0].prio, Priority::Low);
     }
 
     #[test]
     fn rejects_overcommit_and_duplicates() {
         let r = [parse_rule("a=60").unwrap(), parse_rule("b=50").unwrap()];
-        assert!(classes(&r, |_| 1).is_err());
+        assert!(classes(&r).is_err());
         let r = [parse_rule("a=10").unwrap(), parse_rule("b,a=10").unwrap()];
-        assert!(classes(&r, |_| 1).is_err());
+        assert!(classes(&r).is_err());
     }
 }
