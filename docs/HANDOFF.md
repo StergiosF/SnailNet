@@ -6,7 +6,7 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
 - **Git:** everything is on **`main`**. The user works only on `main`: no
-  feature branches. `main` is 3 commits ahead of `origin/main` (not pushed;
+  feature branches. `main` is in sync with `origin/main` (pushed 2026-11-14;
   push only when asked).
 - **Phase 0 is mostly done.** Results are in `docs/phase0-report.md`:
   - `snailnet check` (elevated): the WinDivert 2.2 driver loads **with HVCI
@@ -39,8 +39,8 @@ the real-app and anti-cheat runs need the user to drive the apps.
 Suggested order: each step stays testable on its own, and the pure-Rust
 ones come first.
 
-1. ~~**Scheduler, full version**~~ **Done (2026-11-14, uncommitted until
-   the user asks).** `snailnet-core::scheduler` now has priority-ordered
+1. ~~**Scheduler, full version**~~ **Done (2026-11-14, commit 19fc7af,
+   pushed).** `snailnet-core::scheduler` now has priority-ordered
    DRR with a burst cap (idle classes bank ≤ 30 ms of credit, which is
    what lets a light High flow go first), per-class ceilings, fq_codel-style
    per-flow queues in every class (4:2:1 weights, new-flow list), CoDel
