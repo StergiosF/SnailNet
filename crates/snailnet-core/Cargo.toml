@@ -1,0 +1,12 @@
+[package]
+name = "snailnet-core"
+description = "Pure SnailNet logic: scheduler, packet parsing, clock. No Windows APIs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
