@@ -1,7 +1,8 @@
 # Phase 0 report: can WinDivert + our scheduler do it?
 
-> Status: **spike built, real-machine runs pending.** Fill in the tables
-> below, then make the Go/No-go call on D4 (PLAN.md §21, "Immediate next steps").
+> Status: **driver check and synthetic shaping run done (2026-11-14), and
+> both look good.** Still open: the Steam + Brave run, anti-cheat, factor
+> 0.85, CPU. Then make the Go/No-go call on D4 (PLAN.md §21).
 
 ## What was built
 
@@ -71,7 +72,7 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 |---|---|
 | Windows edition / build | Windows 11 Pro, build 26300 |
 | CPU | AMD Ryzen 5 9600X (6 cores) |
-| Line (ISP speed test ↓/↑, idle ping) | |
+| Line (ISP speed test ↓/↑, idle ping) | ≈ 25 Mbps ↓ (Cloudflare, 25 MB in 7.8 s; ↑ not measured), idle ping 11 ms to 1.1.1.1 |
 | Memory integrity (HVCI) | **on** (`SecurityServicesRunning` = 2) |
 | Security software | Windows Defender |
 
@@ -92,10 +93,15 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 
 | Scenario | Expected | Measured | Pass (±5%) |
 |---|---|---|---|
-| Steam download + YouTube 4K, 40/60 | ~38/57 when both saturate | | |
-| Close YouTube | Steam back to ~full shaped rate within 2 s | | |
-| Only one app busy | gets ~100% of shaped rate | | |
-| `who:` attribution | flow + port ≥ 95% | | |
+| Synthetic: `a.exe=40` / `b.exe=60` (curl copies, Cloudflare 25 MB), `--down 25` → 23 Mbps | 38.1 / 57.1 / 4.8 | t=6–14 s: a 37–39%, b 56–57%, other 4–5%; total 21.5–23.0 of 23.0 | ✅ within ±2% |
+| b stops (≈16 s) → a recovers | a back to most of the line within 2 s | 18 s: a 14.5 Mbps; 20–28 s: a 15–20 Mbps (83–88%), rest is background traffic in "everything else" | ✅ ≈2–4 s |
+| Steam download + YouTube 4K in Brave, 40/60 | ~38/57 when both saturate | not run yet | |
+| `who:` attribution | flow + port ≥ 95% | flow 87–96% + port remainder, **unknown 0%** | ✅ |
+| Ctrl+C / `--duration` end = fail-open | normal networking right away | ✅ queues flushed, handles closed, ping/HTTPS normal afterwards | ✅ |
+
+Tail drops ran at 100–400 per 2 s window while saturated. That's expected
+with Phase 0's tail-drop queues; CoDel in Phase 1 should mark or drop earlier
+and less.
 
 ### Ping under load
 
@@ -103,10 +109,19 @@ Run `ping -t 1.1.1.1` while a big download runs.
 
 | Condition | Ping p50 / max |
 |---|---|
-| Idle, no SnailNet | |
-| Download, no SnailNet | |
-| Download, spike factor 0.92 | |
-| Download, spike factor 0.85 | |
+| Idle, no SnailNet | avg 11 ms, max 13 ms |
+| Download (6 streams), no SnailNet | avg 61 ms, **max 234 ms** |
+| Download (2 streams), spike factor 0.92 | avg 25 ms, max 54 ms |
+| Download, spike factor 0.85 | not run yet |
+
+Shaping cut loaded ping from 61 → 25 ms average and 234 → 54 ms max, but
+that's still above the §20 target (within +10 ms of idle, i.e. ≤ 21 ms).
+Likely causes: the 25 Mbps line figure is rough, so 0.92 may still sit at or
+above the real bottleneck, and there's no CoDel yet. Next: rerun at 0.85,
+then with CoDel in Phase 1. (ICMP isn't diverted, so ping measures the
+router's queue, which is exactly what Low-latency mode is meant to keep empty.)
+Caveat: the two runs used 6 vs 2 download streams, so the comparison isn't
+exact.
 
 ### CPU
 
@@ -119,8 +134,8 @@ Run `ping -t 1.1.1.1` while a big download runs.
 
 - [x] Driver loads on this machine with HVCI on
 - [ ] Games you play tolerate it (or Game-safe mode is enough)
-- [ ] Split within ±5% while both apps saturate
-- [ ] Ping under load clearly better than without SnailNet
+- [x] Split within ±5% while both apps saturate (synthetic; the Steam + Brave run is still pending)
+- [x] Ping under load clearly better than without SnailNet (61 → 25 ms avg; §20 target not met yet)
 
 **Decision:** _pending_. If Go, start Phase 1. If No-go, record why and
 re-open D4 (`WfpEngine`).

@@ -9,9 +9,15 @@ Paste this into a fresh session, or say "read docs/HANDOFF.md and continue".
 - **Phase 0 status:** spike built and unit-tested. `snailnet check` has run
   elevated on the real machine: the driver loads **with HVCI on**, Defender is
   silent, and PID mapping and IPv4/IPv6 address decoding are confirmed
-  (28/28 flows attributed). **Still to do:** run `spike` with real traffic
-  (split accuracy, ping under load) and the anti-cheat checks. Results go in
-  `docs/phase0-report.md`, which also has the how-to and the tables.
+  (28/28 flows attributed). A synthetic `spike` (two curl copies, 40/60,
+  `--down 25`) held **38/57/5 within ±2%**, recovered in ~2–4 s when one
+  stopped, attributed 100% of packets (0% unknown) and failed open cleanly.
+  Loaded ping dropped from 61 → 25 ms avg (234 → 54 max), still above the
+  §20 target of +10 ms. **Still to do:** the Steam + Brave run, factor 0.85,
+  anti-cheat, CPU. Everything is in `docs/phase0-report.md`.
+- Line ≈ 25 Mbps down. Cloudflare's `__down` endpoint rejects
+  `bytes=100000000` (403), so use `bytes=25000000`; its parallel streams
+  stall, so use one stream per process.
 - The user's browser is **Brave** (`brave.exe`), not Chrome.
 - Elevated runs: this shell isn't elevated. Launch one elevated process with
   `Start-Process powershell -Verb RunAs -Wait -ArgumentList '-File script.ps1'`,
@@ -43,8 +49,10 @@ cargo build --release
 
 ## Known gaps and open questions
 
-- The shaping path (`spike`: NETWORK-layer divert, reinject, pacing) has not
-  run on a live system yet. Only the sniff-only `check` path has.
+- Ping under load is better but not at target: try `--factor 0.85` first;
+  CoDel/ECN is the Phase 1 fix. The repeatable synthetic test script lives
+  in the scratchpad only. Rebuild it from the description above if needed,
+  or add it to the repo as `scripts/phase0-synthetic.ps1`.
 - Phase 0 simplifications (Phase 1 replaces them): no priority, ceilings,
   CoDel/ECN or real express lane (only DNS and pure TCP control packets
   bypass); tail drop at ~50 ms of the class's share; a `Vec` allocated per
@@ -55,8 +63,9 @@ cargo build --release
 
 ## Next steps
 
-1. Run `spike` as Administrator with real traffic, plus the anti-cheat
-   checks; fill in `docs/phase0-report.md` (`check` is done).
+1. Finish Phase 0 with the user at the machine: Steam download + YouTube
+   in Brave under `spike`, a rerun at `--factor 0.85`, anti-cheat in their
+   games, CPU % (`check` and the synthetic run are done).
 2. Go/No-go on D4 (WinDivert) from that report.
 3. If Go → Phase 1 (PLAN.md §21): full scheduler (priority, ceilings,
    FQ inside Everything else, CoDel/ECN, express lane), `snailnet-sim`, flow
