@@ -165,6 +165,11 @@ impl<S: ProcessSource> Attribution<S> {
     pub fn app_count(&self) -> usize {
         self.apps.read().unwrap().list.len()
     }
+
+    /// Every app seen so far, in the order first seen.
+    pub fn apps(&self) -> Vec<Arc<App>> {
+        self.apps.read().unwrap().list.clone()
+    }
 }
 
 /// How long a flow with no known owner stays "pending" (PLAN.md §6.3).

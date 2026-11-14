@@ -437,6 +437,23 @@ impl runner::Running for Running {
         self.report.log(&self.shaper);
     }
 
+    fn sample(&self) -> Option<Snapshot> {
+        Some(self.shaper.snapshot())
+    }
+
+    fn apps(&self) -> Vec<snailnet_ipc::AppInfo> {
+        self.shaper
+            .attribution()
+            .apps()
+            .iter()
+            .map(|a| snailnet_ipc::AppInfo {
+                family: a.family.clone(),
+                name: a.name.clone(),
+                exe: a.exe.clone(),
+            })
+            .collect()
+    }
+
     fn stop(self) -> Option<String> {
         self.shaper.stop()
     }

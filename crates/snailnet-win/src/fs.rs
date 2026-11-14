@@ -13,7 +13,7 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, PROTECTED_DACL_SECURITY_INFORMATION,
-    PSECURITY_DESCRIPTOR,
+    PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
@@ -127,9 +127,69 @@ pub fn protect_dir(dir: &Path, sddl: &str) -> io::Result<()> {
     result
 }
 
+/// A `SECURITY_ATTRIBUTES` built from SDDL, for creating kernel objects
+/// such as named pipes. Frees its descriptor on drop.
+pub struct SecurityAttributes {
+    sa: SECURITY_ATTRIBUTES,
+}
+
+// SAFETY: the descriptor is a private LocalAlloc'd block that nothing else
+// references; it is only read by the API calls we pass it to.
+unsafe impl Send for SecurityAttributes {}
+// SAFETY: as above; shared references never write through the pointer.
+unsafe impl Sync for SecurityAttributes {}
+
+impl SecurityAttributes {
+    pub fn from_sddl(sddl: &str) -> io::Result<Self> {
+        let s = wide(OsStr::new(sddl));
+        let mut sd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: `s` is NUL-terminated; on success `sd` receives a
+        // LocalAlloc'd descriptor, freed in Drop.
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                s.as_ptr(),
+                SDDL_REVISION_1,
+                &mut sd,
+                std::ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self {
+            sa: SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: sd,
+                bInheritHandle: 0,
+            },
+        })
+    }
+
+    /// For APIs that take `LPSECURITY_ATTRIBUTES`. Valid while `self` lives;
+    /// the callee must only read through it.
+    pub fn as_ptr(&self) -> *mut std::ffi::c_void {
+        (&self.sa as *const SECURITY_ATTRIBUTES).cast_mut().cast()
+    }
+}
+
+impl Drop for SecurityAttributes {
+    fn drop(&mut self) {
+        // SAFETY: the descriptor came from ConvertStringSecurityDescriptor…,
+        // which says to free it with LocalFree; it is freed once.
+        unsafe { LocalFree(self.sa.lpSecurityDescriptor) };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn security_attributes_from_sddl() {
+        let sa = SecurityAttributes::from_sddl("D:P(A;;GA;;;SY)").unwrap();
+        assert!(!sa.as_ptr().is_null());
+        assert!(SecurityAttributes::from_sddl("not sddl").is_err());
+    }
 
     fn tmp(name: &str) -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!("snailnet-win-fs-{name}-{}", std::process::id()));

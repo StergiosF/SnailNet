@@ -164,12 +164,59 @@ ones come first.
    RUNNING/STOPPED, config written, ACL, "shaping down at …" in the log, no
    `running` marker left. The user declined the UAC prompt on 2026-11-14,
    so ask before launching it.
-6. **IPC** (`snailnet-ipc`, §12): named pipe `\\.\pipe\snailnet.v1` with
-   the ACL, length-prefixed MessagePack, protocol v1 messages; make
-   `snailnet-cli` a client (`status`, `rules`, `top`).
+6. ~~**IPC**~~ **Done (2026-11-14).** `crates/snailnet-ipc`: protocol v1
+   types (`ClientMsg{id, Request}`, `ServerMsg::{Reply, Stats, Event}`,
+   `ServiceState`, `Snapshot{rev, state, config, apps}`, `StatsTick`),
+   framing (4-byte LE length + MessagePack via `rmp_serde::to_vec_named`,
+   so structs are maps; 1 MB cap checked before allocating), and a
+   blocking `Client` (Hello on connect, replies matched by id, stats and
+   events queued). Service: `hub` (config + `rev` + state + latest stats +
+   apps; every change checks `rev` → `Conflict`, validates → `Invalid`,
+   saves atomically, bumps `rev`, wakes the runner, broadcasts
+   `ConfigChanged`) and `ipc` (tokio current-thread runtime on its own
+   thread; keeps one instance listening; first instance uses
+   `FILE_FLAG_FIRST_PIPE_INSTANCE`; remote clients rejected; ≤ 16
+   clients; 5 s write timeout; Hello first, protocol 1 only).
+   `PIPE_SDDL`: deny NETWORK; SYSTEM, Admins and Owner Rights full;
+   interactive users `0x12019b` (read/write data, **no** create-instance,
+   so they can't add a fake server instance). The owner ACE is needed:
+   without it the creator can't add a second instance (the tests found
+   this). `SetLine` is an addition to §12.2 (no estimator yet).
+   `SetBlocked`/`FocusChanged`/`Pause`/`RunSpeedTest`/`AnswerPrompt` exist
+   but answer `Unsupported`.
+   Runner: a config change **restarts shaping** with the new plan (flushes
+   queued packets; not counted as a failure); no line speed → waits for a
+   change, so `snailnet line --down 25` starts shaping. Safe mode ignores
+   changes until a restart. States are published to the hub.
+   CLI (no admin needed): `status`, `apps`, `rules [--profile P] [--clear]
+   steam=40:low game.exe=10`, `profile [ID]`, `line [--down] [--up]
+   [--factor] [--clear]`, `top [--hz] [--count]`; hidden `--pipe` to talk
+   to `snailnet-service run --console --pipe NAME`.
+   Verified end to end without admin (console service on a scratch dir
+   and a test pipe): status, rules saved (shown as 38/57/5), overcommit
+   refused, line set → shaping attempted → fail-open counted → state
+   "retrying" visible in `status` and `top`. **Not yet verified with real
+   shaping** (needs elevation): do it together with the service smoke
+   test above, then `snailnet top` during a download.
 
-**Phase 1 exit:** rules editable via the CLI, live stats via
-`snailnet top`, 24 h soak passes (flat memory, no handle leaks).
+   Deferred, worth doing before Phase 1 exit:
+   - **Live rule swap without restart** (§9.6): the scheduler has
+     `LiveConfig`, but `FastPath` takes fixed configs and `AppClassifier`
+     caches app → class. A restart flushes, so nothing is lost, but
+     attribution state is rebuilt (the port snapshot covers open flows).
+   - **Per-app stats** in `StatsTick` (§12.2 `per_family`): needs byte
+     counters per `AppId` in the classifier. `top` shows classes only.
+   - **Client verification** (§12.1: client PID → exe path/signature),
+     and the CLI checking that the server is the service: not done; the
+     DACL is the only gate. The pipe is byte mode, not message mode (the
+     framing makes them equivalent).
+   - The hub saves `config.toml` on the IPC thread (blocking, but tiny).
+7. **Phase 1 exit:** the deferred items above, then the 24 h soak (flat
+   memory, no handle leaks; the 60 s log line prints the sizes).
+
+**Phase 1 exit:** rules editable via the CLI (done), live stats via
+`snailnet top` (done, per class), 24 h soak passes (flat memory, no
+handle leaks).
 
 Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
@@ -179,9 +226,10 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 |---|---|---|
 | `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking, `classify` (flow table, app families, pending window), `rules` (config model → scheduler plan). No OS deps. | 93 |
 | `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers, `pool` (pre-allocated packet buffers), `fastpath` (rx / scheduler / watchdog threads), `MockEngine` | 10 + 7 |
-| `snailnet-win` | process facts (`WinProcesses`: path, creation time, parent, command line, package, publisher, description), PID-by-local-port snapshot (IP Helper), high-res waitable timer, `fs` (atomic replace with backup, data-folder ACL) | 10 |
-| `snailnet-service` (bin `snailnet-service`) | Windows service: install/uninstall, config store, crash guard + Safe mode, logs, supervisor, `shaper` (FLOW/SOCKET/port threads + classifier + fast path) | 19 |
-| `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID/family test), `spike` (shaping via `snailnet_service::shaper`) | 5 |
+| `snailnet-win` | process facts (`WinProcesses`: path, creation time, parent, command line, package, publisher, description), PID-by-local-port snapshot (IP Helper), high-res waitable timer, `fs` (atomic replace with backup, data-folder ACL, `SecurityAttributes` from SDDL) | 11 |
+| `snailnet-ipc` | protocol v1 types, framing, blocking `Client`, pipe SDDL | 5 |
+| `snailnet-service` (bin `snailnet-service`) | Windows service: install/uninstall, config store, crash guard + Safe mode, logs, supervisor, `hub` + `ipc` (pipe server), `shaper` (FLOW/SOCKET/port threads + classifier + fast path) | 34 |
+| `snailnet-cli` (bin `snailnet`) | IPC client (`status`, `apps`, `rules`, `profile`, `line`, `top`); Phase 0 `check` (sniff-only driver/PID/family test) and `spike` (shaping via `snailnet_service::shaper`) | 6 |
 | `snailnet-sim` (bin `snailnet-sim`) | closed-loop traffic models + ISP link on `SimClock`; §19.1 property tests; shaping-factor sweep | 5 + 10 |
 
 `assets/families.toml` is the app-family pack (compiled into core with
@@ -241,6 +289,9 @@ stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
 
 - Work and commit directly on `main`; commit when asked; push only when asked.
 - No browser automation unless explicitly asked.
+- Shell gotchas: Git Bash mangles a `\\.\pipe\…` argument on its way to
+  an exe, so drive pipe tests from PowerShell; and PowerShell variable
+  names are case-insensitive (`$p` and `$P` are the same variable).
 - Library or API docs: look them up with Context7 first.
 - Ask interview-style questions through the options window
   (AskUserQuestion), recommended option first.

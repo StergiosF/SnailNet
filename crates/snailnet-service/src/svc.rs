@@ -16,6 +16,8 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
 
+use crate::hub::Hub;
+use crate::ipc::IpcServer;
 use crate::logging;
 use crate::paths::DataDir;
 use crate::runner::{self, StopSignal, Timing};
@@ -64,8 +66,9 @@ fn status(
 }
 
 fn run_service() -> Result<()> {
-    let stop = StopSignal::new();
-    let handler_stop = stop.clone();
+    let dir = DataDir::system();
+    let hub = Hub::new(dir.clone(), StopSignal::new());
+    let handler_stop = hub.signal().clone();
     let handle = service_control_handler::register(SERVICE_NAME, move |control| match control {
         ServiceControl::Stop | ServiceControl::Shutdown => {
             handler_stop.request();
@@ -81,7 +84,6 @@ fn run_service() -> Result<()> {
         10,
     ))?;
 
-    let dir = DataDir::system();
     let result = dir
         .create_protected()
         .with_context(|| format!("creating {}", dir.root().display()))
@@ -94,13 +96,21 @@ fn run_service() -> Result<()> {
                 0,
                 0,
             ))?;
-            runner::run(
-                &dir,
+            // Shaping doesn't need the pipe: if it can't be created, log
+            // it and carry on (the app and CLI just can't connect).
+            let ipc = IpcServer::start(hub.clone(), snailnet_ipc::PIPE_NAME)
+                .inspect_err(|e| error!("{e:#}"))
+                .ok();
+            let ended = runner::run(
+                &hub,
                 &mut WinEngine::default(),
-                &stop,
                 Timing::default(),
                 &runner::unix_now,
-            )
+            );
+            if let Some(ipc) = ipc {
+                ipc.stop();
+            }
+            ended
         });
     let exit = match &result {
         Ok(_) => 0,

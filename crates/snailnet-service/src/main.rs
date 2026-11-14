@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use snailnet_service::hub::Hub;
+use snailnet_service::ipc::IpcServer;
 use snailnet_service::paths::DataDir;
 use snailnet_service::runner::{self, Ended, StopSignal, Timing};
 use snailnet_service::shaper::WinEngine;
@@ -52,6 +54,10 @@ enum Command {
         /// Receive threads (1 or 2). 2 can reorder packets within a flow.
         #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
         rx_threads: u8,
+        /// Serve clients on this pipe instead of \.\pipe\snailnet.v1
+        /// (for testing next to a running service).
+        #[arg(long, value_name = "NAME", default_value = snailnet_ipc::PIPE_NAME)]
+        pipe: String,
     },
     /// Entry point for the Windows service manager. Not for interactive use.
     #[command(hide = true)]
@@ -66,13 +72,14 @@ fn main() -> Result<()> {
             console,
             data_dir,
             rx_threads,
+            pipe,
         } => {
             if !console {
                 bail!(
                     "use `run --console` to run in this terminal; the service manager starts the real service"
                 );
             }
-            run_console(data_dir, rx_threads.into())
+            run_console(data_dir, rx_threads.into(), &pipe)
         }
         // The data folder and logging are set up inside the service, once
         // the service manager has connected, so running this by hand
@@ -83,7 +90,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn run_console(data_dir: Option<PathBuf>, rx_threads: usize) -> Result<()> {
+fn run_console(data_dir: Option<PathBuf>, rx_threads: usize, pipe: &str) -> Result<()> {
     let dir = match data_dir {
         Some(d) => {
             let dir = DataDir::new(d);
@@ -104,16 +111,18 @@ fn run_console(data_dir: Option<PathBuf>, rx_threads: usize) -> Result<()> {
     };
     logging::init(&dir.logs(), true)?;
     logging::abort_on_panic();
-    let stop = StopSignal::new();
-    let s = stop.clone();
+    let hub = Hub::new(dir.clone(), StopSignal::new());
+    let s = hub.signal().clone();
     ctrlc::set_handler(move || s.request()).context("installing the Ctrl+C handler")?;
+    let ipc = IpcServer::start(hub.clone(), pipe)?;
     let ended = runner::run(
-        &dir,
+        &hub,
         &mut WinEngine { rx_threads },
-        &stop,
         Timing::default(),
         &runner::unix_now,
-    )?;
+    );
+    ipc.stop();
+    let ended = ended?;
     if ended == Ended::StoppedInSafeMode {
         eprintln!(
             "Stopped (was in Safe mode; see the log in {}).",

@@ -1,0 +1,567 @@
+//! The IPC server (PLAN.md §12): `\\.\pipe\snailnet.v1`, protocol v1.
+//!
+//! One thread runs a single-threaded tokio runtime: an accept loop that
+//! always keeps one pipe instance listening, and one task per client. The
+//! pipe's DACL ([`snailnet_ipc::PIPE_SDDL`]) denies network logons and lets
+//! only SYSTEM, Administrators and interactive users in; remote clients are
+//! rejected, and the first instance is created with
+//! `FILE_FLAG_FIRST_PIPE_INSTANCE` so nobody can squat the name first.
+//! Frames are bounded (1 MB) and every change is validated by the hub
+//! before it is saved. Never touches the packet path.
+
+use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use snailnet_ipc::{
+    ClientMsg, ErrorCode, FrameError, MIN_PROTOCOL, PIPE_SDDL, PROTOCOL, Reply, Request, ServerMsg,
+    decode, encode, frame_len, parse_len,
+};
+use snailnet_win::fs::SecurityAttributes;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use tokio::sync::{broadcast, mpsc, watch};
+use tokio::time::{Interval, MissedTickBehavior};
+use tracing::{debug, info, warn};
+
+use crate::hub::Hub;
+
+/// More simultaneous clients than this are turned away.
+const MAX_CLIENTS: usize = 16;
+/// A client that doesn't take a frame within this long is dropped.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub struct IpcServer {
+    shutdown: watch::Sender<bool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl IpcServer {
+    /// Create the pipe and start serving. Fails if the pipe can't be
+    /// created (e.g. another SnailNet service already owns the name).
+    pub fn start(hub: Arc<Hub>, pipe: &str) -> Result<Self> {
+        let sa =
+            Arc::new(SecurityAttributes::from_sddl(PIPE_SDDL).context("building the pipe ACL")?);
+        let (shutdown, rx) = watch::channel(false);
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let pipe = pipe.to_owned();
+        let thread = std::thread::Builder::new()
+            .name("ipc".into())
+            .spawn(move || {
+                let rt = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(e));
+                        return;
+                    }
+                };
+                rt.block_on(async move {
+                    let first = match create(&pipe, true, &sa) {
+                        Ok(s) => {
+                            let _ = ready_tx.send(Ok(()));
+                            s
+                        }
+                        Err(e) => {
+                            let _ = ready_tx.send(Err(e));
+                            return;
+                        }
+                    };
+                    accept_loop(hub, pipe, sa, first, rx).await;
+                });
+            })
+            .context("starting the IPC thread")?;
+        match ready_rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                let _ = thread.join();
+                return Err(e).context("creating the IPC pipe (is another SnailNet running?)");
+            }
+            Err(_) => {
+                let _ = thread.join();
+                anyhow::bail!("the IPC thread ended before it started");
+            }
+        }
+        Ok(Self {
+            shutdown,
+            thread: Some(thread),
+        })
+    }
+
+    /// Close the pipe and every client connection.
+    pub fn stop(mut self) {
+        self.halt();
+    }
+
+    fn halt(&mut self) {
+        let _ = self.shutdown.send(true);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+impl Drop for IpcServer {
+    fn drop(&mut self) {
+        self.halt();
+    }
+}
+
+fn create(pipe: &str, first: bool, sa: &SecurityAttributes) -> io::Result<NamedPipeServer> {
+    let mut o = ServerOptions::new();
+    o.first_pipe_instance(first).reject_remote_clients(true);
+    // SAFETY: `sa` is a valid SECURITY_ATTRIBUTES that outlives this call.
+    unsafe { o.create_with_security_attributes_raw(pipe, sa.as_ptr()) }
+}
+
+async fn accept_loop(
+    hub: Arc<Hub>,
+    pipe: String,
+    sa: Arc<SecurityAttributes>,
+    first: NamedPipeServer,
+    mut shutdown: watch::Receiver<bool>,
+) {
+    info!("IPC: listening on {pipe}");
+    let clients = Arc::new(AtomicUsize::new(0));
+    let mut listening = Some(first);
+    loop {
+        // Keep an instance listening. Creating it right after the previous
+        // one connected leaves only a microsecond gap without one.
+        let server = match &mut listening {
+            Some(s) => s,
+            None => match create(&pipe, false, &sa) {
+                Ok(s) => listening.insert(s),
+                Err(e) => {
+                    warn!("IPC: could not create a pipe instance: {e}; retrying");
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => continue,
+                        _ = shutdown.changed() => break,
+                    }
+                }
+            },
+        };
+        tokio::select! {
+            r = server.connect() => {
+                let client = listening.take().expect("listening");
+                if let Err(e) = r {
+                    debug!("IPC: a client failed to connect: {e}");
+                    continue;
+                }
+                if clients.load(Ordering::Relaxed) >= MAX_CLIENTS {
+                    warn!("IPC: more than {MAX_CLIENTS} clients; turning one away");
+                    continue;
+                }
+                clients.fetch_add(1, Ordering::Relaxed);
+                let (hub, shutdown, clients) = (hub.clone(), shutdown.clone(), clients.clone());
+                tokio::spawn(async move {
+                    if let Err(e) = serve(client, &hub, shutdown).await {
+                        debug!("IPC: client gone: {e}");
+                    }
+                    clients.fetch_sub(1, Ordering::Relaxed);
+                });
+            }
+            _ = shutdown.changed() => break,
+        }
+    }
+    info!("IPC: stopped");
+}
+
+async fn read_msg<R: AsyncRead + Unpin>(r: &mut R) -> Result<ClientMsg, FrameError> {
+    let mut prefix = [0u8; 4];
+    r.read_exact(&mut prefix).await?;
+    let mut body = vec![0u8; parse_len(prefix)?];
+    r.read_exact(&mut body).await?;
+    decode(&body)
+}
+
+async fn write_msg<W: AsyncWrite + Unpin>(w: &mut W, msg: &ServerMsg) -> Result<(), FrameError> {
+    let body = encode(msg)?;
+    let mut buf = Vec::with_capacity(4 + body.len());
+    buf.extend_from_slice(&frame_len(body.len())?);
+    buf.extend_from_slice(&body);
+    match tokio::time::timeout(WRITE_TIMEOUT, async {
+        w.write_all(&buf).await?;
+        w.flush().await
+    })
+    .await
+    {
+        Ok(r) => Ok(r?),
+        Err(_) => Err(io::Error::new(io::ErrorKind::TimedOut, "client stopped reading").into()),
+    }
+}
+
+async fn next_tick(t: &mut Option<Interval>) {
+    match t {
+        Some(i) => {
+            i.tick().await;
+        }
+        None => std::future::pending().await,
+    }
+}
+
+/// Per-client state.
+struct Session {
+    hello: bool,
+    ticker: Option<Interval>,
+}
+
+async fn serve(
+    pipe: NamedPipeServer,
+    hub: &Hub,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<(), FrameError> {
+    let (mut rd, mut wr) = tokio::io::split(pipe);
+    // Reading isn't cancel-safe, so it gets its own task and a channel.
+    let (tx, mut rx) = mpsc::channel::<Result<ClientMsg, FrameError>>(8);
+    let reader = tokio::spawn(async move {
+        loop {
+            let m = read_msg(&mut rd).await;
+            let end = m.is_err();
+            if tx.send(m).await.is_err() || end {
+                break;
+            }
+        }
+    });
+    let mut events = hub.subscribe();
+    let mut s = Session {
+        hello: false,
+        ticker: None,
+    };
+    let result = loop {
+        tokio::select! {
+            m = rx.recv() => {
+                let msg = match m {
+                    Some(Ok(m)) => m,
+                    Some(Err(e)) => break Err(e),
+                    None => break Ok(()),
+                };
+                let reply = handle(hub, &mut s, msg.req);
+                let bye = matches!(reply, Reply::Error { code: ErrorCode::Handshake, .. });
+                if let Err(e) = write_msg(&mut wr, &ServerMsg::Reply { id: msg.id, reply }).await {
+                    break Err(e);
+                }
+                if bye {
+                    break Ok(());
+                }
+            }
+            _ = next_tick(&mut s.ticker) => {
+                if let Err(e) = write_msg(&mut wr, &ServerMsg::Stats(hub.latest_tick())).await {
+                    break Err(e);
+                }
+            }
+            ev = events.recv() => match ev {
+                Ok(ev) if s.hello => {
+                    if let Err(e) = write_msg(&mut wr, &ServerMsg::Event(ev)).await {
+                        break Err(e);
+                    }
+                }
+                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Closed) => break Ok(()),
+            },
+            _ = shutdown.changed() => break Ok(()),
+        }
+    };
+    reader.abort();
+    result
+}
+
+fn err(code: ErrorCode, msg: impl Into<String>) -> Reply {
+    Reply::Error {
+        code,
+        msg: msg.into(),
+    }
+}
+
+fn ack(r: Result<u64, (ErrorCode, String)>) -> Reply {
+    match r {
+        Ok(rev) => Reply::Ack { rev },
+        Err((code, msg)) => err(code, msg),
+    }
+}
+
+fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
+    if !s.hello && !matches!(req, Request::Hello { .. }) {
+        return err(ErrorCode::Handshake, "say Hello first");
+    }
+    debug!("IPC: {}", req.name());
+    match req {
+        Request::Hello {
+            protocol,
+            client_version,
+            ..
+        } => {
+            if !(MIN_PROTOCOL..=PROTOCOL).contains(&protocol) {
+                return err(
+                    ErrorCode::Handshake,
+                    format!(
+                        "protocol {protocol} isn't supported (this service speaks {MIN_PROTOCOL}–{PROTOCOL})"
+                    ),
+                );
+            }
+            debug!("IPC: hello from client {client_version}");
+            s.hello = true;
+            Reply::Welcome {
+                service_version: env!("CARGO_PKG_VERSION").into(),
+                protocol: PROTOCOL,
+                state: hub.state(),
+            }
+        }
+        Request::GetSnapshot => Reply::Snapshot(hub.snapshot()),
+        Request::Subscribe { stats_hz } => {
+            let every = Duration::from_millis(1000 / u64::from(stats_hz.clamp(1, 10)));
+            let mut i = tokio::time::interval(every);
+            i.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            s.ticker = Some(i);
+            Reply::Ack { rev: hub.rev() }
+        }
+        Request::Unsubscribe => {
+            s.ticker = None;
+            Reply::Ack { rev: hub.rev() }
+        }
+        Request::SetRules {
+            profile_id,
+            rules,
+            rev,
+        } => ack(hub.set_rules(&profile_id, rules, rev)),
+        Request::SwitchProfile { id, rev } => ack(hub.switch_profile(&id, rev)),
+        Request::SetLine { line, rev } => ack(hub.set_line(line, rev)),
+        other @ (Request::SetBlocked { .. }
+        | Request::FocusChanged { .. }
+        | Request::Pause { .. }
+        | Request::RunSpeedTest
+        | Request::AnswerPrompt { .. }) => err(
+            ErrorCode::Unsupported,
+            format!("{} isn't available in this version", other.name()),
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use snailnet_core::rules::{Config, Line, Rule, Target};
+    use snailnet_ipc::{Client, ClientError, Event, ServiceState};
+
+    use super::*;
+    use crate::paths::DataDir;
+    use crate::runner::StopSignal;
+
+    fn pipe_name(tag: &str) -> String {
+        format!(r"\\.\pipe\snailnet-test-{tag}-{}", std::process::id())
+    }
+
+    fn setup(tag: &str) -> (tempfile::TempDir, Arc<Hub>, IpcServer, String) {
+        let t = tempfile::tempdir().unwrap();
+        let d = DataDir::new(t.path());
+        d.create().unwrap();
+        let hub = Hub::new(d, StopSignal::new());
+        hub.set_loaded(Config::default());
+        let pipe = pipe_name(tag);
+        let server = IpcServer::start(hub.clone(), &pipe).unwrap();
+        (t, hub, server, pipe)
+    }
+
+    fn snapshot(c: &mut Client) -> snailnet_ipc::Snapshot {
+        match c.call(Request::GetSnapshot).unwrap() {
+            Reply::Snapshot(s) => s,
+            r => panic!("{r:?}"),
+        }
+    }
+
+    #[test]
+    fn hello_snapshot_and_a_rule_change() {
+        let (_t, hub, server, pipe) = setup("rules");
+        let mut c = Client::connect(&pipe, "test").unwrap();
+        assert_eq!(c.service_version, env!("CARGO_PKG_VERSION"));
+        let snap = snapshot(&mut c);
+        assert_eq!((snap.rev, &snap.state), (1, &ServiceState::Starting));
+
+        let rule = Rule {
+            target: Target::family("steam"),
+            share: 4000,
+            priority: Default::default(),
+            ceiling: None,
+            enabled: true,
+        };
+        let r = c.call(Request::SetRules {
+            profile_id: "balanced".into(),
+            rules: vec![rule.clone()],
+            rev: 1,
+        });
+        assert_eq!(r.unwrap(), Reply::Ack { rev: 2 });
+        assert!(hub.signal().take_reload(), "the runner is told");
+        assert_eq!(snapshot(&mut c).config.profiles[0].rules, vec![rule]);
+
+        // The change is broadcast to clients.
+        match c.recv().unwrap() {
+            ServerMsg::Event(Event::ConfigChanged { rev: 2 }) => {}
+            m => panic!("{m:?}"),
+        }
+        server.stop();
+    }
+
+    #[test]
+    fn two_clients_cant_overwrite_each_other() {
+        let (_t, _hub, server, pipe) = setup("conflict");
+        let mut a = Client::connect(&pipe, "a").unwrap();
+        let mut b = Client::connect(&pipe, "b").unwrap();
+        let line = |m| Line {
+            down_mbps: Some(m),
+            ..Line::default()
+        };
+        assert_eq!(
+            a.call(Request::SetLine {
+                line: line(25.0),
+                rev: 1
+            })
+            .unwrap(),
+            Reply::Ack { rev: 2 }
+        );
+        match b.call(Request::SetLine {
+            line: line(50.0),
+            rev: 1,
+        }) {
+            Err(ClientError::Refused {
+                code: ErrorCode::Conflict,
+                ..
+            }) => {}
+            r => panic!("{r:?}"),
+        }
+        assert_eq!(snapshot(&mut b).config.line.down_mbps, Some(25.0));
+        server.stop();
+    }
+
+    #[test]
+    fn invalid_and_unsupported_requests_are_refused() {
+        let (_t, _hub, server, pipe) = setup("refuse");
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        match c.call(Request::SwitchProfile {
+            id: "nope".into(),
+            rev: 1,
+        }) {
+            Err(ClientError::Refused {
+                code: ErrorCode::Invalid,
+                ..
+            }) => {}
+            r => panic!("{r:?}"),
+        }
+        match c.call(Request::RunSpeedTest) {
+            Err(ClientError::Refused {
+                code: ErrorCode::Unsupported,
+                ..
+            }) => {}
+            r => panic!("{r:?}"),
+        }
+        // Still usable afterwards.
+        assert_eq!(snapshot(&mut c).rev, 1);
+        server.stop();
+    }
+
+    #[test]
+    fn subscribe_streams_stats() {
+        let (_t, hub, server, pipe) = setup("stats");
+        hub.set_state(ServiceState::Unshaped);
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        c.call(Request::Subscribe { stats_hz: 10 }).unwrap();
+        let mut ticks = 0;
+        while ticks < 3 {
+            if let ServerMsg::Stats(t) = c.recv().unwrap() {
+                assert_eq!(t.state, ServiceState::Unshaped);
+                ticks += 1;
+            }
+        }
+        server.stop();
+    }
+
+    #[test]
+    fn requests_before_hello_are_refused_and_the_pipe_closed() {
+        let (_t, _hub, server, pipe) = setup("hello");
+        use std::os::windows::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .access_mode(snailnet_ipc::CLIENT_ACCESS)
+            .open(&pipe)
+            .unwrap();
+        snailnet_ipc::write_frame(
+            &mut f,
+            &ClientMsg {
+                id: 9,
+                req: Request::GetSnapshot,
+            },
+        )
+        .unwrap();
+        let m: ServerMsg = snailnet_ipc::read_frame(&mut f).unwrap();
+        assert!(matches!(
+            m,
+            ServerMsg::Reply {
+                id: 9,
+                reply: Reply::Error {
+                    code: ErrorCode::Handshake,
+                    ..
+                }
+            }
+        ));
+        let next: Result<ServerMsg, _> = snailnet_ipc::read_frame(&mut f);
+        assert!(next.is_err(), "the service hung up");
+
+        // A future protocol is refused too.
+        let mut f = std::fs::OpenOptions::new()
+            .access_mode(snailnet_ipc::CLIENT_ACCESS)
+            .open(&pipe)
+            .unwrap();
+        let hello = Request::Hello {
+            client_version: "x".into(),
+            protocol: PROTOCOL + 1,
+            ui_capabilities: vec![],
+        };
+        snailnet_ipc::write_frame(&mut f, &ClientMsg { id: 1, req: hello }).unwrap();
+        let m: ServerMsg = snailnet_ipc::read_frame(&mut f).unwrap();
+        assert!(matches!(
+            m,
+            ServerMsg::Reply {
+                reply: Reply::Error {
+                    code: ErrorCode::Handshake,
+                    ..
+                },
+                ..
+            }
+        ));
+        server.stop();
+    }
+
+    #[test]
+    fn oversized_frames_drop_the_client_only() {
+        let (_t, _hub, server, pipe) = setup("big");
+        use std::io::Write;
+        use std::os::windows::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .access_mode(snailnet_ipc::CLIENT_ACCESS)
+            .open(&pipe)
+            .unwrap();
+        f.write_all(&(64u32 << 20).to_le_bytes()).unwrap();
+        let r: Result<ServerMsg, _> = snailnet_ipc::read_frame(&mut f);
+        assert!(r.is_err(), "the service hung up");
+        // Others are unaffected.
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        assert_eq!(snapshot(&mut c).rev, 1);
+        server.stop();
+    }
+
+    #[test]
+    fn a_second_server_on_the_same_name_is_refused() {
+        let (_t, hub, server, pipe) = setup("twice");
+        assert!(IpcServer::start(hub, &pipe).is_err());
+        server.stop();
+    }
+
+    #[test]
+    fn no_service_means_not_running() {
+        match Client::connect(&pipe_name("absent"), "t") {
+            Err(ClientError::NotRunning(_)) => {}
+            r => panic!("{:?}", r.err()),
+        }
+    }
+}

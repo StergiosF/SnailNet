@@ -9,11 +9,15 @@
 //!   (also used by `snailnet spike`).
 //! - [`runner`]: the supervisor loop: load config, shape, fail open, retry,
 //!   fall back to Safe mode.
+//! - [`hub`], [`ipc`]: shared state and the named-pipe server for the app
+//!   and CLI (§12).
 //! - [`svc`], [`install`]: the Windows service itself.
 #![cfg(windows)]
 
 pub mod crashguard;
+pub mod hub;
 pub mod install;
+pub mod ipc;
 pub mod logging;
 pub mod paths;
 pub mod runner;
