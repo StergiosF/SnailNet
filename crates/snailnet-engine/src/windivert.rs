@@ -62,6 +62,11 @@ pub mod flags {
 pub mod event {
     pub const FLOW_ESTABLISHED: u8 = 1;
     pub const FLOW_DELETED: u8 = 2;
+    pub const SOCKET_BIND: u8 = 3;
+    pub const SOCKET_CONNECT: u8 = 4;
+    pub const SOCKET_LISTEN: u8 = 5;
+    pub const SOCKET_ACCEPT: u8 = 6;
+    pub const SOCKET_CLOSE: u8 = 7;
 }
 
 const SHUTDOWN_RECV: i32 = 0x1;

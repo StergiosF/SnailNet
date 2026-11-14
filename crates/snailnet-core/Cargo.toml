@@ -8,6 +8,9 @@ publish.workspace = true
 
 [dependencies]
 arc-swap = "1.9.5"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
+toml = "1.1.4"
 
 [lints]
 workspace = true

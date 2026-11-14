@@ -101,7 +101,7 @@ ones come first.
    `crates/snailnet-engine/tests/fastpath.rs` (rate, 40/60 split, ACK
    jumps the queue, LAN/unshaped bypass, stop flushes, stalled scheduler
    fails open and loses nothing, empty pool passes through), stable over
-   15 repeated runs. **Start at step 4 next.**
+   15 repeated runs.
 
    Real-driver run (2026-11-14, `scripts/phase0-synthetic.ps1`, 25 Mbps,
    factor 0.92, a.exe=40 / b.exe=60, one curl stream each): no fail-open,
@@ -118,10 +118,28 @@ ones come first.
      connections ending or restarting, which are the slow-start bursts the
      simulator predicted. Next: the same run with `-Factor 0.85`, and
      longer downloads so connections don't churn.
-4. **Classification** (§6.3, §7): flow table keyed by (pid, process
-   creation time), SOCKET-layer early mapping, 50 ms pending window, app
-   families (packs in `assets/`, same-folder+publisher fallback, parent chain
-   for generic hosts, `svchost -s` → "Windows Update").
+4. ~~**Classification**~~ **Done (2026-11-14).** `snailnet-core::classify`:
+   `flow` (FlowTable: FLOW events > SOCKET connect/accept > SOCKET
+   bind/listen by local port > 1 s port snapshot; SOCKET entries leave on
+   close, FLOW on delete; capped), `family` (Resolver over a
+   `ProcessSource`: pack `assets/families.toml` → `svchost -s` → generic
+   host's nearest real ancestor (parent must be older than the child) →
+   Store package → same folder + same publisher (never inside Windows or
+   `steamapps\common`) → the exe alone; cached by (pid, creation time), so
+   a reused PID is resolved afresh), `Attribution` (resolves on the event
+   threads, interns (family, exe) as `AppId`; rx threads do one read-locked
+   lookup) and `Pending` (per rx thread, 50 ms window, bounded).
+   `snailnet-win::process::WinProcesses` supplies creation time, parent,
+   command line (svchost only), package family, embedded-signature
+   publisher and FileDescription. The CLI got `events.rs` (flow-sniffer,
+   socket-sniffer, port-table threads); `--app` takes families
+   (`--app steam=40:low --app brave=60`) or exes; `check` prints each
+   flow's family. Real-driver run (synthetic, 25 Mbps, 0.92): SOCKET layer
+   opens fine; 100% of packets attributed (0% pending/unknown); split
+   39–42 / 58–61 while both ran (b's curl stopped at ~21 s again); ping
+   idle 10 ms, loaded avg 22 / max 47, 0 lost (one sample; the last run
+   was 38/221 — less connection churn this time, not a classify effect).
+   **Start at step 5 next.**
 5. **Windows service** (`snailnet-service`, §4, §17): `windows-service`
    crate, `install` / `uninstall` / `run --console`; config TOML in
    `C:\ProgramData\SnailNet\` with atomic writes + `.bak` (§13); `tracing`
@@ -139,11 +157,14 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
 | Crate | Role | Tests |
 |---|---|---|
-| `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking. No OS deps. | 58 |
+| `snailnet-core` | `Clock` (real + sim), full §9 scheduler (priority DRR, ceilings, FQ + CoDel/ECN, express lane, live reconfig, `shares`), IPv4/IPv6/TCP/UDP parser + ECN marking, `classify` (flow table, app families, pending window). No OS deps. | 83 |
 | `snailnet-engine` | `PacketEngine` trait, `WinDivertLib`/`WinDivert` (runtime-loaded FFI via `libloading`), `Address` (80-byte `WINDIVERT_ADDRESS`), batch buffers, `pool` (pre-allocated packet buffers), `fastpath` (rx / scheduler / watchdog threads), `MockEngine` | 10 + 7 |
-| `snailnet-win` | exe name by PID, PID-by-local-port snapshot (IP Helper), high-res waitable timer | 4 |
-| `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID test), `spike` (shaping) | 6 |
+| `snailnet-win` | process facts (`WinProcesses`: path, creation time, parent, command line, package, publisher, description), PID-by-local-port snapshot (IP Helper), high-res waitable timer | 8 |
+| `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID/family test), `spike` (shaping), `events` (FLOW/SOCKET/port threads) | 5 |
 | `snailnet-sim` (bin `snailnet-sim`) | closed-loop traffic models + ISP link on `SimClock`; §19.1 property tests; shaping-factor sweep | 5 + 10 |
+
+`assets/families.toml` is the app-family pack (compiled into core with
+`include_str!`; its tests check it parses).
 
 WinDivert 2.2.2 is pinned in `third_party/windivert/` (hashes and signature
 notes in its README). The DLL is found via `$SNAILNET_WINDIVERT_DIR`, then
@@ -176,16 +197,20 @@ stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
   RUNNING), which locks `third_party/windivert/x64/WinDivert64.sys`. Git
   can't rewrite that file until it's unloaded: `sc stop WinDivert`
   (elevated) or reboot. Avoid checkouts that touch it.
-- `spike` shortcuts still left for Phase 1 step 4: attribution is the
-  Phase 0 FLOW map + port snapshot (no SOCKET layer, no pending window, no
-  app families); DNS is excluded by the filter rather than sent express.
-  The Phase 0 numbers in the report were measured with the *old*
+- `spike` still excludes DNS by the filter rather than sending it express
+  (Phase 2 sniffs DNS). The Phase 0 numbers in the report were measured with the *old*
   scheduler and rx loop (tail drop, no CoDel, ACKs bypassed); re-run the
   synthetic test to see what CoDel and the express lane do to the ping gap.
 - With `--rx-threads 2`, two receive batches can overtake each other, so
   packets of one flow may be reordered. Keep 1 unless rx is the bottleneck.
 - "Everything else" keeps a 5% floor, so 40/60 rules now shape as exactly
   38/57/5 (`shares::normalize`; the old scheduler gave 38.1/57.1/4.8).
+- Only `WinDivert64.sys` carries an embedded signature; `WinDivert.dll`
+  is unsigned (the publisher test reads the `.sys`).
+- Family resolution order matters for folder grouping: a pack app
+  "teaches" its folder + publisher, so an unlisted signed helper seen
+  *before* its main exe gets its own folder family instead. Rare; fine
+  until the UI's split/merge (§11.6).
 - The driver's signing cert (a Chengdu company, the one upstream used for
   2.2.2) has expired; its timestamp keeps it valid, but some AVs block it.
 - The user's browser is **Brave**. The line is about 25 Mbps down; upload

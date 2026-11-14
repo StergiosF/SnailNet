@@ -13,24 +13,25 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use snailnet_core::classify::{AppId, FlowKey, Miss, Pending, Source};
+use snailnet_core::clock::{Clock, MonotonicClock};
 use snailnet_core::parse::ip::PacketInfo;
 use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
-use snailnet_engine::RecvBatch;
-use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
     Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot,
 };
-use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
+use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib};
 use snailnet_win::timer::HighResTimer;
 
-use crate::attrib::{Attribution, FlowKey, Source};
+use crate::events::{self, Sniffers, WinAttribution};
 use crate::rules::{self, AppRule};
 
 #[derive(clap::Args, Debug)]
 pub struct SpikeArgs {
-    /// App rule EXE[,EXE…]=PERCENT[:high|normal|low], repeatable. Example:
-    /// --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60
-    #[arg(long = "app", value_name = "EXE=PERCENT", value_parser = rules::parse_rule, required = true)]
+    /// App rule APP[,APP…]=PERCENT[:high|normal|low], repeatable. APP is a
+    /// family (steam, brave, windows-update: see assets/families.toml) or an
+    /// exe (game.exe). Example: --app steam=40:low --app brave=60
+    #[arg(long = "app", value_name = "APP=PERCENT", value_parser = rules::parse_rule, required = true)]
     apps: Vec<AppRule>,
     /// Your line's download speed in Mbps. Turns on download shaping.
     #[arg(long, value_name = "MBPS")]
@@ -68,51 +69,67 @@ fn direction(rules: &[AppRule], line_mbps: f64, factor: f64) -> Result<Scheduler
     })
 }
 
-/// How packets were attributed to an app.
+/// How packets were attributed to an app (packet counts), plus flows whose
+/// first packets beat their FLOW/SOCKET event.
 #[derive(Default)]
 struct WhoCounters {
     by_flow: AtomicU64,
+    by_socket: AtomicU64,
     by_port: AtomicU64,
-    unattributed: AtomicU64,
+    pending: AtomicU64,
+    unknown: AtomicU64,
+    late_flows: AtomicU64,
 }
 
-/// Packet → app → rule. Each rx thread has its own clone (and PID cache).
+/// Packet → app → rule. Each rx thread has its own clone (caches and
+/// pending list); the attribution behind it is shared.
 #[derive(Clone)]
 struct AppClassifier {
-    attribution: Arc<Attribution>,
+    attribution: Arc<WinAttribution>,
     who: Arc<WhoCounters>,
     rules: Arc<[AppRule]>,
     other_class: ClassId,
-    /// PID → class, refreshed every few seconds to survive PID reuse.
-    pid_class: HashMap<u32, ClassId>,
-    cache_born: Instant,
+    /// App ids are never reused (a reused PID is a new process key and is
+    /// resolved afresh), so this needs no expiry. One entry per app.
+    app_class: HashMap<AppId, ClassId>,
+    pending: Pending,
+    clock: Arc<MonotonicClock>,
     /// Keyed per run, so nobody on the internet can aim flows at one bucket.
     /// Clones share the keys, so every rx thread hashes a flow the same.
     flow_hasher: RandomState,
 }
 
+impl AppClassifier {
+    fn class_of(&mut self, app: AppId) -> ClassId {
+        let (rules, other, attribution) = (&self.rules, self.other_class, &self.attribution);
+        *self.app_class.entry(app).or_insert_with(|| {
+            let app = attribution.app(app);
+            rules.iter().position(|r| r.matches(&app)).unwrap_or(other)
+        })
+    }
+}
+
 impl Classifier for AppClassifier {
     fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta {
-        if self.cache_born.elapsed() > Duration::from_secs(5) {
-            self.pid_class.clear();
-            self.cache_born = Instant::now();
-        }
         let key = FlowKey::from_packet(info, outbound);
+        let who = self.who.clone();
         let class = match self.attribution.lookup(&key) {
-            Some((pid, source)) => {
+            Some((owner, source)) => {
+                if self.pending.hit(&key) {
+                    who.late_flows.fetch_add(1, Relaxed);
+                }
                 match source {
-                    Source::Flow => self.who.by_flow.fetch_add(1, Relaxed),
-                    Source::Port => self.who.by_port.fetch_add(1, Relaxed),
+                    Source::Flow => who.by_flow.fetch_add(1, Relaxed),
+                    Source::Socket => who.by_socket.fetch_add(1, Relaxed),
+                    Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
-                let (rules, other) = (&self.rules, self.other_class);
-                *self.pid_class.entry(pid).or_insert_with(|| {
-                    snailnet_win::process::exe_name(pid)
-                        .and_then(|exe| rules.iter().position(|r| r.matches(&exe)))
-                        .unwrap_or(other)
-                })
+                self.class_of(owner.app)
             }
             None => {
-                self.who.unattributed.fetch_add(1, Relaxed);
+                match self.pending.miss(key, self.clock.now()) {
+                    Miss::Pending => who.pending.fetch_add(1, Relaxed),
+                    Miss::Unknown => who.unknown.fetch_add(1, Relaxed),
+                };
                 self.other_class
             }
         };
@@ -162,19 +179,9 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         _ => {}
     }
 
-    // Open the sniff-only FLOW handle first so no new flow is missed.
-    let flow = Arc::new(
-        WinDivert::open(
-            &lib,
-            "!loopback and (tcp or udp)",
-            Layer::Flow,
-            0,
-            flags::SNIFF | flags::RECV_ONLY,
-        )
-        .context("opening the FLOW layer (PID mapping)")?,
-    );
-    let attribution = Arc::new(Attribution::default());
-    attribution.set_ports(snailnet_win::ports::snapshot());
+    // Start the sniff-only FLOW/SOCKET threads first so no new flow is missed.
+    let attribution = Arc::new(events::new_attribution());
+    let sniffers = Sniffers::start(&lib, attribution.clone())?;
     let net = Arc::new(
         WinDivert::open(&lib, &filter, Layer::Network, 0, 0)
             .context("opening the NETWORK layer")?,
@@ -184,32 +191,14 @@ pub fn run(args: SpikeArgs) -> Result<()> {
 
     let stop = Arc::new(AtomicBool::new(false));
     {
-        let (stop, net, flow) = (stop.clone(), net.clone(), flow.clone());
+        let (stop, net, stop_sniffers) = (stop.clone(), net.clone(), sniffers.stopper());
         ctrlc::set_handler(move || {
             stop.store(true, Relaxed);
             net.shutdown_recv();
-            flow.shutdown_recv();
+            stop_sniffers();
         })
         .context("installing the Ctrl+C handler")?;
     }
-
-    let flow_thread = {
-        let (flow, attribution) = (flow.clone(), attribution.clone());
-        std::thread::Builder::new()
-            .name("flow-sniffer".into())
-            .spawn(move || flow_loop(&flow, &attribution))?
-    };
-    let port_thread = {
-        let (attribution, stop) = (attribution.clone(), stop.clone());
-        std::thread::Builder::new()
-            .name("port-table".into())
-            .spawn(move || {
-                while !stop.load(Relaxed) {
-                    std::thread::sleep(Duration::from_secs(1));
-                    attribution.set_ports(snailnet_win::ports::snapshot());
-                }
-            })?
-    };
 
     let who = Arc::new(WhoCounters::default());
     let classifier = AppClassifier {
@@ -217,8 +206,9 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         who: who.clone(),
         rules: args.apps.clone().into(),
         other_class: args.apps.len(),
-        pid_class: HashMap::new(),
-        cache_born: Instant::now(),
+        app_class: HashMap::new(),
+        pending: Pending::default(),
+        clock: Arc::new(MonotonicClock::new()),
         flow_hasher: RandomState::new(),
     };
     let timer = HighResTimer::new().context("creating a high-resolution timer")?;
@@ -245,9 +235,7 @@ pub fn run(args: SpikeArgs) -> Result<()> {
     };
 
     stop.store(true, Relaxed);
-    flow.shutdown_recv();
-    let _ = flow_thread.join();
-    let _ = port_thread.join();
+    sniffers.stop();
     println!("\nStopped. Handles closed; traffic flows normally again.");
     match failure {
         Some(reason) => bail!("failed open: {reason}"),
@@ -278,25 +266,6 @@ fn print_header(args: &SpikeArgs) {
     println!();
 }
 
-fn flow_loop(flow: &WinDivert, attribution: &Attribution) {
-    let mut batch = RecvBatch::new(DEFAULT_BATCH);
-    while flow.recv(&mut batch).is_ok() {
-        for a in batch.addresses() {
-            let f = a.flow();
-            let key = FlowKey::new(
-                f.protocol,
-                (f.local_ip(), f.local_port),
-                (f.remote_ip(), f.remote_port),
-            );
-            match a.event() {
-                event::FLOW_ESTABLISHED => attribution.flow_established(key, f.process_id),
-                event::FLOW_DELETED => attribution.flow_deleted(&key),
-                _ => {}
-            }
-        }
-    }
-}
-
 /// Print a stats line every `--interval` until Ctrl+C, `--duration`, or the
 /// fast path fails open.
 fn report_until_stopped(
@@ -304,7 +273,7 @@ fn report_until_stopped(
     args: &SpikeArgs,
     stop: &AtomicBool,
     who: &WhoCounters,
-    attribution: &Attribution,
+    attribution: &WinAttribution,
 ) {
     let started = Instant::now();
     let every = Duration::from_secs(args.interval.max(1));
@@ -364,7 +333,7 @@ impl Stats {
         snap: &Snapshot,
         counters: Counters,
         who: &WhoCounters,
-        attribution: &Attribution,
+        attribution: &WinAttribution,
     ) {
         let secs = (at - self.last_at).as_secs_f64().max(1e-3);
         for (arrow, d, last) in [
@@ -400,22 +369,31 @@ impl Stats {
             println!("{line}");
             *last = now;
         }
-        let (f, p, u) = (
-            who.by_flow.swap(0, Relaxed),
-            who.by_port.swap(0, Relaxed),
-            who.unattributed.swap(0, Relaxed),
-        );
-        let n = (f + p + u).max(1) as f64;
+        let take = |c: &AtomicU64| c.swap(0, Relaxed);
+        let counts = [
+            ("flow", take(&who.by_flow)),
+            ("socket", take(&who.by_socket)),
+            ("port", take(&who.by_port)),
+            ("pending", take(&who.pending)),
+            ("unknown", take(&who.unknown)),
+        ];
+        let n = counts.iter().map(|(_, v)| v).sum::<u64>().max(1) as f64;
         let c = counters;
         let l = self.last_counters;
-        let mut line = format!(
-            "         who: flow {:.0}% · port {:.0}% · unknown {:.0}% · passthrough {} pkts · {} flows tracked",
-            f as f64 * 100.0 / n,
-            p as f64 * 100.0 / n,
-            u as f64 * 100.0 / n,
+        let mut line = String::from("         who:");
+        for (name, v) in counts {
+            line += &format!(" {name} {:.0}% ·", v as f64 * 100.0 / n);
+        }
+        let (flows, sockets, ports, full) = attribution.sizes();
+        line += &format!(
+            " late flows {} · passthrough {} pkts · tracking {flows} flows, {sockets} sockets, {ports} ports, {} apps",
+            take(&who.late_flows),
             c.bypassed - l.bypassed,
-            attribution.flow_count()
+            attribution.app_count()
         );
+        if full > 0 {
+            line += &format!(" · TABLE FULL, skipped {full}");
+        }
         let overflow = (c.pool_exhausted - l.pool_exhausted) + (c.channel_full - l.channel_full);
         if overflow > 0 {
             line += &format!(" · overflow passthrough {overflow} pkts");

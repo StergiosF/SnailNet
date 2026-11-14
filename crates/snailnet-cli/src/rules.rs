@@ -1,32 +1,43 @@
-//! `--app steam.exe,steamwebhelper.exe=40[:low]` rules → scheduler classes.
+//! `--app steam=40[:low]` rules → scheduler classes.
+//!
+//! A rule names apps by family id (`steam`: Steam and all its helpers, from
+//! `assets/families.toml`) or by exe (`steamwebhelper.exe`, or just
+//! `steamwebhelper`).
 
+use snailnet_core::classify::App;
 use snailnet_core::scheduler::{ClassConfig, Priority, shares};
 
 pub const OTHER_NAME: &str = "everything else";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppRule {
-    /// Lowercased exe file names, e.g. `["steam.exe", "steamwebhelper.exe"]`.
-    pub exes: Vec<String>,
+    /// Lowercased family ids or exe names, e.g. `["steam", "game.exe"]`.
+    pub names: Vec<String>,
     pub percent: u32,
     pub prio: Priority,
 }
 
 impl AppRule {
     pub fn label(&self) -> String {
-        self.exes.join("+")
+        self.names.join("+")
     }
 
-    pub fn matches(&self, exe: &str) -> bool {
-        self.exes.iter().any(|e| e == exe)
+    pub fn matches(&self, app: &App) -> bool {
+        self.names.iter().any(|n| names(n, app))
     }
 }
 
-/// clap value parser for `--app`: `EXE[,EXE…]=PERCENT[:high|normal|low]`.
+/// Does rule name `n` cover `app`? Family id, exe, or exe without `.exe`.
+fn names(n: &str, app: &App) -> bool {
+    n == app.family
+        || (!app.exe.is_empty() && (n == app.exe || app.exe.strip_suffix(".exe") == Some(n)))
+}
+
+/// clap value parser for `--app`: `APP[,APP…]=PERCENT[:high|normal|low]`.
 pub fn parse_rule(s: &str) -> Result<AppRule, String> {
     let (names, rest) = s
         .rsplit_once('=')
-        .ok_or_else(|| format!("expected EXE=PERCENT, got {s:?}"))?;
+        .ok_or_else(|| format!("expected APP=PERCENT, got {s:?}"))?;
     let (pct, prio) = match rest.split_once(':') {
         None => (rest, Priority::Normal),
         Some((pct, p)) => (pct, parse_prio(p)?),
@@ -39,23 +50,16 @@ pub fn parse_rule(s: &str) -> Result<AppRule, String> {
     if !(1..=95).contains(&percent) {
         return Err(format!("share must be 1–95%, got {percent}%"));
     }
-    let exes: Vec<String> = names
+    let names: Vec<String> = names
         .split(',')
         .map(|n| n.trim().to_lowercase())
         .filter(|n| !n.is_empty())
-        .map(|n| {
-            if n.ends_with(".exe") {
-                n
-            } else {
-                format!("{n}.exe")
-            }
-        })
         .collect();
-    if exes.is_empty() {
-        return Err(format!("no executable names in {s:?}"));
+    if names.is_empty() {
+        return Err(format!("no app names in {s:?}"));
     }
     Ok(AppRule {
-        exes,
+        names,
         percent,
         prio,
     })
@@ -81,9 +85,9 @@ pub fn classes(rules: &[AppRule]) -> Result<Vec<ClassConfig>, String> {
         return Err(format!("shares add up to {sum}%, more than 100%"));
     }
     for (i, r) in rules.iter().enumerate() {
-        for e in &r.exes {
-            if rules[..i].iter().any(|p| p.matches(e)) {
-                return Err(format!("{e} appears in more than one rule"));
+        for n in &r.names {
+            if rules[..i].iter().any(|p| p.names.contains(n)) {
+                return Err(format!("{n} appears in more than one rule"));
             }
         }
     }
@@ -110,7 +114,7 @@ mod tests {
         assert_eq!(
             parse_rule("Steam.exe, steamwebhelper=40%").unwrap(),
             AppRule {
-                exes: vec!["steam.exe".into(), "steamwebhelper.exe".into()],
+                names: vec!["steam.exe".into(), "steamwebhelper".into()],
                 percent: 40,
                 prio: Priority::Normal,
             }
@@ -123,6 +127,29 @@ mod tests {
         assert!(parse_rule("steam.exe=96").is_err());
         assert!(parse_rule("=40").is_err());
         assert!(parse_rule("steam.exe=4.5").is_err());
+    }
+
+    #[test]
+    fn names_match_families_and_exes() {
+        let app = |family: &str, exe: &str| App {
+            family: family.into(),
+            name: String::new(),
+            exe: exe.into(),
+            how: snailnet_core::classify::How::Pack,
+        };
+        let helper = app("steam", "steamwebhelper.exe");
+        assert!(parse_rule("steam=40").unwrap().matches(&helper));
+        assert!(parse_rule("steamwebhelper=40").unwrap().matches(&helper));
+        assert!(
+            parse_rule("x, steamwebhelper.exe=40")
+                .unwrap()
+                .matches(&helper)
+        );
+        assert!(!parse_rule("steam.exe=40").unwrap().matches(&helper));
+        assert!(!parse_rule("brave=40").unwrap().matches(&helper));
+        // System has no exe: an empty name can't sneak in.
+        assert!(!parse_rule(".exe=40").unwrap().matches(&app("system", "")));
+        assert!(parse_rule("system=10").unwrap().matches(&app("system", "")));
     }
 
     #[test]

@@ -1,11 +1,14 @@
 //! `snailnet check`: can WinDivert load here, and does PID mapping work?
 //! Answers the Phase 0 HVCI question without touching any traffic (the FLOW
-//! layer is sniff-only).
+//! layer is sniff-only). Each new connection is shown with the app family
+//! it resolves to (PLAN.md §7).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use snailnet_core::classify::How;
 use snailnet_engine::RecvBatch;
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
 
@@ -34,6 +37,8 @@ pub fn run(seconds: u64, max_events: usize) -> Result<()> {
         stopper.shutdown_recv();
     });
 
+    let attribution = crate::events::new_attribution();
+    let mut families: HashMap<String, usize> = HashMap::new();
     let mut batch = RecvBatch::new(16);
     let (mut seen, mut named) = (0usize, 0usize);
     loop {
@@ -47,9 +52,10 @@ pub fn run(seconds: u64, max_events: usize) -> Result<()> {
                 continue;
             }
             let f = a.flow();
-            let exe = snailnet_win::process::exe_name(f.process_id);
+            let app = attribution.app(attribution.owner_of(f.process_id).app);
             seen += 1;
-            named += exe.is_some() as usize;
+            named += (app.how != How::Unknown) as usize;
+            *families.entry(app.name.clone()).or_default() += 1;
             if seen <= max_events {
                 let proto = match f.protocol {
                     6 => "tcp",
@@ -57,16 +63,23 @@ pub fn run(seconds: u64, max_events: usize) -> Result<()> {
                     _ => "ip ",
                 };
                 println!(
-                    "  {proto} {:>21} → {:<40} pid {:>6} {}",
+                    "  {proto} {:>21} → {:<40} pid {:>6} {} → {} ({:?})",
                     format!("{}:{}", f.local_ip(), f.local_port),
                     format!("{}:{}", f.remote_ip(), f.remote_port),
                     f.process_id,
-                    exe.as_deref().unwrap_or("?"),
+                    if app.exe.is_empty() { "-" } else { &app.exe },
+                    app.name,
+                    app.how,
                 );
             }
         }
     }
-    println!("\n{seen} new flows, {named} attributed to an exe.");
+    println!("\n{seen} new flows, {named} attributed to an app.");
+    let mut by_count: Vec<_> = families.into_iter().collect();
+    by_count.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    for (name, n) in by_count {
+        println!("  {n:>5}  {name}");
+    }
     if seen == 0 {
         println!("No flows seen: generate some traffic and run again.");
     }

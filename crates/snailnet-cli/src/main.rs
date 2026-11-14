@@ -1,8 +1,8 @@
 //! `snailnet`: developer and diagnostic CLI. In Phase 0 it hosts the spike
 //! that proves download shaping works before any UI exists (PLAN.md §21).
 
-mod attrib;
 mod check;
+mod events;
 mod rules;
 mod spike;
 

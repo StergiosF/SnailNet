@@ -1,0 +1,154 @@
+# App families (PLAN.md §7.2): helper processes that count as one app.
+#
+# Matching is case-insensitive. A process joins a family when its exe file
+# name is in `exes`, or its full path matches one of `paths`, and no
+# `not_paths` pattern matches. In patterns `*` matches any run of characters
+# (including `\`). Ids are lowercase and may not contain `:` or `\`.
+#
+# Anything not listed here falls back to: Windows services (svchost -s),
+# the parent app for generic hosts, the Store package, the same install
+# folder + publisher, and finally the exe on its own.
+
+# Runtimes that host other apps' code: attributed to the nearest ancestor
+# that isn't one of these (PLAN.md §7.2 step 3).
+generic_hosts = [
+  "msedgewebview2.exe",
+  "node.exe",
+  "java.exe",
+  "javaw.exe",
+  "python.exe",
+  "pythonw.exe",
+  "py.exe",
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "conhost.exe",
+  "rundll32.exe",
+  "dllhost.exe",
+]
+
+# Walking up stops at these: a generic host started by the shell or the
+# service manager is an app of its own, not "Explorer".
+stop_at = [
+  "explorer.exe",
+  "services.exe",
+  "svchost.exe",
+  "wininit.exe",
+  "winlogon.exe",
+  "userinit.exe",
+  "sihost.exe",
+  "taskhostw.exe",
+  "runtimebroker.exe",
+]
+
+# Windows services hosted in svchost.exe, by the service name after `-s`.
+# Services not listed here are "Windows services".
+[[service]]
+id = "windows-update"
+name = "Windows Update"
+services = ["wuauserv", "bits", "dosvc", "usosvc"]
+
+# ── Game launchers and stores ────────────────────────────────────────────
+# Games they install are not part of the launcher (they're games, §11.4).
+
+[[family]]
+id = "steam"
+name = "Steam"
+exes = ["steam.exe", "steamwebhelper.exe", "steamservice.exe", "steamerrorreporter.exe"]
+not_paths = ['*\steamapps\common\*']
+
+[[family]]
+id = "epic"
+name = "Epic Games Launcher"
+exes = ["epicgameslauncher.exe", "epicwebhelper.exe", "epiconlineservices.exe", "epiconlineserviceshost.exe"]
+
+[[family]]
+id = "battlenet"
+name = "Battle.net"
+exes = ["battle.net.exe"]
+paths = ['*\battle.net\agent\*agent.exe', '*\battle.net\*battle.net helper.exe']
+
+[[family]]
+id = "ea"
+name = "EA app"
+exes = ["eadesktop.exe", "eabackgroundservice.exe", "eaconnect_microsoft.exe", "ealocalhostsvc.exe"]
+
+[[family]]
+id = "ubisoft"
+name = "Ubisoft Connect"
+exes = ["upc.exe", "ubisoftconnect.exe", "uplaywebcore.exe", "uplayservice.exe"]
+
+[[family]]
+id = "gog"
+name = "GOG Galaxy"
+exes = ["galaxyclient.exe", "galaxyclient helper.exe", "galaxyclientservice.exe", "galaxycommunication.exe"]
+
+# ── Browsers ─────────────────────────────────────────────────────────────
+
+[[family]]
+id = "chrome"
+name = "Google Chrome"
+exes = ["chrome.exe"]
+
+[[family]]
+id = "edge"
+name = "Microsoft Edge"
+exes = ["msedge.exe"]
+
+[[family]]
+id = "brave"
+name = "Brave"
+exes = ["brave.exe"]
+
+[[family]]
+id = "firefox"
+name = "Firefox"
+exes = ["firefox.exe"]
+
+[[family]]
+id = "opera"
+name = "Opera"
+exes = ["opera.exe", "opera_gx.exe"]
+
+[[family]]
+id = "vivaldi"
+name = "Vivaldi"
+exes = ["vivaldi.exe"]
+
+# ── Chat, media, sync ────────────────────────────────────────────────────
+
+[[family]]
+id = "discord"
+name = "Discord"
+exes = ["discord.exe", "discordptb.exe", "discordcanary.exe"]
+paths = ['*\discord\update.exe', '*\discordptb\update.exe', '*\discordcanary\update.exe']
+
+[[family]]
+id = "spotify"
+name = "Spotify"
+exes = ["spotify.exe"]
+
+[[family]]
+id = "teams"
+name = "Microsoft Teams"
+exes = ["ms-teams.exe", "teams.exe"]
+
+[[family]]
+id = "zoom"
+name = "Zoom"
+exes = ["zoom.exe"]
+
+[[family]]
+id = "onedrive"
+name = "OneDrive"
+exes = ["onedrive.exe", "onedrivestandaloneupdater.exe"]
+
+[[family]]
+id = "dropbox"
+name = "Dropbox"
+exes = ["dropbox.exe"]
+
+[[family]]
+id = "qbittorrent"
+name = "qBittorrent"
+exes = ["qbittorrent.exe"]
