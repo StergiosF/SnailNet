@@ -101,8 +101,23 @@ ones come first.
    `crates/snailnet-engine/tests/fastpath.rs` (rate, 40/60 split, ACK
    jumps the queue, LAN/unshaped bypass, stop flushes, stalled scheduler
    fails open and loses nothing, empty pool passes through), stable over
-   15 repeated runs. **Not yet run on the real driver**: re-run the
-   synthetic recipe below elevated to confirm, then start at step 4.
+   15 repeated runs. **Start at step 4 next.**
+
+   Real-driver run (2026-11-14, `scripts/phase0-synthetic.ps1`, 25 Mbps,
+   factor 0.92, a.exe=40 / b.exe=60, one curl stream each): no fail-open,
+   clean stop, 99–100% attributed by FLOW, ~0–3 passthrough pkts/s.
+   - Split while both ran: 41–45 / 55–59 (target 40/60 after "everything
+     else" goes idle), so within ±5%. a gets a little extra because one Reno
+     flow can't fill b's share, the same as `snailnet-sim` found. Mid-run
+     (14–21 s) it drifted to ~48/52, and b went to 0 from 22 s for the rest
+     of the run (its curl stopped, cause unknown: maybe Cloudflare limiting
+     repeat requests). a then took the whole line, 20–23 Mbps.
+   - Ping 1.1.1.1 (ICMP isn't diverted, so this measures the ISP buffer):
+     idle 10 ms avg; under load avg 38, max 221, 1 of 22 lost. Most samples
+     are 9–46 ms; the outliers (timeout, 221, 74, 53) line up with
+     connections ending or restarting, which are the slow-start bursts the
+     simulator predicted. Next: the same run with `-Factor 0.85`, and
+     longer downloads so connections don't churn.
 4. **Classification** (§6.3, §7): flow table keyed by (pid, process
    creation time), SOCKET-layer early mapping, 50 ms pending window, app
    families (packs in `assets/`, same-folder+publisher fallback, parent chain
@@ -152,7 +167,8 @@ Synthetic test recipe: copy `C:\Windows\System32\curl.exe` to `a.exe` and
 `b.exe`, download `https://speed.cloudflare.com/__down?bytes=25000000`
 (100 MB returns 403; use one stream per process, because parallel streams
 stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
-1.1.1.1 alongside. Worth adding to the repo as `scripts/phase0-synthetic.ps1`.
+1.1.1.1 alongside. That recipe is now `scripts/phase0-synthetic.ps1`
+(`-OutDir`, `-Down`, `-Factor`, `-Duration`); it needs a release build.
 
 ## Gotchas
 
