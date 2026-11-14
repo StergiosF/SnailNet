@@ -1,28 +1,75 @@
-# Handoff: SnailNet, Phase 0 spike
+# Handoff: SnailNet, next steps
 
-Paste this into a fresh session, or say "read docs/HANDOFF.md and continue".
+Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
 ## Where things stand (2026-11-14)
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
-- **Branch:** `phase0-spike` (off `main`). Phase 0 code is committed there.
-- **Phase 0 status:** spike built and unit-tested. `snailnet check` has run
-  elevated on the real machine: the driver loads **with HVCI on**, Defender is
-  silent, and PID mapping and IPv4/IPv6 address decoding are confirmed
-  (28/28 flows attributed). A synthetic `spike` (two curl copies, 40/60,
-  `--down 25`) held **38/57/5 within ±2%**, recovered in ~2–4 s when one
-  stopped, attributed 100% of packets (0% unknown) and failed open cleanly.
-  Loaded ping dropped from 61 → 25 ms avg (234 → 54 max), still above the
-  §20 target of +10 ms. **Still to do:** the Steam + Brave run, factor 0.85,
-  anti-cheat, CPU. Everything is in `docs/phase0-report.md`.
-- Line ≈ 25 Mbps down. Cloudflare's `__down` endpoint rejects
-  `bytes=100000000` (403), so use `bytes=25000000`; its parallel streams
-  stall, so use one stream per process.
-- The user's browser is **Brave** (`brave.exe`), not Chrome.
-- Elevated runs: this shell isn't elevated. Launch one elevated process with
-  `Start-Process powershell -Verb RunAs -Wait -ArgumentList '-File script.ps1'`,
-  have the script redirect output to a file in scratch, then read it. The
-  user has to click Yes on the UAC prompt.
+- **Git:** everything is on **`main`**. The user works only on `main`: no
+  feature branches. `main` is 3 commits ahead of `origin/main` (not pushed;
+  push only when asked).
+- **Phase 0 is mostly done.** Results are in `docs/phase0-report.md`:
+  - `snailnet check` (elevated): the WinDivert 2.2 driver loads **with HVCI
+    on**, Defender is silent, 28/28 flows attributed, IPv4/IPv6 FLOW address
+    decoding confirmed.
+  - Synthetic `spike` (two curl copies `a.exe=40` / `b.exe=60`,
+    `--down 25`): held **38/57/5 within ±2%**, recovered in ~2–4 s when one
+    stopped, attributed 100% of packets, failed open cleanly.
+  - Ping under load: 61 → 25 ms avg (234 → 54 max). **Not yet** at the §20
+    target (≤ idle + 10 ms ≈ 21 ms).
+
+## Next steps, in order
+
+### 1. Finish Phase 0 (needs the user at the machine)
+
+| Task | How | Done when |
+|---|---|---|
+| Real scenario | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40 --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
+| Lower factor | Same run with `--factor 0.85` plus `ping -t 1.1.1.1` | loaded ping recorded; is it ≤ 21 ms? |
+| Anti-cheat | Run `spike` (or `check`) while launching the user's games | per-game result in the report |
+| CPU | Task Manager → `snailnet.exe` during the real run | % recorded |
+| Upload | `--up <Mbps>` after measuring upload | split recorded |
+| **Go/No-go** | Fill in the report's Decision line; record the outcome in PLAN.md's D4 row | decision written |
+
+You can run the elevated steps yourself (see "Running elevated" below), but
+the real-app and anti-cheat runs need the user to drive the apps.
+
+### 2. Phase 1: engine, scheduler, service (PLAN.md §21, 3–4 weeks)
+
+Suggested order: each step stays testable on its own, and the pure-Rust
+ones come first.
+
+1. **Scheduler, full version** (`snailnet-core::scheduler`, §9): priority
+   ordering with the deficit cap (`burst_c`), per-class ceilings (token
+   bucket), per-flow fair queues inside "Everything else" (weights 4:2:1),
+   CoDel (5 ms / 100 ms) with ECN marking, express lane, live weight swap
+   (`arc-swap`) with no packet loss. Tests from §19.1 + `proptest`
+   (shares sum to 10000, floors hold, deficits bounded).
+   **Start here:** it's pure Rust, needs no admin, and is the most likely
+   fix for the ping gap.
+2. **`snailnet-sim` crate** (§5, §19.1): traffic models (AIMD TCP, CBR
+   game UDP, bursty web, QUIC-like) on `SimClock`; asserts p99 queueing delay
+   ≤ 2 ms for a light High-priority flow at 92% load, plus convergence
+   < 500 ms after a weight change.
+3. **Fast path** (§4, §6.3): slab buffer pool (no per-packet `Vec`), 1–2 rx
+   threads, scheduler thread, watchdog that closes the NETWORK handle if the
+   scheduler stalls > 500 ms.
+4. **Classification** (§6.3, §7): flow table keyed by (pid, process
+   creation time), SOCKET-layer early mapping, 50 ms pending window, app
+   families (packs in `assets/`, same-folder+publisher fallback, parent chain
+   for generic hosts, `svchost -s` → "Windows Update").
+5. **Windows service** (`snailnet-service`, §4, §17): `windows-service`
+   crate, `install` / `uninstall` / `run --console`; config TOML in
+   `C:\ProgramData\SnailNet\` with atomic writes + `.bak` (§13); `tracing`
+   logs with 7-day rotation; safe mode after 3 crashes in 10 minutes.
+6. **IPC** (`snailnet-ipc`, §12): named pipe `\\.\pipe\snailnet.v1` with
+   the ACL, length-prefixed MessagePack, protocol v1 messages; make
+   `snailnet-cli` a client (`status`, `rules`, `top`).
+
+**Phase 1 exit:** rules editable via the CLI, live stats via
+`snailnet top`, 24 h soak passes (flat memory, no handle leaks).
+
+Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
 ## What exists
 
@@ -34,51 +81,53 @@ Paste this into a fresh session, or say "read docs/HANDOFF.md and continue".
 | `snailnet-cli` (bin `snailnet`) | `check` (sniff-only driver/PID test), `spike` (shaping) | 6 |
 
 WinDivert 2.2.2 is pinned in `third_party/windivert/` (hashes and signature
-notes in its README). The DLL is found via `$SNAILNET_WINDIVERT_DIR`, then the
-exe's folder, then that repo path.
+notes in its README). The DLL is found via `$SNAILNET_WINDIVERT_DIR`, then
+the exe's folder, then that repo path.
 
 ## Verify
 
 ```powershell
 cargo fmt --all --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test --workspace
 cargo build --release
-# elevated:
-.\target\release\snailnet.exe check
-.\target\release\snailnet.exe spike --down <Mbps> --app steam.exe,steamwebhelper.exe=40 --app brave.exe=60
 ```
 
-## Known gaps and open questions
+## Running elevated
 
-- Ping under load is better but not at target: try `--factor 0.85` first;
-  CoDel/ECN is the Phase 1 fix. The repeatable synthetic test script lives
-  in the scratchpad only. Rebuild it from the description above if needed,
-  or add it to the repo as `scripts/phase0-synthetic.ps1`.
-- Phase 0 simplifications (Phase 1 replaces them): no priority, ceilings,
-  CoDel/ECN or real express lane (only DNS and pure TCP control packets
-  bypass); tail drop at ~50 ms of the class's share; a `Vec` allocated per
-  packet; no SOCKET layer and no pending window.
+This shell isn't elevated. Write a `.ps1` in the scratchpad that runs the
+command and redirects output to a file, then run
+`Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File <script>'`
+and read the file. The user clicks Yes on the UAC prompt. Tell them first.
+
+Synthetic test recipe: copy `C:\Windows\System32\curl.exe` to `a.exe` and
+`b.exe`, download `https://speed.cloudflare.com/__down?bytes=25000000`
+(100 MB returns 403; use one stream per process, because parallel streams
+stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
+1.1.1.1 alongside. Worth adding to the repo as `scripts/phase0-synthetic.ps1`.
+
+## Gotchas
+
+- **The WinDivert driver stays loaded** after a run (`sc query WinDivert` →
+  RUNNING), which locks `third_party/windivert/x64/WinDivert64.sys`. Git
+  can't rewrite that file until it's unloaded: `sc stop WinDivert`
+  (elevated) or reboot. Avoid checkouts that touch it.
+- Phase 0 shortcuts, which Phase 1 replaces: no priority, ceilings or
+  CoDel/ECN; only DNS and pure TCP control packets bypass the queues; tail
+  drop at ~50 ms of share; a `Vec` allocated per packet; no SOCKET layer.
 - "Everything else" keeps a 5% floor, so 40/60 rules shape as 38.1/57.1/4.8.
 - The driver's signing cert (a Chengdu company, the one upstream used for
   2.2.2) has expired; its timestamp keeps it valid, but some AVs block it.
+- The user's browser is **Brave**. The line is about 25 Mbps down; upload
+  not measured yet.
 
-## Next steps
+## Working agreements
 
-1. Finish Phase 0 with the user at the machine: Steam download + YouTube
-   in Brave under `spike`, a rerun at `--factor 0.85`, anti-cheat in their
-   games, CPU % (`check` and the synthetic run are done).
-2. Go/No-go on D4 (WinDivert) from that report.
-3. If Go → Phase 1 (PLAN.md §21): full scheduler (priority, ceilings,
-   FQ inside Everything else, CoDel/ECN, express lane), `snailnet-sim`, flow
-   table + app families, Windows service, config, IPC, `snailnet-cli top`.
-
-## Working agreements in this environment
-
-- Commit only when asked; work on a branch, never directly on `main`.
-- No browser automation unless explicitly asked (`~/.claude/rules`).
+- Work and commit directly on `main`; commit when asked; push only when asked.
+- No browser automation unless explicitly asked.
 - Library or API docs: look them up with Context7 first.
 - Ask interview-style questions through the options window
   (AskUserQuestion), recommended option first.
-- A **GateGuard** hook blocks the first Write of every new file and the first
-  Bash/PowerShell call until you state: who calls the file, which data it
-  touches, and the user's verbatim instruction. State that, then retry the
-  identical call.
+- A **GateGuard** hook blocks the first Write of each new file, and some
+  shell commands, until you state who calls the file, what data it touches,
+  and the user's verbatim instruction (or, for destructive commands, which
+  files change and how to roll back). State that, then retry the identical
+  call.
