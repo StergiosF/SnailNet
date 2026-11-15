@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # No test needs the WinDivert driver or admin: the engine test only
+      # loads the pinned third_party/windivert DLL, which needs neither.
+      - run: cargo test --workspace
+
+  deny:
+    name: cargo deny
+    # cargo-deny-action is a Docker action, so it runs on Linux; it reads
+    # Cargo.lock and deny.toml, and deny.toml targets Windows.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  frontend:
+    name: Frontend (check, lint, test)
+    # Steps are skipped until the Phase 3 app lands in app/. hashFiles()
+    # isn't available in a job-level `if`, so each step carries the guard.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - id: app
+        shell: bash
+        working-directory: .
+        run: echo "present=${{ hashFiles('app/package.json') != '' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - if: steps.app.outputs.present == 'true'
+        run: npm ci
+      - if: steps.app.outputs.present == 'true'
+        run: npm run check
+      - if: steps.app.outputs.present == 'true'
+        run: npm run lint
+      - if: steps.app.outputs.present == 'true'
+        run: npm test

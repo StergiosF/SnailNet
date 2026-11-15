@@ -1,0 +1,32 @@
+# cargo deny check (CI job "cargo deny"). SnailNet ships on Windows only.
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+all-features = true
+
+[advisories]
+unmaintained = "all"
+unsound = "all"
+ignore = []
+
+[licenses]
+confidence-threshold = 0.93
+# Everything the dependency tree uses today; permissive only.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "ISC",
+    "Unicode-3.0",
+]
+
+[licenses.private]
+# Our own crates are UNLICENSED and publish = false.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

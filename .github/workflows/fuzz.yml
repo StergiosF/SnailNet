@@ -1,0 +1,42 @@
+name: Fuzz
+
+# Short nightly fuzz runs of the wire parsers (PLAN.md §19). snailnet-core
+# has no OS dependencies, so Linux is fine and libFuzzer + ASan just work.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds per target
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [tls, quic, dns]
+    defaults:
+      run:
+        working-directory: crates/snailnet-core
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/snailnet-core/fuzz
+      - run: cargo install cargo-fuzz --locked
+      - name: Run ${{ matrix.target }}
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=${{ inputs.seconds || '300' }}
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: crates/snailnet-core/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
