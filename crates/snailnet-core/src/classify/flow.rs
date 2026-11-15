@@ -202,6 +202,7 @@ mod tests {
             src_port: if outbound { 50_000 } else { 443 },
             dst_port: if outbound { 443 } else { 50_000 },
             tcp_payload_len: Some(0),
+            payload_offset: Some(40),
         }
     }
 

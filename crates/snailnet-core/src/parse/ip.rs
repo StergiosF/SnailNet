@@ -18,6 +18,19 @@ pub struct PacketInfo {
     pub dst_port: u16,
     /// TCP payload bytes (0 for a pure control packet). `None` if not TCP.
     pub tcp_payload_len: Option<usize>,
+    /// Where the TCP/UDP payload starts in the packet. `None` if not
+    /// TCP/UDP, a later fragment, or the transport header is cut off.
+    pub payload_offset: Option<usize>,
+}
+
+impl PacketInfo {
+    /// The TCP/UDP payload of `pkt` (the packet this info was parsed from);
+    /// empty if there is none.
+    pub fn payload<'a>(&self, pkt: &'a [u8]) -> &'a [u8] {
+        self.payload_offset
+            .and_then(|o| pkt.get(o..self.len))
+            .unwrap_or(&[])
+    }
 }
 
 /// Length of the IP packet at the start of `buf`, from its header. Used to
@@ -101,8 +114,11 @@ fn finish(
         src_port: 0,
         dst_port: 0,
         tcp_payload_len: None,
+        payload_offset: None,
     };
     let Some(t) = transport else { return info };
+    // `t` is the tail of the packet, so this is the IP header length.
+    let t_off = len - t.len();
     let need = match protocol {
         PROTO_TCP => 20,
         PROTO_UDP => 8,
@@ -116,6 +132,11 @@ fn finish(
     if protocol == PROTO_TCP {
         let data_off = ((t[12] >> 4) as usize) * 4;
         info.tcp_payload_len = Some(t.len().saturating_sub(data_off));
+        if (20..=t.len()).contains(&data_off) {
+            info.payload_offset = Some(t_off + data_off);
+        }
+    } else {
+        info.payload_offset = Some(t_off + 8);
     }
     info
 }
@@ -228,6 +249,24 @@ mod tests {
             assert_eq!(p[1] & !0b11, 0xb8, "DSCP must be untouched");
             assert_eq!(u16::from_be_bytes([p[10], p[11]]), v4_checksum(&p));
         }
+    }
+
+    #[test]
+    fn payload_offsets() {
+        let mut p = v4_tcp(5);
+        p[40..45].copy_from_slice(b"hello");
+        let info = parse(&p).unwrap();
+        assert_eq!(info.payload_offset, Some(40));
+        assert_eq!(info.payload(&p), b"hello");
+        let q = v6_udp();
+        let info = parse(&q).unwrap();
+        assert_eq!(info.payload_offset, Some(48));
+        assert_eq!(info.payload(&q).len(), 4);
+        // A data offset past the segment: no payload, no panic.
+        p[32] = 15 << 4;
+        let info = parse(&p).unwrap();
+        assert_eq!(info.payload_offset, None);
+        assert_eq!(info.payload(&p), b"");
     }
 
     #[test]

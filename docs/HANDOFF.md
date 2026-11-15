@@ -315,8 +315,28 @@ WinDivert handle would disturb it).
    seal → open round trip, a shuffled two-packet hello, tamper/version/
    type/truncation rejection, proptests (garbage, corrupted headers,
    assembler vs. a reference model).
-3. Next: DNS answers, then the IP→domain cache, site packs, and wiring
-   into the classifier (first payloads of :443 flows; per-flow assembler).
+3. ~~**DNS answers**~~ **Done.** `parse::dns::answers(msg)` → `Resolution
+   { names (CNAME chain, question first), addrs (ip, ttl) }` for A/AAAA
+   responses; backward-only compression pointers, hop limit, capped.
+4. ~~**Site packs, matcher, cache**~~ **Done.** `assets/sites.toml` (the 10
+   v1 sites; **first draft**, check in the exit test), `sites::SitePack`
+   / `SiteMatcher` (longest pattern wins; custom sites override shipped
+   ones) / `DomainCache` (newest answer wins, TTL clamped 5 min–1 h,
+   FIFO-capped).
+5. ~~**Per-flow names**~~ **Done.** `PacketInfo` has `payload_offset` +
+   `payload(pkt)`. `sniff::FlowNames::observe` reads a :443 flow's first
+   outbound payloads (TLS ≤ 12 segments, QUIC ≤ 6 packets) → `Named::
+   Pending` / `Known { names, via: Sni | Dns | Ech | None }`; ECH or no
+   SNI → the DNS cache; other ports → the cache at once; capped (a full
+   table still reads one-packet hellos), `forget` on flow end, `sweep`
+   after 15 min idle.
+6. **Next: wiring (engine + service).** `Classifier::classify` needs the
+   packet bytes; `Plan` needs site rules (`TargetKind::Site` matches
+   nothing yet); a DNS sniff handle (H4, `udp.SrcPort == 53 or
+   tcp.SrcPort == 53`) feeding `DomainCache`; per-site stats and
+   unidentified counts. Open question for the user: should site rules
+   apply in every app or only browsers (§8.3 says browsers, plus apps the
+   user enables)? The real-driver check waits for the soak to end.
 
 ## What exists
 
