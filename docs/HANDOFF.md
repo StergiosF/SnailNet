@@ -243,8 +243,19 @@ ones come first.
    - The hub saves `config.toml` on the IPC thread (blocking, but tiny).
 7. **Phase 1 exit:** the deferred items above are done (2026-11-15); what
    remains is the **24 h soak** (flat memory, no handle leaks; the 60 s
-   log line prints the sizes). Needs the service installed for a day
-   while the user uses the PC normally.
+   log line prints the sizes).
+   **Soak running since 2026-11-15 05:25 local (03:25Z)**, user's choice
+   "pass-through": the service is installed from a copy in
+   `C:\Program Files\SnailNet` (service exe, CLI, WinDivert DLL + sys; the
+   CLI must live there, see client verification), so `target\release`
+   stays free for builds. Line 1000/1000 Mbps at factor 1.0, no app rules:
+   the whole engine sees every packet but never limits. (Monitor-only was
+   rejected: it opens no WinDivert handles, so it would test nothing.)
+   Baseline right after start: working set 33.5 MB, 135 handles.
+   Check after 2026-11-16 05:25: read `C:\ProgramData\SnailNet\logs\`
+   (Users can read it) and `Get-Process snailnet-service` (WS, handles).
+   Then uninstall elevated: `& 'C:\Program Files\SnailNet\snailnet-service.exe' uninstall --remove-data`,
+   delete that folder, `sc stop WinDivert`.
 
 **Phase 1 exit:** rules editable via the CLI (done), live stats via
 `snailnet top` (done, per class), 24 h soak passes (flat memory, no
