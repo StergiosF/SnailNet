@@ -16,6 +16,11 @@ allow = [
     "MIT",
     "ISC",
     "Unicode-3.0",
+    # Tauri's tree (brotli, foldhash, Servo's CSS crates); MPL-2.0 is
+    # file-level copyleft and we ship those files unmodified.
+    "BSD-3-Clause",
+    "Zlib",
+    "MPL-2.0",
 ]
 
 [licenses.private]
