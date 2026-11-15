@@ -2,28 +2,59 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-16 00:45)
+## Start here (updated 2026-11-16 01:40)
 
-- **Where we are:** Phase 1 is built except its exit soak; Phase 2
-  (website recognition) is built and unit-tested but **not yet run on the
-  real driver**. Details: section 2 step 7 (soak) and section 3 (Phase 2).
-- **Nothing is installed or running:** the soak service, its Program
-  Files copy, data folder and sampler task were removed 2026-11-16 00:37;
-  WinDivert is stopped. `target\release` holds the current build.
-- **Git:** `main`, clean, **9 commits ahead of `origin/main`** (32bffc7 …
-  69d3fac, not pushed; push only when asked).
+- **Where we are:** Phase 1 built except its exit soak. Phase 2 code is
+  complete (incl. per-site stats rows, name counts over IPC, fuzz targets,
+  CI) but its **exit test in a real browser is still owed**. **Phase 3
+  (the app) has started:** `app/` holds the Tauri 2 + Svelte 5 shell.
+- **Installed:** the service is installed in `C:\Program Files\SnailNet`
+  (build of b7282cc) with line 25 Mbps down and rules `site:youtube=45
+  brave=30`, but **stopped and set to manual start** (user's choice).
+  To test: elevated `sc start SnailNet`; afterwards `sc config SnailNet
+  start= auto` or uninstall. `snailnet top` (unelevated, from that folder)
+  now prints `names:` and `sites:` lines.
+- **Git:** `main`, ~15 commits ahead of `origin/main`, not pushed (push
+  only when asked). CI (`.github/workflows/ci.yml`, `fuzz.yml`) has never
+  run on GitHub yet.
 - **Next, in order (pick with the user):**
-  1. **Phase 2 real-browser check** (needs the user at the machine):
-     section 3 step 7. Install the service from `target\release`, `snailnet
-     line --down 25`, `snailnet rules site:youtube=45 brave=30`, play
-     YouTube in Brave (secure DNS on and off), watch `snailnet top` and the
-     log's "site names" line; add missing domains to `assets/sites.toml`.
-  2. **Soak run 3** (24 h, pass-through, same recipe as run 2) to pass the
-     Phase 1 exit with the stale-flow fix (f535820); "tracking N flows" in
-     the log should stay near the live connection count.
-  3. Phase 2 leftovers: per-site stats rows, unidentified counts over IPC
-     (§8.4), cargo-fuzz targets for `parse::{tls,quic,dns}`.
+  1. **Phase 3 continued** (no user needed): the split bar (§14.3, the
+     signature component), rule editor, system accent via `UISettings`,
+     Windows 10 fallback for Mica (today the window is transparent +
+     `mica` only, so Win10 would show through), Snap layouts on the
+     custom maximize button, tray + flyout, first run.
+  2. **Phase 2 exit check** (needs the user): start the service, play
+     YouTube in Brave with secure DNS on and off, watch `snailnet top`
+     (`names:`/`sites:` lines) and the log; add missing domains to
+     `assets/sites.toml` (compiled in: rebuild + reinstall after).
+  3. **Soak run 3** (24 h, pass-through) for the Phase 1 exit.
   4. Anti-cheat test (Phase 0, user skipped for now).
+
+### The app (Phase 3) — how to run and where things are
+
+- `app/src-tauri` is the `snailnet-app` crate, a **workspace member** so
+  its dev exe lands in `target\debug` next to `snailnet-service.exe`: the
+  service only accepts clients in its own folder. Dev loop: elevated
+  `target\debug\snailnet-service.exe run --console`, then `npm run tauri
+  dev` in `app/`. The installed service in Program Files will reject the
+  dev app (`Link::Rejected` InfoBar).
+- Rust: `bridge.rs` (one pipe connection, reconnect with backoff, emits
+  `link` / `snapshot` / `service-state` / `stats`; tested with fakes),
+  `lib.rs` (Tauri setup, `current` command for late page loads).
+- Svelte: `src/lib/service.svelte.ts` (runes store), `types.ts` (mirrors
+  the IPC serde JSON — keep in step with `snailnet-ipc`), `format.ts`
+  (§14.7 number rules, vitest), `i18n/en.json` (all strings), components
+  `TitleBar`, `Header`, `InfoBar`, `AppList`, `Snail`. Tokens in
+  `src/app.css` (Fluent light/dark/high contrast; Segoe Fluent Icons).
+- Gate: `npm run check`, `npm run lint`, `npm test` in `app/` plus the
+  cargo gate. Versions pinned exactly (Tauri 2.12.5, Svelte 5.57.3, Vite
+  8.3.8, TS 6.0.3 — svelte-check doesn't support TS 7 yet).
+- Design workflow: `PRODUCT.md` (impeccable) records users/brand; the
+  visual world is pinned by PLAN.md §14.1 (Windows 11 native). The UI has
+  **not been looked at in a real window yet** (no browser/screenshot
+  unless the user asks).
+- `.claude/settings.local.json` (uncommitted, local) sets
+  `GATEGUARD_EXEMPT_GLOBS=app/**`.
 
 ## Where things stand (Phase 0/1 detail, 2026-11-15)
 
