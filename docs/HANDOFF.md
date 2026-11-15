@@ -29,7 +29,7 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 | Anti-cheat (**user skipped for now**, 2026-11-15) | Run `spike` (or `check`) while launching the user's games | per-game result in the report |
 | ~~CPU~~ **done**: 1.08% of 12 logical cores at 21 Mbps | Task Manager → `snailnet.exe` during the real run | % recorded |
 | ~~Upload~~ **done 2026-11-15**: line ≈ 40 Mbps ↑ (fiber; ↓ really is ≈ 25). Synthetic `--up 40 --factor 0.85`: 40/60, ping avg 12 vs 10 idle (unshaped upload: 410 ms) | `--up <Mbps>` after measuring upload | split recorded |
-| **Go/No-go** | Fill in the report's Decision line; record the outcome in PLAN.md's D4 row | decision written |
+| ~~**Go/No-go**~~ **Go, 2026-11-15** (anti-cheat later); written in the report and PLAN.md D4 | Fill in the report's Decision line; record the outcome in PLAN.md's D4 row | decision written |
 
 You can run the elevated steps yourself (see "Running elevated" below), but
 the real-app and anti-cheat runs need the user to drive the apps.

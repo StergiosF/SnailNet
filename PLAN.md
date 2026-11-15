@@ -71,7 +71,7 @@ Settled during the planning interview. Change these only deliberately, and note 
 | D1 | Audience | Personal first, built clean enough to publish later | No paid certificates or licensing yet; keep the code and LGPL boundary clean |
 | D2 | Meaning of % | **Guaranteed share**, idle bandwidth redistributed (work-conserving), plus an optional **hard ceiling** per rule | Matches the intuition behind "40/60" without wasting bandwidth |
 | D3 | Direction | Upload **and** download; one shared split by default, "separate up/down" per rule | Download hogging is the main pain point |
-| D4 | Engine | **WinDivert 2.2** behind a `PacketEngine` trait | Signed, proven, per-process info; can be swapped for a custom WFP driver later |
+| D4 | Engine | **WinDivert 2.2** behind a `PacketEngine` trait | Signed, proven, per-process info; can be swapped for a custom WFP driver later. **Phase 0: Go (2026-11-15)**, see `docs/phase0-report.md`; anti-cheat still untested |
 | D5 | Line speed | Auto speed test, adaptive afterwards, manual override, **Low-latency mode** | % needs a 100%; low latency is the standout feature |
 | D6 | Primary use | Gaming ping + taming big downloads (game download 40% / YouTube 60%) | Drives defaults and presets |
 | D7 | Per-site rules | **Yes**, YouTube, Twitch, etc. inside browsers | YouTube is a tab, not an app |

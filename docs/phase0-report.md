@@ -172,5 +172,9 @@ exact.
 - [x] Split within ±5% while both apps saturate (synthetic, and the real Steam + Brave run: 40/60, YouTube 4K didn't buffer)
 - [x] Ping under load clearly better than without SnailNet (61 → 25 ms avg at 0.92 with the Phase 0 scheduler; at 0.85 with the Phase 1 scheduler, avg 20 ms vs 9 idle, which meets the §20 target on average, max 39)
 
-**Decision:** _pending_. If Go, start Phase 1. If No-go, record why and
-re-open D4 (`WfpEngine`).
+**Decision: Go (2026-11-15, user's call).** WinDivert stays the engine
+(PLAN.md D4). The driver loads with HVCI on; splits hold 40/60 in both
+directions on real and synthetic traffic; loaded ping drops 226 → 22 ms
+(down) and 410 → 12 ms (up); CPU 1.1%. **Open:** anti-cheat is untested;
+test the user's games before release, with Game-safe mode as the fallback.
+A No-go later would re-open D4 (`WfpEngine`).
