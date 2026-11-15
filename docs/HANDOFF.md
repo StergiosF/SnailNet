@@ -257,7 +257,7 @@ ones come first.
    `conhost --headless`) → `%LOCALAPPDATA%\SnailNetSoak\soak.csv`
    (`time,pid,ws_mb,private_mb,handles,threads`; pid 0 = service not
    running). First row: 33.6 MB WS, 26.6 MB private, 125 handles, 11 threads.
-   Check after 2026-11-16 05:25: the CSV (look for steady growth in
+   Check (see the restart below for the current end time): the CSV (look for steady growth in
    private_mb / handles; a new pid means a restart) and the service's 60 s
    log lines in `C:\ProgramData\SnailNet\logs\` (table sizes, pool free,
    overflow; Users can read it).
@@ -273,9 +273,13 @@ ones come first.
    would see an 11 h "stall" and fail open for nothing (it didn't this
    time). Fixed in commit 5787780: `fastpath::StallMeter` counts only
    silence the watchdog was awake for (≤ 2 ticks per look; any beat
-   resets), with unit tests. The installed copy still has the old
-   watchdog; redeploy and restart the soak to test the fix (a 24 h soak
-   should include a sleep/resume).
+   resets), with unit tests.
+   **Soak restarted 2026-11-15 18:05 local** with the fixed build (PID
+   7180, same pass-through config). Baseline: 35.1 MB WS, 26.4 MB private,
+   135 handles, 14 threads. The first run's CSV is kept as `soak-run1.csv`.
+   Check after **2026-11-16 18:05**. Sleep during the run is fine, since it
+   tests the fix; judge by awake hours, and look for any "stalled" fail-open
+   right after a resume in the log.
    Then clean up: `Unregister-ScheduledTask SnailNetSoak -Confirm:$false`;
    elevated: `& 'C:\Program Files\SnailNet\snailnet-service.exe' uninstall --remove-data`,
    delete that folder, `sc stop WinDivert`.
