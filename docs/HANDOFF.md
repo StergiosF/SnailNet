@@ -2,12 +2,34 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Where things stand (2026-11-15)
+## Start here (updated 2026-11-16 00:45)
+
+- **Where we are:** Phase 1 is built except its exit soak; Phase 2
+  (website recognition) is built and unit-tested but **not yet run on the
+  real driver**. Details: section 2 step 7 (soak) and section 3 (Phase 2).
+- **Nothing is installed or running:** the soak service, its Program
+  Files copy, data folder and sampler task were removed 2026-11-16 00:37;
+  WinDivert is stopped. `target\release` holds the current build.
+- **Git:** `main`, clean, **9 commits ahead of `origin/main`** (32bffc7 …
+  69d3fac, not pushed; push only when asked).
+- **Next, in order (pick with the user):**
+  1. **Phase 2 real-browser check** (needs the user at the machine):
+     section 3 step 7. Install the service from `target\release`, `snailnet
+     line --down 25`, `snailnet rules site:youtube=45 brave=30`, play
+     YouTube in Brave (secure DNS on and off), watch `snailnet top` and the
+     log's "site names" line; add missing domains to `assets/sites.toml`.
+  2. **Soak run 3** (24 h, pass-through, same recipe as run 2) to pass the
+     Phase 1 exit with the stale-flow fix (f535820); "tracking N flows" in
+     the log should stay near the live connection count.
+  3. Phase 2 leftovers: per-site stats rows, unidentified counts over IPC
+     (§8.4), cargo-fuzz targets for `parse::{tls,quic,dns}`.
+  4. Anti-cheat test (Phase 0, user skipped for now).
+
+## Where things stand (Phase 0/1 detail, 2026-11-15)
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
 - **Git:** everything is on **`main`**. The user works only on `main`: no
-  feature branches. `main` is in sync with `origin/main` (pushed 2026-11-14;
-  push only when asked).
+  feature branches. Push only when asked.
 - **Phase 0 is mostly done.** Results are in `docs/phase0-report.md`:
   - `snailnet check` (elevated): the WinDivert 2.2 driver loads **with HVCI
     on**, Defender is silent, 28/28 flows attributed, IPv4/IPv6 FLOW address
