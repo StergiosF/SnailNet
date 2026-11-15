@@ -52,7 +52,9 @@ pub trait Classifier: Clone + Send + 'static {
     /// Class, flow hash and priority for one packet, and its owner's tag.
     /// `control` is filled in by the fast path. Runs on the rx thread: keep
     /// it quick.
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag);
+    /// `pkt` is the whole IP packet `info` was parsed from (site sniffing
+    /// reads the first payloads of a flow).
+    fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag);
 }
 
 /// How the scheduler thread waits for its next release time.
@@ -439,7 +441,7 @@ fn rx_loop<C: Classifier>(
                 None
             } else {
                 admit(data, up, shaped).map(|info| {
-                    let (meta, tag) = classifier.classify(&info, up);
+                    let (meta, tag) = classifier.classify(data, &info, up);
                     let control = info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
                     (PacketMeta { control, ..meta }, tag)
                 })

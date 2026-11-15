@@ -330,13 +330,29 @@ WinDivert handle would disturb it).
    SNI → the DNS cache; other ports → the cache at once; capped (a full
    table still reads one-packet hellos), `forget` on flow end, `sweep`
    after 15 min idle.
-6. **Next: wiring (engine + service).** `Classifier::classify` needs the
-   packet bytes; `Plan` needs site rules (`TargetKind::Site` matches
-   nothing yet); a DNS sniff handle (H4, `udp.SrcPort == 53 or
-   tcp.SrcPort == 53`) feeding `DomainCache`; per-site stats and
-   unidentified counts. Open question for the user: should site rules
-   apply in every app or only browsers (§8.3 says browsers, plus apps the
-   user enables)? The real-driver check waits for the soak to end.
+6. ~~**Wiring**~~ **Done (unit-tested; not yet run on the driver).**
+   User decision 2026-11-16: **a site rule applies in every app and beats
+   the app's rule** (PLAN.md D7, §8.3). Config gains `[[sites]]` custom
+   sites; a site rule must name a known site; `Plan::site_class` /
+   `has_site_rules`. `Classifier::classify(pkt, info, outbound)` gets the
+   packet bytes. Service `shaper`: `PlanRules` (plan + `SiteMatcher`)
+   replaces `impl Rules for Plan`; `SiteState` (`FlowNames` + `DomainCache`,
+   shared, lock order cache → names) is consulted only while site rules
+   exist; a `dns-sniffer` thread (H4: NETWORK, SNIFF|RECV_ONLY, `inbound
+   and !loopback and (udp.SrcPort == 53 or tcp.SrcPort == 53)`; TCP needs
+   the whole length-prefixed message in one segment) fills the cache; if
+   it can't open, shaping goes on with SNI only (logged). The 60 s log
+   gains "site names (packets): sni/dns/ech/none/naming; tracking N named
+   flows, M DNS addresses". CLI: `snailnet rules site:youtube=45`.
+7. **Next, after the soak ends (needs the user at the machine):**
+   reinstall the service from this build, `snailnet rules site:youtube=45
+   brave=...`, play YouTube in Brave (and Chrome/Edge/Firefox if
+   installed) with secure DNS on and off; check `snailnet top` shows the
+   `site:youtube` class and the log's name mix; note what lands in
+   "none" and add missing domains to `assets/sites.toml`. Still to do
+   after that: per-site rows in stats (tags are per app today; the class
+   rates already show `site:…`), unidentified counts over IPC for the UI
+   (§8.4), and fuzzing in CI (cargo-fuzz targets for tls/quic/dns).
 
 ## What exists
 

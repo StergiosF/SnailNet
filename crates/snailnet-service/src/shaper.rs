@@ -26,9 +26,12 @@ use snailnet_core::classify::{
     App, AppId, Attribution, Event, FlowKey, Miss, Pack, Pending, Resolver, Source,
 };
 use snailnet_core::clock::{Clock, MonotonicClock};
-use snailnet_core::parse::ip::PacketInfo;
+use snailnet_core::parse::dns;
+use snailnet_core::parse::ip::{self, PROTO_TCP, PROTO_UDP, PacketInfo};
 use snailnet_core::rules::Plan;
 use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
+use snailnet_core::sites::{DomainCache, Names, SiteMatcher, SitePack};
+use snailnet_core::sniff::{FlowNames, Named, Via};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
     Classifier, Counters, DirectionStats, FastPath, FastPathConfig, NO_TAG, Nap, Snapshot, Tag,
@@ -154,6 +157,57 @@ impl Drop for Sniffers {
     }
 }
 
+/// DNS answers arriving at this PC (H4, PLAN.md §6.2): copies only, so it
+/// never delays them. Secure DNS (DoH) is invisible here; SNI covers that.
+const DNS_FILTER: &str = "inbound and !loopback and (udp.SrcPort == 53 or tcp.SrcPort == 53)";
+
+/// The `dns-sniffer` thread, feeding the IP → domain cache.
+struct DnsSniffer {
+    handle: Arc<WinDivert>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl DnsSniffer {
+    fn start(lib: &Arc<WinDivertLib>, sites: Arc<SiteState>) -> Result<Self> {
+        let handle = Arc::new(
+            WinDivert::open(
+                lib,
+                DNS_FILTER,
+                Layer::Network,
+                0,
+                flags::SNIFF | flags::RECV_ONLY,
+            )
+            .context("opening the DNS sniffer")?,
+        );
+        let h = handle.clone();
+        let thread = std::thread::Builder::new()
+            .name("dns-sniffer".into())
+            .spawn(move || {
+                let mut batch = RecvBatch::new(DEFAULT_BATCH);
+                while h.recv(&mut batch).is_ok() {
+                    for (pkt, _) in batch.iter() {
+                        if let Some(info) = ip::parse(pkt) {
+                            sites.learn(info.payload(pkt), info.protocol == PROTO_TCP);
+                        }
+                    }
+                }
+            })?;
+        Ok(Self {
+            handle,
+            thread: Some(thread),
+        })
+    }
+}
+
+impl Drop for DnsSniffer {
+    fn drop(&mut self) {
+        self.handle.shutdown_recv();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
 fn event_loop(handle: &WinDivert, attribution: &WinAttribution) {
     let mut batch = RecvBatch::new(DEFAULT_BATCH);
     while handle.recv(&mut batch).is_ok() {
@@ -171,19 +225,107 @@ pub trait Rules: Send + Sync + 'static {
     fn prio_of(&self, class: ClassId) -> Priority;
     /// Where unattributed traffic goes: Everything else.
     fn other_class(&self) -> ClassId;
+    /// Whether any rule targets a site, so flows need naming.
+    fn has_site_rules(&self) -> bool {
+        false
+    }
+    /// The class of a flow opened for `names` (SNI, or a DNS CNAME chain),
+    /// if a site rule claims it. Beats the app's class (PLAN.md §8.3).
+    fn site_class_of(&self, _names: &[String]) -> Option<ClassId> {
+        None
+    }
 }
 
-impl Rules for Plan {
+/// A [`Plan`] plus the domain → site matcher for its custom sites.
+pub struct PlanRules {
+    plan: Plan,
+    sites: SiteMatcher,
+}
+
+impl PlanRules {
+    pub fn new(plan: Plan) -> Self {
+        let pack = SitePack::builtin();
+        // Custom sites were validated with the config; if they somehow
+        // aren't valid, the shipped sites still work.
+        let sites = SiteMatcher::new(&pack, &plan.custom_sites)
+            .or_else(|_| SiteMatcher::new(&pack, &[]))
+            .unwrap_or_default();
+        Self { plan, sites }
+    }
+}
+
+impl Rules for PlanRules {
     fn class_of(&self, app: &App) -> ClassId {
-        Plan::class_of(self, app)
+        self.plan.class_of(app)
     }
 
     fn prio_of(&self, class: ClassId) -> Priority {
-        Plan::prio_of(self, class)
+        self.plan.prio_of(class)
     }
 
     fn other_class(&self) -> ClassId {
-        Plan::other_class(self)
+        self.plan.other_class()
+    }
+
+    fn has_site_rules(&self) -> bool {
+        self.plan.has_site_rules()
+    }
+
+    fn site_class_of(&self, names: &[String]) -> Option<ClassId> {
+        let site = self.sites.site_of_any(names.iter().map(String::as_str))?;
+        self.plan.site_class(site)
+    }
+}
+
+/// Flow names and the IP → domain cache, shared by the rx threads and the
+/// DNS sniffer. Lock order: `cache` (read) before `names`.
+pub struct SiteState {
+    names: Mutex<FlowNames>,
+    cache: std::sync::RwLock<DomainCache>,
+    clock: Arc<MonotonicClock>,
+}
+
+const FLOW_NAMES_CAP: usize = 16_384;
+const DNS_CACHE_CAP: usize = 16_384;
+
+impl SiteState {
+    fn new(clock: Arc<MonotonicClock>) -> Self {
+        Self {
+            names: Mutex::new(FlowNames::new(FLOW_NAMES_CAP)),
+            cache: std::sync::RwLock::new(DomainCache::new(DNS_CACHE_CAP)),
+            clock,
+        }
+    }
+
+    /// Record a DNS response (the UDP payload, or a TCP segment holding a
+    /// whole length-prefixed message).
+    fn learn(&self, msg: &[u8], tcp: bool) {
+        let msg = if tcp {
+            match msg {
+                [hi, lo, rest @ ..]
+                    if usize::from(u16::from_be_bytes([*hi, *lo])) == rest.len() =>
+                {
+                    rest
+                }
+                _ => return,
+            }
+        } else {
+            msg
+        };
+        let Some(res) = dns::answers(msg) else { return };
+        let names: Names = Arc::from(res.names);
+        let now = self.clock.now();
+        let mut cache = self.cache.write().unwrap_or_else(|e| e.into_inner());
+        for (addr, ttl) in res.addrs {
+            cache.insert(ip::canonical(addr), names.clone(), ttl, now);
+        }
+    }
+
+    /// (flows being named, cached addresses)
+    fn sizes(&self) -> (usize, usize) {
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner()).len();
+        let names = self.names.lock().unwrap_or_else(|e| e.into_inner()).len();
+        (names, cache)
     }
 }
 
@@ -197,6 +339,13 @@ pub struct WhoCounters {
     pub pending: AtomicU64,
     pub unknown: AtomicU64,
     pub late_flows: AtomicU64,
+    /// Packets of flows named by SNI / by the DNS cache / hidden by ECH /
+    /// unnamed / still being named. Counted only while site rules exist.
+    pub named_sni: AtomicU64,
+    pub named_dns: AtomicU64,
+    pub named_ech: AtomicU64,
+    pub unnamed: AtomicU64,
+    pub naming: AtomicU64,
 }
 
 /// The rules every rx thread classifies by, swappable while shaping. The
@@ -243,6 +392,7 @@ pub struct AppClassifier {
     /// when the rules change.
     app_class: HashMap<AppId, ClassId>,
     pending: Pending,
+    sites: Arc<SiteState>,
     clock: Arc<MonotonicClock>,
     /// Keyed per run, so nobody on the internet can aim flows at one bucket.
     /// Clones share the keys, so every rx thread hashes a flow the same.
@@ -259,6 +409,7 @@ impl Clone for AppClassifier {
             seen: self.seen,
             app_class: self.app_class.clone(),
             pending: self.pending.clone(),
+            sites: self.sites.clone(),
             clock: self.clock.clone(),
             flow_hasher: self.flow_hasher.clone(),
         }
@@ -283,16 +434,52 @@ impl AppClassifier {
             .entry(app)
             .or_insert_with(|| rules.class_of(&attribution.app(app)))
     }
+
+    /// The site rule's class for this flow, if it has a name a site rule
+    /// claims. Only called while site rules exist.
+    fn site_class(
+        &self,
+        key: FlowKey,
+        pkt: &[u8],
+        info: &PacketInfo,
+        outbound: bool,
+    ) -> Option<ClassId> {
+        if !matches!(info.protocol, PROTO_TCP | PROTO_UDP) {
+            return None;
+        }
+        let named = {
+            let cache = self.sites.cache.read().unwrap_or_else(|e| e.into_inner());
+            let mut names = self.sites.names.lock().unwrap_or_else(|e| e.into_inner());
+            names.observe(key, pkt, info, outbound, &cache, self.clock.now())
+        };
+        let who = &self.who;
+        match named {
+            Named::Pending => {
+                who.naming.fetch_add(1, Relaxed);
+                None
+            }
+            Named::Known { names, via } => {
+                match via {
+                    Via::Sni => &who.named_sni,
+                    Via::Dns => &who.named_dns,
+                    Via::Ech => &who.named_ech,
+                    Via::None => &who.unnamed,
+                }
+                .fetch_add(1, Relaxed);
+                self.rules.site_class_of(&names?)
+            }
+        }
+    }
 }
 
 impl Classifier for AppClassifier {
     /// The tag is the packet's [`AppId`] ([`NO_TAG`] when unknown), so
     /// per-tag byte counts are per-app.
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+    fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
         self.refresh();
         let key = FlowKey::from_packet(info, outbound);
         let who = self.who.clone();
-        let (class, tag) = match self.attribution.lookup(&key) {
+        let (app_class, tag) = match self.attribution.lookup(&key) {
             Some((owner, source)) => {
                 if self.pending.hit(&key) {
                     who.late_flows.fetch_add(1, Relaxed);
@@ -311,6 +498,13 @@ impl Classifier for AppClassifier {
                 };
                 (self.rules.other_class(), NO_TAG)
             }
+        };
+        // A site rule beats the app's rule, in any app (PLAN.md §8.3).
+        let class = if self.rules.has_site_rules() {
+            self.site_class(key, pkt, info, outbound)
+                .unwrap_or(app_class)
+        } else {
+            app_class
         };
         let meta = PacketMeta {
             prio: self.rules.prio_of(class),
@@ -344,6 +538,9 @@ pub struct Spec {
 pub struct Shaper {
     fast_path: Option<FastPath<WinDivert>>,
     sniffers: Option<Sniffers>,
+    /// `None` if its handle wouldn't open: sites are then named by SNI only.
+    dns: Option<DnsSniffer>,
+    sites: Arc<SiteState>,
     who: Arc<WhoCounters>,
     attribution: Arc<WinAttribution>,
     rules: Arc<LiveRules>,
@@ -366,6 +563,11 @@ impl Shaper {
         // dropping them closes their handles.
         let attribution = Arc::new(new_attribution());
         let sniffers = Sniffers::start(&lib, attribution.clone())?;
+        let clock = Arc::new(MonotonicClock::new());
+        let sites = Arc::new(SiteState::new(clock.clone()));
+        let dns = DnsSniffer::start(&lib, sites.clone())
+            .inspect_err(|e| tracing::warn!("no DNS-based site names: {e:#}"))
+            .ok();
         let net = Arc::new(
             WinDivert::open(&lib, &filter, Layer::Network, 0, 0)
                 .context("opening the NETWORK layer")?,
@@ -380,7 +582,8 @@ impl Shaper {
             seen: 0,
             app_class: HashMap::new(),
             pending: Pending::default(),
-            clock: Arc::new(MonotonicClock::new()),
+            sites: sites.clone(),
+            clock,
             flow_hasher: RandomState::new(),
         };
         let fast_path = FastPath::start(
@@ -399,6 +602,8 @@ impl Shaper {
         Ok(Self {
             fast_path: Some(fast_path),
             sniffers: Some(sniffers),
+            dns,
+            sites,
             who,
             attribution,
             rules,
@@ -458,6 +663,7 @@ impl Shaper {
 
     fn halt(&mut self) -> Option<String> {
         let failure = self.fast_path.take().and_then(FastPath::stop);
+        drop(self.dns.take());
         drop(self.sniffers.take());
         failure
     }
@@ -487,7 +693,7 @@ impl runner::Engine for WinEngine {
         let shaper = Shaper::start(Spec {
             down: plan.down.clone(),
             up: plan.up.clone(),
-            rules: Arc::new(plan.clone()),
+            rules: Arc::new(PlanRules::new(plan.clone())),
             shape_lan: plan.shape_lan,
             rx_threads: self.rx_threads,
         })?;
@@ -537,8 +743,11 @@ impl runner::Running for Running {
         if plan.shape_lan != self.shape_lan {
             anyhow::bail!("LAN shaping changed");
         }
-        self.shaper
-            .reconfigure(plan.down.clone(), plan.up.clone(), Arc::new(plan.clone()))
+        self.shaper.reconfigure(
+            plan.down.clone(),
+            plan.up.clone(),
+            Arc::new(PlanRules::new(plan.clone())),
+        )
     }
 
     fn stop(self) -> Option<String> {
@@ -624,7 +833,94 @@ impl Report {
             (c.pool_exhausted - l.pool_exhausted) + (c.channel_full - l.channel_full),
             c.send_errors - l.send_errors,
         );
+        let (sni, by_dns, ech, none, naming) = (
+            take(&who.named_sni),
+            take(&who.named_dns),
+            take(&who.named_ech),
+            take(&who.unnamed),
+            take(&who.naming),
+        );
+        let (named_flows, cached) = s.sites.sizes();
+        tracing::info!(
+            "site names (packets): sni {sni}, dns {by_dns}, ech {ech}, none {none}, naming {naming}; \
+             tracking {named_flows} named flows, {cached} DNS addresses{}",
+            if s.dns.is_some() {
+                ""
+            } else {
+                " (no DNS sniffer)"
+            }
+        );
         self.counters = c;
         self.at = Instant::now();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use snailnet_core::rules::Config;
+
+    fn plan(extra: &str) -> Plan {
+        Config::parse(&format!(
+            "version = 1\nactive_profile = \"p\"\n[[profiles]]\nid = \"p\"\nname = \"P\"\n\
+             [[profiles.rules]]\ntarget = {{ kind = \"family\", id = \"brave\" }}\nshare = 3000\n\
+             [[profiles.rules]]\ntarget = {{ kind = \"site\", id = \"youtube\" }}\nshare = 4000\n{extra}"
+        ))
+        .unwrap()
+        .plan()
+    }
+
+    #[test]
+    fn plan_rules_map_names_to_site_classes() {
+        let r = PlanRules::new(plan(""));
+        assert!(r.has_site_rules());
+        let chain = [
+            "youtube-ui.l.google.com".to_string(),
+            "www.youtube.com".to_string(),
+        ];
+        assert_eq!(r.site_class_of(&chain), Some(1));
+        assert_eq!(r.site_class_of(&["twitch.tv".to_string()]), None, "no rule");
+        assert_eq!(r.site_class_of(&["example.com".to_string()]), None);
+    }
+
+    #[test]
+    fn custom_sites_reach_the_matcher() {
+        let extra = "[[profiles.rules]]\ntarget = { kind = \"site\", id = \"work\" }\nshare = 1000\n\
+                     [[sites]]\nid = \"work\"\nname = \"Work\"\ndomains = [\"*.corp.example\"]\n";
+        let r = PlanRules::new(plan(extra));
+        assert_eq!(r.site_class_of(&["git.corp.example".to_string()]), Some(2));
+    }
+
+    /// A response: www.youtube.com A 142.250.1.1, TTL 60.
+    fn dns_response() -> Vec<u8> {
+        let mut m = vec![0x12, 0x34, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0];
+        for label in ["www", "youtube", "com"] {
+            m.push(label.len() as u8);
+            m.extend_from_slice(label.as_bytes());
+        }
+        m.extend_from_slice(&[0, 0, 1, 0, 1]); // end, type A, class IN
+        m.extend_from_slice(&[0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 142, 250, 1, 1]);
+        m
+    }
+
+    #[test]
+    fn learning_dns_fills_the_cache_over_udp_and_tcp() {
+        let ip: std::net::IpAddr = "142.250.1.1".parse().unwrap();
+        let s = SiteState::new(Arc::new(MonotonicClock::new()));
+        s.learn(&dns_response(), false);
+        let now = s.clock.now();
+        let got = s.cache.read().unwrap().get(&ip, now).cloned().unwrap();
+        assert_eq!(&got[..], ["www.youtube.com"]);
+
+        let s = SiteState::new(Arc::new(MonotonicClock::new()));
+        let msg = dns_response();
+        s.learn(&msg, true);
+        assert_eq!(s.sizes().1, 0, "TCP needs the length prefix");
+        let mut framed = (msg.len() as u16).to_be_bytes().to_vec();
+        framed.extend_from_slice(&msg);
+        s.learn(&framed, true);
+        assert_eq!(s.sizes().1, 1);
+        s.learn(&framed[..framed.len() - 1], true); // split segment: ignored
+        assert_eq!(s.sizes().1, 1);
     }
 }

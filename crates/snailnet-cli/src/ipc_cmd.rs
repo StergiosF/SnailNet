@@ -130,7 +130,7 @@ pub fn apps(pipe: &str) -> Result<()> {
 }
 
 /// clap value parser: `TARGET=PERCENT[:high|normal|low]`. TARGET is
-/// `family:ID`, `exe:NAME`, or a bare name (an exe if it ends in `.exe`,
+/// `family:ID`, `exe:NAME`, `site:ID`, or a bare name (an exe if it ends in `.exe`,
 /// else a family).
 pub fn parse_target_rule(s: &str) -> Result<Rule, String> {
     let (target, rest) = s
@@ -164,7 +164,12 @@ pub fn parse_target_rule(s: &str) -> Result<Rule, String> {
     let target = match t.split_once(':') {
         Some(("family", id)) => Target::family(id.trim()),
         Some(("exe", id)) => Target::exe(id.trim()),
-        Some((kind, _)) => return Err(format!("unknown target kind {kind:?} (family or exe)")),
+        Some(("site", id)) => Target::site(id.trim()),
+        Some((kind, _)) => {
+            return Err(format!(
+                "unknown target kind {kind:?} (family, exe or site)"
+            ));
+        }
         None if t.ends_with(".exe") => Target::exe(&t),
         None => Target::family(&t),
     };
@@ -351,7 +356,9 @@ mod tests {
         assert_eq!((r.target.kind, r.share), (TargetKind::Exe, 1250));
         let r = parse_target_rule("exe:helper=0").unwrap();
         assert_eq!(r.target, Target::exe("helper"));
-        assert!(parse_target_rule("site:youtube=10").is_err());
+        let r = parse_target_rule("site:YouTube=45").unwrap();
+        assert_eq!(r.target, Target::site("youtube"));
+        assert!(parse_target_rule("web:youtube=10").is_err());
         assert!(parse_target_rule("steam").is_err());
         assert!(parse_target_rule("steam=96").is_err());
         assert!(parse_target_rule("steam=10:urgent").is_err());

@@ -53,7 +53,7 @@ fn port_of(p: &[u8]) -> u16 {
 struct ByPort;
 
 impl Classifier for ByPort {
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+    fn classify(&mut self, _pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
         let remote = if outbound {
             info.dst_port
         } else {

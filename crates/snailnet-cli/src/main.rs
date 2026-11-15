@@ -36,7 +36,8 @@ enum Command {
     /// `snailnet rules steam=40:low brave=60` replaces the active
     /// profile's rules with these two. TARGET=PERCENT[:high|normal|low];
     /// TARGET is a family id (`steam`), an exe (`game.exe`), or
-    /// `family:ID` / `exe:NAME`. "Everything else" gets the rest (at least
+    /// `family:ID` / `exe:NAME` / `site:ID` (`site:youtube`, in any app).
+    /// "Everything else" gets the rest (at least
     /// 5%; if the rules ask for more, they all shrink to fit).
     Rules {
         /// Which profile (default: the active one).
