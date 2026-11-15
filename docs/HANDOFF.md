@@ -228,13 +228,23 @@ ones come first.
      `DirStats::families` (`FamilyTick { family, name, bps }`, busiest
      first, idle ones omitted, unknown → `unknown`/"Unknown").
      `snailnet top` prints the top 5 under each direction.
-   - **Client verification** (§12.1: client PID → exe path/signature),
-     and the CLI checking that the server is the service: not done; the
-     DACL is the only gate. The pipe is byte mode, not message mode (the
-     framing makes them equivalent).
+   - ~~**Client verification**~~ **Done (2026-11-15)**, user's choice:
+     "same folder as the service". `snailnet-win::pipe`: the service gets
+     each client's PID (`GetNamedPipeClientProcessId`) and refuses it
+     unless its exe is in the service exe's folder (logged: "IPC: refused
+     a client: … is not in …"; the client sees `ClientError::Rejected`).
+     The client can't read a SYSTEM service's image path as a normal user
+     (tested: `OpenProcess` fails), so it checks the pipe's **owner**
+     instead: SYSTEM, Administrators or the same user, else
+     `ClientError::Impostor`. Verified with a console service: the CLI in
+     `target\release` is accepted, a copy elsewhere is refused.
+     Signature checks wait for signed builds. The pipe is byte mode, not
+     message mode (the framing makes them equivalent).
    - The hub saves `config.toml` on the IPC thread (blocking, but tiny).
-7. **Phase 1 exit:** the deferred items above, then the 24 h soak (flat
-   memory, no handle leaks; the 60 s log line prints the sizes).
+7. **Phase 1 exit:** the deferred items above are done (2026-11-15); what
+   remains is the **24 h soak** (flat memory, no handle leaks; the 60 s
+   log line prints the sizes). Needs the service installed for a day
+   while the user uses the PC normally.
 
 **Phase 1 exit:** rules editable via the CLI (done), live stats via
 `snailnet top` (done, per class), 24 h soak passes (flat memory, no

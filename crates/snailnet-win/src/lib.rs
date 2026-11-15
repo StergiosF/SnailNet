@@ -4,6 +4,7 @@
 #![cfg(windows)]
 
 pub mod fs;
+pub mod pipe;
 pub mod ports;
 pub mod process;
 pub mod timer;

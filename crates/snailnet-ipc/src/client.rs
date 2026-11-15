@@ -27,6 +27,14 @@ pub enum ClientError {
     Refused { code: ErrorCode, msg: String },
     #[error("unexpected reply from the service: {0}")]
     Unexpected(String),
+    /// The pipe isn't owned by SYSTEM, Administrators or us: some other
+    /// program created it, maybe to impersonate the service.
+    #[error("the pipe {0} wasn't created by the SnailNet service; not talking to it")]
+    Impostor(String),
+    #[error(
+        "the service closed the connection; only programs installed in the same folder as snailnet-service.exe may connect"
+    )]
+    Rejected,
 }
 
 pub struct Client {
@@ -57,17 +65,33 @@ impl Client {
                 Err(e) => return Err(FrameError::Io(e).into()),
             }
         };
+        use std::os::windows::io::AsRawHandle;
+        match snailnet_win::pipe::owner_is_trusted(file.as_raw_handle()) {
+            Ok(true) => {}
+            Ok(false) => return Err(ClientError::Impostor(pipe.into())),
+            Err(e) => {
+                return Err(ClientError::Denied(format!(
+                    "reading the pipe's owner: {e}"
+                )));
+            }
+        }
         let mut c = Self {
             pipe: file,
             next_id: 1,
             backlog: VecDeque::new(),
             service_version: String::new(),
         };
-        match c.call(Request::Hello {
+        let hello = c.call(Request::Hello {
             client_version: client_version.into(),
             protocol: PROTOCOL,
             ui_capabilities: Vec::new(),
-        })? {
+        });
+        // The service hangs up on clients it doesn't accept.
+        let hello = match hello {
+            Err(ClientError::Frame(FrameError::Io(_))) => return Err(ClientError::Rejected),
+            r => r?,
+        };
+        match hello {
             Reply::Welcome {
                 service_version, ..
             } => c.service_version = service_version,

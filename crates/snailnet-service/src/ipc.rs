@@ -6,10 +6,14 @@
 //! only SYSTEM, Administrators and interactive users in; remote clients are
 //! rejected, and the first instance is created with
 //! `FILE_FLAG_FIRST_PIPE_INSTANCE` so nobody can squat the name first.
+//! Each client must be a program in the service's own folder (§12.1: the
+//! CLI, later `SnailNet.exe`); others are disconnected before Hello.
 //! Frames are bounded (1 MB) and every change is validated by the hub
 //! before it is saved. Never touches the packet path.
 
 use std::io;
+use std::os::windows::io::AsRawHandle;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
@@ -152,6 +156,13 @@ async fn accept_loop(
                     debug!("IPC: a client failed to connect: {e}");
                     continue;
                 }
+                match verify_client(&client) {
+                    Ok(exe) => debug!("IPC: client {}", exe.display()),
+                    Err(why) => {
+                        warn!("IPC: refused a client: {why}");
+                        continue;
+                    }
+                }
                 if clients.load(Ordering::Relaxed) >= MAX_CLIENTS {
                     warn!("IPC: more than {MAX_CLIENTS} clients; turning one away");
                     continue;
@@ -169,6 +180,14 @@ async fn accept_loop(
         }
     }
     info!("IPC: stopped");
+}
+
+/// Only programs installed next to the service may talk to it.
+fn verify_client(pipe: &NamedPipeServer) -> Result<PathBuf, String> {
+    use snailnet_win::pipe::{End, in_my_folder, peer_pid};
+    let pid = peer_pid(pipe.as_raw_handle(), End::Client)
+        .map_err(|e| format!("can't tell which process it is: {e}"))?;
+    in_my_folder(pid)
 }
 
 async fn read_msg<R: AsyncRead + Unpin>(r: &mut R) -> Result<ClientMsg, FrameError> {

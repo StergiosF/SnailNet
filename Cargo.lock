@@ -724,6 +724,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "snailnet-core",
+ "snailnet-win",
  "thiserror",
 ]
 
