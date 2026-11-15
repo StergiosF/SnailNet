@@ -2,8 +2,9 @@
 
 > Status: **driver check and synthetic shaping run done (2026-11-14), and
 > both look good.** Factor 0.85 run done 2026-11-15 (loaded ping avg 20 ms
-> vs 9 idle). Still open: the Steam + Brave run, anti-cheat, CPU. Then make
-> the Go/No-go call on D4 (PLAN.md §21).
+> vs 9 idle). Real Steam + Brave run done 2026-11-15: 40/60, no buffering,
+> ping 226 → 22 ms avg, CPU 1.1%. Still open: anti-cheat (and upload).
+> Then make the Go/No-go call on D4 (PLAN.md §21).
 
 ## What was built
 
@@ -96,7 +97,7 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 |---|---|---|---|
 | Synthetic: `a.exe=40` / `b.exe=60` (curl copies, Cloudflare 25 MB), `--down 25` → 23 Mbps | 38.1 / 57.1 / 4.8 | t=6–14 s: a 37–39%, b 56–57%, other 4–5%; total 21.5–23.0 of 23.0 | ✅ within ±2% |
 | b stops (≈16 s) → a recovers | a back to most of the line within 2 s | 18 s: a 14.5 Mbps; 20–28 s: a 15–20 Mbps (83–88%), rest is background traffic in "everything else" | ✅ ≈2–4 s |
-| Steam download + YouTube 4K in Brave, 40/60 | ~38/57 when both saturate | not run yet | |
+| Steam download + YouTube 4K in Brave, `steam=40:low` / `brave=60`, `--down 25 --factor 0.85` → 21.2 Mbps, 120 s (2026-11-15) | 40/60 while both saturate (everything else idle) | **40/60 in ~80% of seconds**, 39–44 / 56–61 in nearly all the rest; short swings to 46–61% Steam when Brave paused between chunks; Brave idle at 21–23 s and 39 s → Steam took 100% at once and gave it back within 1 s. Total 20–21.3 of 21.2 most seconds (dips to 13–16 every ~10 s). **YouTube didn't buffer** (user watched). Unknown 0%, passthrough 0 | ✅ |
 | `who:` attribution | flow + port ≥ 95% | flow 87–96% + port remainder, **unknown 0%** | ✅ |
 | Ctrl+C / `--duration` end = fail-open | normal networking right away | ✅ queues flushed, handles closed, ping/HTTPS normal afterwards | ✅ |
 
@@ -115,6 +116,17 @@ Run `ping -t 1.1.1.1` while a big download runs.
 | Download (2 streams), spike factor 0.92 | avg 25 ms, max 54 ms |
 | Download (2 streams), spike factor 0.92, Phase 1 scheduler (CoDel/ECN, express lane), 2026-11-14 | runs: avg 38 / max 221 (1 lost), and avg 22 / max 47 |
 | Download (2 streams), spike factor 0.85, Phase 1 scheduler, 2026-11-15 (idle that run: avg 9, max 12) | **avg 20 ms, max 39 ms, 0 of 22 lost** |
+
+| Steam download + YouTube 4K in Brave, no SnailNet (2026-11-15) | avg 226 ms, **max 688 ms, 2 of 20 lost** |
+| Same, spike factor 0.85, steam=40:low / brave=60 (90 pings) | **avg 22, p50 17, p90 40, p95 53, max 77 ms, 0 lost** |
+
+**Real scenario (2026-11-15):** shaping cut loaded ping ten-fold
+(226 → 22 ms avg, 688 → 77 max, loss 10% → 0). Median 17 ms is within the
+§20 target (idle ≈ 9–10 ms, so ≤ ~20 ms); the average is 2–3 ms over it,
+and the tail (p95 53) is the slow-start/chunk-burst effect described below.
+Attribution: Steam's and Brave's connections were open before shaping
+started, so the port snapshot carried 30–40% of packets (100% in the
+first 23 s), the rest by FLOW; unknown 0%.
 
 **Factor 0.85 (2026-11-15, `scripts/phase0-synthetic.ps1 -Factor 0.85`):**
 loaded ping averaged 20 ms against 9 ms idle, so it meets the §20 target
@@ -142,14 +154,14 @@ exact.
 
 | Rate | `snailnet.exe` CPU % (Task Manager) |
 |---|---|
-| ~100 Mbps | |
-| max line rate | |
+| ~100 Mbps | not measurable on this line |
+| max line rate (21.2 Mbps shaped, real scenario, 2026-11-15) | **1.08% of all cores** (12 logical; ≈ 13% of one core), working set 31.9 MB. Measured from the process's own CPU time over 90 s, not Task Manager |
 
 ## Go / No-go
 
 - [x] Driver loads on this machine with HVCI on
 - [ ] Games you play tolerate it (or Game-safe mode is enough)
-- [x] Split within ±5% while both apps saturate (synthetic; the Steam + Brave run is still pending)
+- [x] Split within ±5% while both apps saturate (synthetic, and the real Steam + Brave run: 40/60, YouTube 4K didn't buffer)
 - [x] Ping under load clearly better than without SnailNet (61 → 25 ms avg at 0.92 with the Phase 0 scheduler; at 0.85 with the Phase 1 scheduler, avg 20 ms vs 9 idle, which meets the §20 target on average, max 39)
 
 **Decision:** _pending_. If Go, start Phase 1. If No-go, record why and

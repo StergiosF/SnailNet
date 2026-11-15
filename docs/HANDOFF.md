@@ -24,10 +24,10 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
 | Task | How | Done when |
 |---|---|---|
-| Real scenario | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
+| ~~Real scenario~~ **done 2026-11-15** (factor 0.85): 40/60, YouTube 4K didn't buffer, ping 226 → 22 ms avg (p50 17, max 77), CPU 1.1% of all cores, 32 MB | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
 | ~~Lower factor~~ | **Synthetic run done 2026-11-15**: `phase0-synthetic.ps1 -Factor 0.85` → split 39–40/60–61, loaded ping avg 20 / max 39 vs idle 9, 0 lost (meets §20 on average). Repeat in the real scenario | loaded ping recorded in the real run too |
 | Anti-cheat | Run `spike` (or `check`) while launching the user's games | per-game result in the report |
-| CPU | Task Manager → `snailnet.exe` during the real run | % recorded |
+| ~~CPU~~ **done**: 1.08% of 12 logical cores at 21 Mbps | Task Manager → `snailnet.exe` during the real run | % recorded |
 | Upload | `--up <Mbps>` after measuring upload | split recorded |
 | **Go/No-go** | Fill in the report's Decision line; record the outcome in PLAN.md's D4 row | decision written |
 
