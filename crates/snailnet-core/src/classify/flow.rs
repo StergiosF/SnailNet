@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 
-use crate::parse::ip::{PacketInfo, canonical};
+use crate::parse::ip::{PROTO_TCP, PROTO_UDP, PacketInfo, canonical};
 
 /// A connection as seen from this machine. Both directions of a flow map to
 /// the same key; IPv4-mapped IPv6 addresses are collapsed to IPv4.
@@ -69,7 +69,15 @@ struct Entry {
     /// WinDivert endpoint id for SOCKET entries, so `close` removes only
     /// what that socket added.
     endpoint: u64,
+    /// Consecutive port snapshots without this entry's local port.
+    misses: u8,
 }
+
+/// An entry whose local port is missing from this many port snapshots in
+/// a row is dead (its delete/close event never matched) and is dropped.
+/// The 24 h soak (2026-11-15) found ~1000 such FLOW entries after 6 h
+/// against ~130 live connections.
+pub const STALE_AFTER_SNAPSHOTS: u8 = 3;
 
 /// `(protocol, local port)`.
 pub type PortKey = (u8, u16);
@@ -121,6 +129,7 @@ impl FlowTable {
             owner,
             source: Source::Socket,
             endpoint,
+            misses: 0,
         };
         self.endpoints.insert(port, entry);
     }
@@ -138,8 +147,25 @@ impl FlowTable {
         }
     }
 
-    /// Replace the port snapshot.
+    /// Replace the port snapshot, and drop flow and endpoint entries whose
+    /// local port has been gone for [`STALE_AFTER_SNAPSHOTS`] snapshots.
+    /// A protocol with no rows at all is left alone (its table read may
+    /// have failed).
     pub fn set_ports(&mut self, ports: HashMap<PortKey, Owner>) {
+        let has_rows = |proto: u8| ports.keys().any(|&(p, _)| p == proto);
+        let (tcp, udp) = (has_rows(PROTO_TCP), has_rows(PROTO_UDP));
+        let checked = |proto: u8| (proto == PROTO_TCP && tcp) || (proto == PROTO_UDP && udp);
+        let age = |port: PortKey, e: &mut Entry| {
+            if !checked(port.0) || ports.contains_key(&port) {
+                e.misses = 0;
+                true
+            } else {
+                e.misses = e.misses.saturating_add(1);
+                e.misses < STALE_AFTER_SNAPSHOTS
+            }
+        };
+        self.flows.retain(|k, e| age((k.protocol, k.local.1), e));
+        self.endpoints.retain(|&port, e| age(port, e));
         self.ports = ports;
     }
 
@@ -179,6 +205,7 @@ impl FlowTable {
                 owner,
                 source,
                 endpoint,
+                misses: 0,
             },
         );
     }
@@ -280,5 +307,56 @@ mod tests {
         assert_eq!(t.sizes().3, 0);
         t.socket_bound((6, 1), owner(1), 0); // a new entry doesn't
         assert_eq!(t.sizes().3, 1);
+    }
+    fn key_at(proto: u8, local_port: u16) -> FlowKey {
+        FlowKey::new(
+            proto,
+            (IpAddr::from(ME), local_port),
+            (IpAddr::from(THEM), 443),
+        )
+    }
+
+    #[test]
+    fn dead_entries_leave_after_three_snapshots_without_their_port() {
+        let mut t = FlowTable::default();
+        t.flow_established(key_at(6, 1000), owner(1)); // live
+        t.flow_established(key_at(6, 2000), owner(1)); // its delete was missed
+        t.socket_connected(key_at(17, 3000), owner(2), 7); // live UDP
+        t.socket_bound((17, 4000), owner(2), 8); // closed, close missed
+        let live = HashMap::from([((6, 1000), owner(1)), ((17, 3000), owner(2))]);
+        for _ in 0..STALE_AFTER_SNAPSHOTS - 1 {
+            t.set_ports(live.clone());
+        }
+        assert_eq!(t.sizes().0, 3, "two misses: still kept");
+        // The port comes back once: the count starts over.
+        let mut back = live.clone();
+        back.insert((6, 2000), owner(1));
+        t.set_ports(back);
+        for _ in 0..STALE_AFTER_SNAPSHOTS - 1 {
+            t.set_ports(live.clone());
+        }
+        assert!(t.lookup(&key_at(6, 2000)).is_some());
+        t.set_ports(live.clone());
+        assert!(t.lookup(&key_at(6, 2000)).is_none(), "gone after three");
+        assert!(t.lookup(&key_at(6, 1000)).is_some());
+        assert!(t.lookup(&key_at(17, 3000)).is_some());
+        assert_eq!(t.sizes().1, 0, "the endpoint went too");
+    }
+
+    #[test]
+    fn a_protocol_missing_from_the_snapshot_is_not_aged() {
+        let mut t = FlowTable::default();
+        t.flow_established(key_at(6, 1000), owner(1));
+        t.flow_established(key_at(17, 1000), owner(1));
+        // The TCP table read failed: only UDP rows.
+        let udp_only = HashMap::from([((17, 1000), owner(1))]);
+        for _ in 0..10 {
+            t.set_ports(udp_only.clone());
+        }
+        assert!(t.lookup(&key_at(6, 1000)).is_some());
+        for _ in 0..10 {
+            t.set_ports(HashMap::new());
+        }
+        assert_eq!(t.sizes().0, 2, "an empty snapshot ages nothing");
     }
 }

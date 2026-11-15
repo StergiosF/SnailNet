@@ -280,6 +280,17 @@ ones come first.
    Check after **2026-11-16 18:05**. Sleep during the run is fine, since it
    tests the fix; judge by awake hours, and look for any "stalled" fail-open
    right after a resume in the log.
+   **Check-in 2026-11-16 00:30: the run-2 soak shows a leak.** Private
+   memory 26.4 → 32.5 MB in 6.25 h and still rising; handles flat. The
+   60 s log shows the FLOW table growing steadily, 7 → 1083 entries,
+   while Windows had only 73 TCP connections and 53 UDP endpoints: dead
+   entries whose FLOW-deleted / socket-close never matched (cause not
+   pinned down; the cap is 131 072, so nothing stopped it). **Fixed in
+   core** (`FlowTable::set_ports`): an entry whose local port is missing
+   from 3 consecutive port snapshots (~3 s) is dropped; a protocol with no
+   rows in the snapshot (failed table read) is never aged. The running
+   soak still has the old build, so it can't pass; a run 3 with this build
+   is needed.
    Then clean up: `Unregister-ScheduledTask SnailNetSoak -Confirm:$false`;
    elevated: `& 'C:\Program Files\SnailNet\snailnet-service.exe' uninstall --remove-data`,
    delete that folder, `sc stop WinDivert`.
