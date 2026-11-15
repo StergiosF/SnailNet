@@ -261,6 +261,21 @@ ones come first.
    private_mb / handles; a new pid means a restart) and the service's 60 s
    log lines in `C:\ProgramData\SnailNet\logs\` (table sizes, pool free,
    overflow; Users can read it).
+   **Check-in 2026-11-15 17:50:** the PC **slept 06:09 → 17:47** (an app
+   called `SetSuspendState`), so the soak had only ~45 min awake; the task
+   missed 70 runs. The service **survived S3 sleep/resume**: same PID, no
+   fail-open, no restart, attributing again right after wake (38 MB WS,
+   132 handles; tables jumped to ~235 flows / 185 sockets / 265 ports after
+   resume, during the reconnect burst — watch that they come back down).
+   The first log line after resume averaged "over 41962 s": `Instant`
+   counts sleep time but thread waits don't. That exposed a **watchdog
+   race**: on resume, if the watchdog looked before the scheduler beat, it
+   would see an 11 h "stall" and fail open for nothing (it didn't this
+   time). Fixed in commit 5787780: `fastpath::StallMeter` counts only
+   silence the watchdog was awake for (≤ 2 ticks per look; any beat
+   resets), with unit tests. The installed copy still has the old
+   watchdog; redeploy and restart the soak to test the fix (a 24 h soak
+   should include a sleep/resume).
    Then clean up: `Unregister-ScheduledTask SnailNetSoak -Confirm:$false`;
    elevated: `& 'C:\Program Files\SnailNet\snailnet-service.exe' uninstall --remove-data`,
    delete that folder, `sc stop WinDivert`.
