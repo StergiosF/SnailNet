@@ -109,6 +109,9 @@ export interface StatsTick {
   names: NameTick | null;
 }
 
+/** Why `set_rules` failed (app/src-tauri/src/lib.rs). */
+export type SaveError = { kind: "conflict" } | { kind: "failed"; message: string };
+
 export interface Latest {
   link: Link;
   snapshot: Snapshot | null;

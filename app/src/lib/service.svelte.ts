@@ -3,7 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Latest, Link, ServiceState, Snapshot, StatsTick } from "./types";
+import type { Latest, Link, SaveError, ServiceState, Snapshot, StatsTick } from "./types";
 
 class Service {
   link = $state<Link>({ kind: "connecting" });
@@ -20,6 +20,21 @@ class Service {
       null,
   );
 
+  /** Display names of sites seen in the stats, kept after they go quiet. */
+  siteNames = $state<Record<string, string>>({});
+
+  /** Save new slice sizes for the active profile's enabled rules, in order
+   *  (`shares` is the bar's full list; Everything else is dropped). Resolves
+   *  to the new revision; rejects with a SaveError. */
+  async saveShares(shares: number[]): Promise<number> {
+    const snap = this.snapshot;
+    const profile = this.activeProfile;
+    if (!snap || !profile) throw { kind: "failed", message: "not connected" } satisfies SaveError;
+    let k = 0;
+    const rules = profile.rules.map((r) => (r.enabled ? { ...r, share: shares[k++] ?? r.share } : r));
+    return invoke<number>("set_rules", { profileId: profile.id, rules, rev: snap.rev });
+  }
+
   async start(): Promise<void> {
     // Listen first so nothing falls between `current` and the first event.
     await Promise.all([
@@ -31,7 +46,12 @@ class Service {
       listen<ServiceState>("service-state", (e) => {
         if (this.snapshot) this.snapshot.state = e.payload;
       }),
-      listen<StatsTick>("stats", (e) => (this.stats = e.payload)),
+      listen<StatsTick>("stats", (e) => {
+        this.stats = e.payload;
+        for (const s of e.payload.down?.sites ?? []) {
+          if (this.siteNames[s.site] !== s.name) this.siteNames[s.site] = s.name;
+        }
+      }),
     ]);
     const now = await invoke<Latest>("current");
     this.link = now.link;

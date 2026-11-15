@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appRates, mbps, percent, stateKind, totalBps } from "./format";
+import { appRates, className, mbps, percent, stateKind, targetLabel, totalBps } from "./format";
 import type { DirStats } from "./types";
 
 const dir = (families: [string, number][], classes: number[] = []): DirStats => ({
@@ -47,6 +47,19 @@ describe("totals and rows", () => {
     );
     expect(rows.map((r) => r.family)).toEqual(["brave", "steam", "discord"]);
     expect(rows[2]).toEqual({ family: "discord", name: "discord", down: 1_000_000, up: 2_000_000 });
+  });
+});
+
+describe("targetLabel", () => {
+  const apps = [{ family: "brave", name: "Brave", exe: "brave.exe" }];
+  it("uses the app's or site's own name, else a capitalised id", () => {
+    expect(targetLabel({ kind: "family", id: "brave" }, apps, {})).toBe("Brave");
+    expect(targetLabel({ kind: "site", id: "youtube" }, apps, { youtube: "YouTube" })).toBe("YouTube");
+    expect(targetLabel({ kind: "site", id: "twitch" }, apps, {})).toBe("Twitch");
+    expect(targetLabel({ kind: "exe", id: "a.exe" }, apps, {})).toBe("A.exe");
+  });
+  it("names the class the scheduler reports", () => {
+    expect(className({ kind: "site", id: "YouTube" })).toBe("site:youtube");
   });
 });
 

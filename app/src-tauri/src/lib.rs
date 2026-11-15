@@ -18,7 +18,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Serialize;
-use snailnet_ipc::{Client, PIPE_NAME, ServiceState, Snapshot, StatsTick};
+use snailnet_core::rules::Rule;
+use snailnet_ipc::{
+    Client, ClientError, ErrorCode, PIPE_NAME, Reply, Request, ServiceState, Snapshot, StatsTick,
+};
 use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::{Link, Sink};
@@ -90,6 +93,51 @@ impl Sink for TauriSink {
     }
 }
 
+/// Why a change didn't save, for the UI.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SaveError {
+    /// Someone else changed the rules first; the UI gets the new snapshot
+    /// through the bridge and the user tries again.
+    Conflict,
+    /// The service said no (`message` says why) or couldn't be reached.
+    Failed { message: String },
+}
+
+/// Replace one profile's rules (PLAN.md §12.2 `SetRules`); returns the new
+/// revision. Uses its own short connection: the bridge's one is busy
+/// reading the stats stream.
+#[tauri::command]
+async fn set_rules(profile_id: String, rules: Vec<Rule>, rev: u64) -> Result<u64, SaveError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut c = Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION"))?;
+        c.call(Request::SetRules {
+            profile_id,
+            rules,
+            rev,
+        })
+    })
+    .await
+    .map_err(|e| SaveError::Failed {
+        message: e.to_string(),
+    })?
+    .map_err(|e| match e {
+        ClientError::Refused {
+            code: ErrorCode::Conflict,
+            ..
+        } => SaveError::Conflict,
+        other => SaveError::Failed {
+            message: other.to_string(),
+        },
+    })
+    .and_then(|reply| match reply {
+        Reply::Ack { rev } => Ok(rev),
+        other => Err(SaveError::Failed {
+            message: format!("unexpected reply: {other:?}"),
+        }),
+    })
+}
+
 #[tauri::command]
 fn current(shared: tauri::State<'_, Arc<Shared>>) -> Latest {
     shared
@@ -123,7 +171,7 @@ pub fn run() {
                 })?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![current])
+        .invoke_handler(tauri::generate_handler![current, set_rules])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");
 }

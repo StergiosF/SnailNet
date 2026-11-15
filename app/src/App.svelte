@@ -5,6 +5,7 @@
   import AppList from "./lib/components/AppList.svelte";
   import Header from "./lib/components/Header.svelte";
   import InfoBar from "./lib/components/InfoBar.svelte";
+  import SplitBar from "./lib/components/SplitBar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import { stateKind } from "./lib/format";
   import { t } from "./lib/i18n";
@@ -78,6 +79,9 @@
     {/if}
     {#if service.link.kind === "connecting"}
       <p class="visually-hidden" role="status">{t("link.connecting")}</p>
+    {/if}
+    {#if service.link.kind === "connected" && service.snapshot}
+      <SplitBar />
     {/if}
     <AppList {loading} />
   </main>

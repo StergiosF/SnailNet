@@ -36,6 +36,22 @@
   --focus-inner: #ffffff;
   --selection: rgb(0 95 184 / 0.25);
 
+  /* Split-bar slices: calm hues, tinted ground + dark ink (≥ 7:1). */
+  --slice-1-bg: #cdede6;
+  --slice-1-fg: #0b3d35;
+  --slice-2-bg: #d6e6fa;
+  --slice-2-fg: #0a2f5c;
+  --slice-3-bg: #e4ddf8;
+  --slice-3-fg: #34225f;
+  --slice-4-bg: #f8e6c4;
+  --slice-4-fg: #4d3300;
+  --slice-5-bg: #f7d9df;
+  --slice-5-fg: #5a1a2a;
+  --slice-6-bg: #ddebc9;
+  --slice-6-fg: #2d4011;
+  --slice-other-bg: rgb(0 0 0 / 0.05);
+  --slice-other-fg: rgb(0 0 0 / 0.66);
+
   --radius-control: 4px;
   --radius-card: 8px;
   --titlebar-h: 32px;
@@ -67,6 +83,21 @@
     --caution-tint: #433519;
     --critical: #ff99a4;
     --critical-tint: #442726;
+
+    --slice-1-bg: #1f4a43;
+    --slice-1-fg: #cff3eb;
+    --slice-2-bg: #213c5e;
+    --slice-2-fg: #d8e8fc;
+    --slice-3-bg: #3a2f5e;
+    --slice-3-fg: #e6defa;
+    --slice-4-bg: #4f3b14;
+    --slice-4-fg: #f8e7c6;
+    --slice-5-bg: #552a35;
+    --slice-5-fg: #f8dce2;
+    --slice-6-bg: #34461f;
+    --slice-6-fg: #e0eecd;
+    --slice-other-bg: rgb(255 255 255 / 0.06);
+    --slice-other-fg: rgb(255 255 255 / 0.79);
 
     --focus-outer: #ffffff;
     --focus-inner: rgb(0 0 0 / 0.7);
