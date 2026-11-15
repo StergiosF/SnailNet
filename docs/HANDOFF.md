@@ -291,7 +291,16 @@ ones come first.
    rows in the snapshot (failed table read) is never aged. The running
    soak still has the old build, so it can't pass; a run 3 with this build
    is needed.
-   Then clean up: `Unregister-ScheduledTask SnailNetSoak -Confirm:$false`;
+   **Soak stopped 2026-11-16 00:37 (user: "Stop it, no soak for now").**
+   Torn down: service uninstalled with `--remove-data`, `C:\Program
+   Files\SnailNet` deleted, WinDivert stopped, task `SnailNetSoak`
+   unregistered. Evidence kept in `%LOCALAPPDATA%\SnailNetSoak\`
+   (`soak-run1.csv`, `soak-run2.csv`, `run2-logs\`). **Phase 1 exit still
+   needs a passing 24 h soak (run 3)** with the fixed build: reinstall the
+   copy in Program Files, pass-through config, re-register the sampler
+   task (`scripts/soak-sample.ps1`), and watch "tracking N flows" stay
+   near the live connection count.
+   (Old cleanup steps, already done:) `Unregister-ScheduledTask SnailNetSoak -Confirm:$false`;
    elevated: `& 'C:\Program Files\SnailNet\snailnet-service.exe' uninstall --remove-data`,
    delete that folder, `sc stop WinDivert`.
 
@@ -303,8 +312,8 @@ Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
 ### 3. Phase 2: website recognition (started 2026-11-16, during the soak)
 
-Pure-Rust parts first; **no driver runs until the soak ends** (a second
-WinDivert handle would disturb it).
+Pure-Rust parts were done during the soak; the soak has since been
+stopped, so driver runs are free again.
 
 1. ~~**TLS ClientHello SNI**~~ **Done.** `snailnet-core::parse::tls`:
    `from_tcp` (TLS records, joins a hello split across records/segments,
@@ -355,8 +364,8 @@ WinDivert handle would disturb it).
    it can't open, shaping goes on with SNI only (logged). The 60 s log
    gains "site names (packets): sni/dns/ech/none/naming; tracking N named
    flows, M DNS addresses". CLI: `snailnet rules site:youtube=45`.
-7. **Next, after the soak ends (needs the user at the machine):**
-   reinstall the service from this build, `snailnet rules site:youtube=45
+7. **Next (needs the user at the machine):**
+   install the service from this build, `snailnet rules site:youtube=45
    brave=...`, play YouTube in Brave (and Chrome/Edge/Firefox if
    installed) with secure DNS on and off; check `snailnet top` shows the
    `site:youtube` class and the log's name mix; note what lands in
@@ -397,6 +406,10 @@ This shell isn't elevated. Write a `.ps1` in the scratchpad that runs the
 command and redirects output to a file, then run
 `Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File <script>'`
 and read the file. The user clicks Yes on the UAC prompt. Tell them first.
+Always use `-File` with a script: an inline `-Command` passed through
+`Start-Process -ArgumentList` gets its quoting mangled and silently does
+nothing. Delete a folder holding `WinDivert64.sys` only after `sc stop
+WinDivert`; while the driver is loaded the file is locked.
 
 Synthetic test recipe: copy `C:\Windows\System32\curl.exe` to `a.exe` and
 `b.exe`, download `https://speed.cloudflare.com/__down?bytes=25000000`
