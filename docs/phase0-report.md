@@ -3,7 +3,8 @@
 > Status: **driver check and synthetic shaping run done (2026-11-14), and
 > both look good.** Factor 0.85 run done 2026-11-15 (loaded ping avg 20 ms
 > vs 9 idle). Real Steam + Brave run done 2026-11-15: 40/60, no buffering,
-> ping 226 → 22 ms avg, CPU 1.1%. Still open: anti-cheat (and upload).
+> ping 226 → 22 ms avg, CPU 1.1%. Upload (≈ 40 Mbps line) done: 40/60,
+> ping 12 ms vs 10 idle. Still open: anti-cheat (user skipped it for now).
 > Then make the Go/No-go call on D4 (PLAN.md §21).
 
 ## What was built
@@ -74,7 +75,7 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 |---|---|
 | Windows edition / build | Windows 11 Pro, build 26300 |
 | CPU | AMD Ryzen 5 9600X (6 cores) |
-| Line (ISP speed test ↓/↑, idle ping) | ≈ 25 Mbps ↓ (Cloudflare, 25 MB in 7.8 s; ↑ not measured), idle ping 11 ms to 1.1.1.1 |
+| Line (ISP speed test ↓/↑, idle ping) | Fiber. ≈ 25 Mbps ↓ (Cloudflare: 1 × 25 MB 24.0 Mbps, 4 × 25 MB 21.9–27.8 Mbps, 2026-11-15), ≈ 40 Mbps ↑ (10–30 MB POSTs: 35, 20, 8, 44 Mbps; the low ones probably overlapped Steam/YouTube), idle ping 9–11 ms to 1.1.1.1 |
 | Memory integrity (HVCI) | **on** (`SecurityServicesRunning` = 2) |
 | Security software | Windows Defender |
 
@@ -98,6 +99,7 @@ Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\D
 | Synthetic: `a.exe=40` / `b.exe=60` (curl copies, Cloudflare 25 MB), `--down 25` → 23 Mbps | 38.1 / 57.1 / 4.8 | t=6–14 s: a 37–39%, b 56–57%, other 4–5%; total 21.5–23.0 of 23.0 | ✅ within ±2% |
 | b stops (≈16 s) → a recovers | a back to most of the line within 2 s | 18 s: a 14.5 Mbps; 20–28 s: a 15–20 Mbps (83–88%), rest is background traffic in "everything else" | ✅ ≈2–4 s |
 | Steam download + YouTube 4K in Brave, `steam=40:low` / `brave=60`, `--down 25 --factor 0.85` → 21.2 Mbps, 120 s (2026-11-15) | 40/60 while both saturate (everything else idle) | **40/60 in ~80% of seconds**, 39–44 / 56–61 in nearly all the rest; short swings to 46–61% Steam when Brave paused between chunks; Brave idle at 21–23 s and 39 s → Steam took 100% at once and gave it back within 1 s. Total 20–21.3 of 21.2 most seconds (dips to 13–16 every ~10 s). **YouTube didn't buffer** (user watched). Unknown 0%, passthrough 0 | ✅ |
+| Upload, synthetic: `a.exe=40` / `b.exe=60` (curl copies, 30 MB POSTs to Cloudflare `__up`), `--up 40 --factor 0.85` → 34 Mbps, 40 s (2026-11-15) | 40/60 | **40/60 in 30 of 38 loaded seconds**; total 30–34 of 34. b idle between POSTs at 20–23 s → a took 96% and gave it back within 1 s. 2–7 drops/s, flow 100%, unknown 0% | ✅ |
 | `who:` attribution | flow + port ≥ 95% | flow 87–96% + port remainder, **unknown 0%** | ✅ |
 | Ctrl+C / `--duration` end = fail-open | normal networking right away | ✅ queues flushed, handles closed, ping/HTTPS normal afterwards | ✅ |
 
@@ -119,6 +121,12 @@ Run `ping -t 1.1.1.1` while a big download runs.
 
 | Steam download + YouTube 4K in Brave, no SnailNet (2026-11-15) | avg 226 ms, **max 688 ms, 2 of 20 lost** |
 | Same, spike factor 0.85, steam=40:low / brave=60 (90 pings) | **avg 22, p50 17, p90 40, p95 53, max 77 ms, 0 lost** |
+
+| Upload 30 MB, no SnailNet (2026-11-15, partial: 9 samples) | 10 → 84 → **410 ms** during the upload |
+| Upload, a.exe=40 / b.exe=60 at 34 Mbps (factor 0.85), idle that run 10 ms avg | **avg 12, max 32 ms**, 1 of 28 lost |
+
+**Upload (2026-11-15):** shaped upload keeps ping within +2 ms of idle on
+average; unshaped, one 30 MB upload pushed it to 410 ms.
 
 **Real scenario (2026-11-15):** shaping cut loaded ping ten-fold
 (226 → 22 ms avg, 688 → 77 max, loss 10% → 0). Median 17 ms is within the
