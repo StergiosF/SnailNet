@@ -5,7 +5,9 @@
 use anyhow::{Context, Result, bail};
 use snailnet_core::rules::{Config, Line, OTHER_CLASS, Profile, Rule, Target};
 use snailnet_core::scheduler::{Priority, shares};
-use snailnet_ipc::{Client, Reply, Request, ServerMsg, ServiceState, Snapshot, StatsTick};
+use snailnet_ipc::{
+    Client, FamilyTick, Reply, Request, ServerMsg, ServiceState, Snapshot, StatsTick,
+};
 
 fn connect(pipe: &str) -> Result<Client> {
     Ok(Client::connect(pipe, env!("CARGO_PKG_VERSION"))?)
@@ -291,7 +293,28 @@ fn print_tick(t: &StatsTick) {
         }
         line += &format!(" | drops {drops}");
         println!("{line}");
+        if let Some(apps) = family_line(&d.families) {
+            println!("{:>12}{apps}", "");
+        }
     }
+}
+
+/// The busiest families on one line: `Brave 8.00, Steam 6.00, +2 more`.
+fn family_line(families: &[FamilyTick]) -> Option<String> {
+    const SHOWN: usize = 5;
+    if families.is_empty() {
+        return None;
+    }
+    let mut line = families
+        .iter()
+        .take(SHOWN)
+        .map(|f| format!("{} {:.2}", f.name, f.bps as f64 / 1e6))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if families.len() > SHOWN {
+        line += &format!(", +{} more", families.len() - SHOWN);
+    }
+    Some(line)
 }
 
 pub fn top(pipe: &str, hz: u32, count: Option<u64>) -> Result<()> {
@@ -333,5 +356,20 @@ mod tests {
         assert!(parse_target_rule("steam=96").is_err());
         assert!(parse_target_rule("steam=10:urgent").is_err());
         assert!(parse_target_rule("family:=10").is_err());
+    }
+
+    #[test]
+    fn family_line_shows_the_busiest_five() {
+        assert_eq!(family_line(&[]), None);
+        let f = |name: &str, mbps: u64| FamilyTick {
+            family: name.to_lowercase(),
+            name: name.into(),
+            bps: mbps * 1_000_000,
+        };
+        let list: Vec<_> = (0..7).map(|k| f(&format!("App{k}"), 7 - k)).collect();
+        assert_eq!(
+            family_line(&list).unwrap(),
+            "App0 7.00, App1 6.00, App2 5.00, App3 4.00, App4 3.00, +2 more"
+        );
     }
 }

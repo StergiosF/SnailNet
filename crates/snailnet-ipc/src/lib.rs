@@ -217,6 +217,20 @@ pub struct DirStats {
     pub shaped_bps: u64,
     /// Rule classes in order, then Everything else.
     pub classes: Vec<ClassTick>,
+    /// App families that sent anything since the previous tick, busiest
+    /// first (PLAN.md §12.2 `per_family`). Traffic whose app isn't known
+    /// (yet) is the family `unknown`.
+    #[serde(default)]
+    pub families: Vec<FamilyTick>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FamilyTick {
+    /// What a family rule names (`steam`).
+    pub family: String,
+    pub name: String,
+    /// Bits per second sent since the previous tick.
+    pub bps: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -396,6 +410,11 @@ mod tests {
                         bps: 9_000_000,
                         drops: 2,
                         queued_bytes: 3000,
+                    }],
+                    families: vec![FamilyTick {
+                        family: "steam".into(),
+                        name: "Steam".into(),
+                        bps: 8_500_000,
                     }],
                 }),
                 up: None,

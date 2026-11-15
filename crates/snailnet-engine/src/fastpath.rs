@@ -23,6 +23,7 @@
 //! scheduler flushes its queues at full speed and forwards everything still
 //! in the channel.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -39,12 +40,19 @@ use crate::batch::DEFAULT_BATCH;
 use crate::pool::{PacketBuf, PacketPool};
 use crate::{Address, EngineError, PacketEngine, RecvBatch, SendBatch};
 
+/// The classifier's label for a packet's owner (the service uses its app
+/// id). The fast path counts sent bytes per tag; it never interprets them.
+pub type Tag = u32;
+/// No owner known.
+pub const NO_TAG: Tag = Tag::MAX;
+
 /// Decides which class a shaped packet belongs to. Each rx thread gets its
 /// own clone, so per-thread caches need no locking.
 pub trait Classifier: Clone + Send + 'static {
-    /// Class, flow hash and priority for one packet. `control` is filled in
-    /// by the fast path. Runs on the rx thread: keep it quick.
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta;
+    /// Class, flow hash and priority for one packet, and its owner's tag.
+    /// `control` is filled in by the fast path. Runs on the rx thread: keep
+    /// it quick.
+    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag);
 }
 
 /// How the scheduler thread waits for its next release time.
@@ -106,6 +114,7 @@ pub enum StartError {
 pub struct Queued {
     buf: PacketBuf,
     addr: Address,
+    tag: Tag,
 }
 
 impl Packet for Queued {
@@ -167,6 +176,9 @@ pub struct DirectionStats {
     pub rate_bytes_per_sec: u64,
     /// (class name, stats), in class order.
     pub classes: Vec<(String, ClassStats)>,
+    /// (tag, bytes sent) since the fast path started, by tag. Packets that
+    /// bypass the scheduler (LAN, overflow) aren't counted.
+    pub tags: Vec<(Tag, u64)>,
 }
 
 /// What the scheduler thread published last (every ~100 ms).
@@ -382,12 +394,13 @@ fn rx_loop<C: Classifier>(
             let meta = if passthrough {
                 None
             } else {
-                admit(data, up, shaped).map(|info| PacketMeta {
-                    control: info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0),
-                    ..classifier.classify(&info, up)
+                admit(data, up, shaped).map(|info| {
+                    let (meta, tag) = classifier.classify(&info, up);
+                    let control = info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
+                    (PacketMeta { control, ..meta }, tag)
                 })
             };
-            let Some(meta) = meta else {
+            let Some((meta, tag)) = meta else {
                 c.bypassed.fetch_add(1, Relaxed);
                 push(engine, shared, &mut bypass, data, addr);
                 continue;
@@ -400,7 +413,11 @@ fn rx_loop<C: Classifier>(
             let item = Item {
                 up,
                 meta,
-                packet: Queued { buf, addr: *addr },
+                packet: Queued {
+                    buf,
+                    addr: *addr,
+                    tag,
+                },
             };
             match tx.try_send(item) {
                 Ok(()) => {
@@ -461,6 +478,8 @@ fn schedule_loop(
     let clock = &shared.clock;
     let mut out = SendBatch::new(DEFAULT_BATCH);
     let mut next_snapshot = 0;
+    // Bytes sent per tag: [down, up].
+    let mut sent: [SentByTag; 2] = Default::default();
 
     let enqueue = |item: Item, down: &mut Option<Scheduler<Queued>>, up: &mut Option<_>| {
         let s: Option<&mut Scheduler<Queued>> = if item.up { up.as_mut() } else { down.as_mut() };
@@ -481,7 +500,7 @@ fn schedule_loop(
             break;
         }
         if now >= next_snapshot {
-            publish(shared, down.as_ref(), up.as_ref());
+            publish(shared, down.as_ref(), up.as_ref(), &sent);
             next_snapshot = now + SNAPSHOT_EVERY;
         }
 
@@ -506,10 +525,12 @@ fn schedule_loop(
 
         let now = clock.now();
         let mut wake: Option<Nanos> = None;
-        for s in [down.as_mut(), up.as_mut()].into_iter().flatten() {
+        for (s, sent) in [down.as_mut(), up.as_mut()].into_iter().zip(&mut sent) {
+            let Some(s) = s else { continue };
             loop {
                 match s.dequeue(now) {
                     Dequeue::Packet { packet, .. } => {
+                        *sent.entry(packet.tag).or_default() += packet.buf.len() as u64;
                         push(engine, shared, &mut out, &packet.buf, &packet.addr);
                     }
                     Dequeue::WaitUntil(t) => {
@@ -533,13 +554,15 @@ fn schedule_loop(
     // Stopping or failing open: release everything we hold, ignoring the
     // rate, then forward whatever the rx threads still hand over until
     // they have all exited.
-    for s in [down.as_mut(), up.as_mut()].into_iter().flatten() {
+    for (s, sent) in [down.as_mut(), up.as_mut()].into_iter().zip(&mut sent) {
+        let Some(s) = s else { continue };
         for (_, p) in s.drain_all() {
+            *sent.entry(p.tag).or_default() += p.buf.len() as u64;
             push(engine, shared, &mut out, &p.buf, &p.addr);
         }
     }
     shared.send(engine, &mut out);
-    publish(shared, down.as_ref(), up.as_ref());
+    publish(shared, down.as_ref(), up.as_ref(), &sent);
     loop {
         shared.heartbeat.store(clock.now(), Relaxed);
         match rx.recv_timeout(IDLE_WAIT) {
@@ -562,19 +585,31 @@ fn schedule_loop(
     shared.send(engine, &mut out);
 }
 
-fn publish(shared: &Shared, down: Option<&Scheduler<Queued>>, up: Option<&Scheduler<Queued>>) {
-    let stats = |s: &Scheduler<Queued>| DirectionStats {
-        rate_bytes_per_sec: s.rate_bytes_per_sec(),
-        classes: (0..s.class_count())
-            .map(|i| (s.class_name(i).to_owned(), s.stats(i)))
-            .collect(),
+type SentByTag = HashMap<Tag, u64>;
+
+fn publish(
+    shared: &Shared,
+    down: Option<&Scheduler<Queued>>,
+    up: Option<&Scheduler<Queued>>,
+    sent: &[SentByTag; 2],
+) {
+    let stats = |s: &Scheduler<Queued>, sent: &SentByTag| {
+        let mut tags: Vec<(Tag, u64)> = sent.iter().map(|(&t, &b)| (t, b)).collect();
+        tags.sort_unstable();
+        DirectionStats {
+            rate_bytes_per_sec: s.rate_bytes_per_sec(),
+            classes: (0..s.class_count())
+                .map(|i| (s.class_name(i).to_owned(), s.stats(i)))
+                .collect(),
+            tags,
+        }
     };
     // Never block the scheduler on a reader.
     if let Ok(mut snap) = shared.snapshot.try_lock() {
         *snap = Snapshot {
             taken: Some(Instant::now()),
-            down: down.map(stats),
-            up: up.map(stats),
+            down: down.map(|s| stats(s, &sent[0])),
+            up: up.map(|s| stats(s, &sent[1])),
         };
     }
 }

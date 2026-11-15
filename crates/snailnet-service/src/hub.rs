@@ -5,13 +5,15 @@
 //! validate, save `config.toml` (atomically, old file → `.bak`), bump
 //! `rev`, then ask the runner to reload and tell every client.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
+use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::rules::{Config, Line, Plan, Rule};
-use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot};
+use snailnet_engine::fastpath::{DirectionStats, NO_TAG, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
-    AppInfo, ClassTick, DirStats, ErrorCode, Event, ServiceState, Snapshot, StatsTick,
+    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, ServiceState, Snapshot, StatsTick,
 };
 use tokio::sync::broadcast;
 
@@ -163,8 +165,8 @@ impl Hub {
             StatsTick {
                 t_ms,
                 state: i.state.clone(),
-                down: dir_stats(snap.down.as_ref(), last.down.as_ref(), secs),
-                up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs),
+                down: dir_stats(snap.down.as_ref(), last.down.as_ref(), secs, &i.apps),
+                up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs, &i.apps),
             }
         });
         if tick.is_some() {
@@ -260,10 +262,13 @@ impl Hub {
     }
 }
 
+/// `apps` is indexed by the engine's tags (app ids, in the order first
+/// seen); it is read after the snapshot, so it covers every tag in it.
 fn dir_stats(
     now: Option<&DirectionStats>,
     last: Option<&DirectionStats>,
     secs: f64,
+    apps: &[AppInfo],
 ) -> Option<DirStats> {
     let now = now?;
     let classes = now
@@ -288,7 +293,42 @@ fn dir_stats(
     Some(DirStats {
         shaped_bps: now.rate_bytes_per_sec * 8,
         classes,
+        families: family_ticks(&now.tags, last.map_or(&[][..], |l| &l.tags), secs, apps),
     })
+}
+
+/// Bytes per tag since `last` (both sorted by tag), summed per family.
+fn family_ticks(
+    now: &[(Tag, u64)],
+    last: &[(Tag, u64)],
+    secs: f64,
+    apps: &[AppInfo],
+) -> Vec<FamilyTick> {
+    let mut by_family: HashMap<(&str, &str), u64> = HashMap::new();
+    for &(tag, bytes) in now {
+        let before = last
+            .binary_search_by_key(&tag, |&(t, _)| t)
+            .map_or(0, |k| last[k].1);
+        let delta = bytes.saturating_sub(before);
+        if delta == 0 {
+            continue;
+        }
+        let key = match apps.get(tag as usize) {
+            Some(a) if tag != NO_TAG => (a.family.as_str(), a.name.as_str()),
+            _ => (UNKNOWN_ID, "Unknown"),
+        };
+        *by_family.entry(key).or_default() += delta;
+    }
+    let mut out: Vec<FamilyTick> = by_family
+        .into_iter()
+        .map(|((family, name), bytes)| FamilyTick {
+            family: family.to_owned(),
+            name: name.to_owned(),
+            bps: (bytes as f64 * 8.0 / secs) as u64,
+        })
+        .collect();
+    out.sort_by(|a, b| b.bps.cmp(&a.bps).then_with(|| a.family.cmp(&b.family)));
+    out
 }
 
 #[cfg(test)]
@@ -391,6 +431,7 @@ mod tests {
                         ..ClassStats::default()
                     },
                 )],
+                tags: vec![],
             }),
             up: None,
         };
@@ -412,5 +453,65 @@ mod tests {
         assert_eq!(hub.latest_tick().down.unwrap().classes[0].bps, 8_000_000);
         hub.clear_stats();
         assert!(hub.latest_tick().down.is_none());
+    }
+
+    #[test]
+    fn per_family_rates_merge_a_familys_exes_and_skip_idle_ones() {
+        let (_t, hub) = hub();
+        let app = |family: &str, name: &str, exe: &str| AppInfo {
+            family: family.into(),
+            name: name.into(),
+            exe: exe.into(),
+        };
+        // Tags are indexes into this list.
+        let apps = vec![
+            app("steam", "Steam", "steam.exe"),
+            app("steam", "Steam", "steamwebhelper.exe"),
+            app("brave", "Brave", "brave.exe"),
+            app("discord", "Discord", "discord.exe"),
+        ];
+        let base = Instant::now();
+        let snap = |ms: u64, tags: Vec<(Tag, u64)>| EngineSnapshot {
+            taken: Some(base + std::time::Duration::from_millis(ms)),
+            down: Some(DirectionStats {
+                rate_bytes_per_sec: 1_000_000,
+                classes: vec![],
+                tags,
+            }),
+            up: None,
+        };
+        hub.publish(&snap(0, vec![(0, 10_000), (3, 500)]), Some(apps.clone()));
+        // Over 100 ms: steam 50 + 25 kB, brave (new) 100 kB, discord idle,
+        // unknown 1 kB.
+        hub.publish(
+            &snap(
+                100,
+                vec![
+                    (0, 60_000),
+                    (1, 25_000),
+                    (2, 100_000),
+                    (3, 500),
+                    (NO_TAG, 1_000),
+                ],
+            ),
+            Some(apps),
+        );
+        let fam: Vec<(String, String, u64)> = hub
+            .latest_tick()
+            .down
+            .unwrap()
+            .families
+            .into_iter()
+            .map(|f| (f.family, f.name, f.bps))
+            .collect();
+        let row = |f: &str, n: &str, bps: u64| (f.to_owned(), n.to_owned(), bps);
+        assert_eq!(
+            fam,
+            vec![
+                row("brave", "Brave", 8_000_000),
+                row("steam", "Steam", 6_000_000),
+                row(UNKNOWN_ID, "Unknown", 80_000),
+            ]
+        );
     }
 }

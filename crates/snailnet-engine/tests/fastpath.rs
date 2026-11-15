@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use snailnet_core::parse::ip::PacketInfo;
 use snailnet_core::scheduler::{ClassConfig, PacketMeta, SchedulerConfig};
-use snailnet_engine::fastpath::{Classifier, FastPath, FastPathConfig, Nap};
+use snailnet_engine::fastpath::{Classifier, FastPath, FastPathConfig, Nap, Tag};
 use snailnet_engine::mock::MockEngine;
 
 const REMOTE: [u8; 4] = [8, 8, 4, 4];
@@ -53,13 +53,17 @@ fn port_of(p: &[u8]) -> u16 {
 struct ByPort;
 
 impl Classifier for ByPort {
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta {
+    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
         let remote = if outbound {
             info.dst_port
         } else {
             info.src_port
         };
-        PacketMeta::new(usize::from(remote != PORT_A), remote as u64)
+        // Tagged by remote port, so the per-tag counts can be checked.
+        (
+            PacketMeta::new(usize::from(remote != PORT_A), remote as u64),
+            Tag::from(remote),
+        )
     }
 }
 
@@ -163,6 +167,12 @@ fn shapes_at_the_rate_splits_by_share_and_returns_every_buffer() {
     let down = snap.down.expect("download is shaped");
     let sent_bytes: u64 = down.classes.iter().map(|(_, s)| s.sent_bytes).sum();
     assert_eq!(sent_bytes, bytes as u64);
+    // Sent bytes per tag (remote port): 200 packets of 1040 bytes each.
+    let each = per_class as u64 * 1040;
+    assert_eq!(
+        down.tags,
+        vec![(Tag::from(PORT_A), each), (Tag::from(PORT_B), each)]
+    );
     assert!(snap.up.is_none());
     assert_eq!(fp.stop(), None);
 }

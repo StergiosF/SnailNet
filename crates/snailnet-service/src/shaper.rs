@@ -29,7 +29,7 @@ use snailnet_core::rules::Plan;
 use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
-    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot,
+    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, NO_TAG, Nap, Snapshot, Tag,
 };
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
 use snailnet_engine::{Address, RecvBatch};
@@ -238,10 +238,12 @@ impl<R: Rules> AppClassifier<R> {
 }
 
 impl<R: Rules> Classifier for AppClassifier<R> {
-    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> PacketMeta {
+    /// The tag is the packet's [`AppId`] ([`NO_TAG`] when unknown), so
+    /// per-tag byte counts are per-app.
+    fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
         let key = FlowKey::from_packet(info, outbound);
         let who = self.who.clone();
-        let class = match self.attribution.lookup(&key) {
+        let (class, tag) = match self.attribution.lookup(&key) {
             Some((owner, source)) => {
                 if self.pending.hit(&key) {
                     who.late_flows.fetch_add(1, Relaxed);
@@ -251,20 +253,21 @@ impl<R: Rules> Classifier for AppClassifier<R> {
                     Source::Socket => who.by_socket.fetch_add(1, Relaxed),
                     Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
-                self.class_of(owner.app)
+                (self.class_of(owner.app), owner.app)
             }
             None => {
                 match self.pending.miss(key, self.clock.now()) {
                     Miss::Pending => who.pending.fetch_add(1, Relaxed),
                     Miss::Unknown => who.unknown.fetch_add(1, Relaxed),
                 };
-                self.rules.other_class()
+                (self.rules.other_class(), NO_TAG)
             }
         };
-        PacketMeta {
+        let meta = PacketMeta {
             prio: self.rules.prio_of(class),
             ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
-        }
+        };
+        (meta, tag)
     }
 }
 

@@ -210,8 +210,15 @@ ones come first.
      `LiveConfig`, but `FastPath` takes fixed configs and `AppClassifier`
      caches app → class. A restart flushes, so nothing is lost, but
      attribution state is rebuilt (the port snapshot covers open flows).
-   - **Per-app stats** in `StatsTick` (§12.2 `per_family`): needs byte
-     counters per `AppId` in the classifier. `top` shows classes only.
+   - ~~**Per-app stats**~~ **Done (2026-11-15).** `Classifier::classify`
+     returns `(PacketMeta, Tag)`; the service's tag is the `AppId`
+     (`NO_TAG` when unknown). The scheduler thread counts bytes *sent* per
+     tag (dequeue and the stop flush), published as `DirectionStats::tags`.
+     The hub maps tags to apps (`apps()` is in `AppId` order) and sends
+     `DirStats::families` (`FamilyTick { family, name, bps }`, busiest
+     first, idle ones omitted, unknown → `unknown`/"Unknown").
+     `snailnet top` prints the top 5 under each direction. Not yet seen
+     with real traffic.
    - **Client verification** (§12.1: client PID → exe path/signature),
      and the CLI checking that the server is the service: not done; the
      DACL is the only gate. The pipe is byte mode, not message mode (the
