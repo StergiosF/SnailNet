@@ -6,8 +6,7 @@ param([string]$OutDir = $PSScriptRoot)
 $ErrorActionPreference = 'Continue'
 $out = Join-Path $OutDir 'svc-smoke.txt'
 $exe = Join-Path $PSScriptRoot '..\target\release\snailnet-service.exe'
-elease\snailnet-service.exe'
-eleasesnailnet-service.exe'
+$cli = Join-Path $PSScriptRoot '..\target\release\snailnet.exe'
 $data = 'C:\ProgramData\SnailNet'
 function Log($m) { Add-Content -Path $out -Value $m -Encoding utf8 }
 function Q { Log ((sc.exe query SnailNet | Select-String 'STATE') -join ' ') }
@@ -17,6 +16,8 @@ Set-Content -Path $out -Value "== smoke $(Get-Date -Format o)" -Encoding utf8
 Log '== install'; & $exe install *>&1 | ForEach-Object { Log "$_" }
 Log ((sc.exe qc SnailNet) -join "`n")
 Log ((sc.exe qfailure SnailNet) -join "`n")
+Log ((sc.exe qfailureflag SnailNet) -join "`n")
+Log ((sc.exe qsidtype SnailNet) -join "`n")
 
 Log '== start (defaults: no line speed -> monitor only)'
 sc.exe start SnailNet | Out-Null; WaitState 'RUNNING'; Start-Sleep 2; Q
@@ -29,7 +30,9 @@ $cfg = Get-Content "$data\config.toml" -Raw
 $cfg = $cfg -replace '(?m)^\[line\]\s*$', "[line]`ndown_mbps = 25.0"
 if ($cfg -notmatch 'down_mbps') { $cfg += "`n[line]`ndown_mbps = 25.0`n" }
 [IO.File]::WriteAllText("$data\config.toml", $cfg)
-sc.exe start SnailNet | Out-Null; WaitState 'RUNNING'; Start-Sleep 8; Q
+sc.exe start SnailNet | Out-Null; WaitState 'RUNNING'; Start-Sleep 3; Q
+Log '-- snailnet status'; & $cli status *>&1 | ForEach-Object { Log "$_" }
+Log '-- snailnet top --count 4'; & $cli top --count 4 *>&1 | ForEach-Object { Log "$_" }
 Log ('-- WinDivert driver: ' + ((sc.exe query WinDivert | Select-String 'STATE') -join ' '))
 sc.exe stop SnailNet | Out-Null; WaitState 'STOPPED'; Q
 Log ('-- running marker left: ' + (Test-Path "$data\running"))

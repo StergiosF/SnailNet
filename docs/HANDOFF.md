@@ -2,7 +2,7 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Where things stand (2026-11-14, later)
+## Where things stand (2026-11-15)
 
 - **Plan:** `PLAN.md` is the source of truth (decisions D1–D20, roadmap §21).
 - **Git:** everything is on **`main`**. The user works only on `main`: no
@@ -139,8 +139,15 @@ ones come first.
    39–42 / 58–61 while both ran (b's curl stopped at ~21 s again); ping
    idle 10 ms, loaded avg 22 / max 47, 0 lost (one sample; the last run
    was 38/221 — less connection churn this time, not a classify effect).
-5. ~~**Windows service**~~ **Done (2026-11-14), not yet run as a real
-   service.** `crates/snailnet-service` (bin `snailnet-service`):
+5. ~~**Windows service**~~ **Done (2026-11-14); smoke-tested as a real
+   service 2026-11-15** (`scripts/service-smoke.ps1`, elevated): install
+   sets recovery 5 s / 30 s restart, 24 h reset, non-crash flag TRUE, SID
+   unrestricted; defaults → monitor only; `down_mbps = 25` → "shaping down
+   at 23.0 Mbps"; clean stop, no `running` marker; ACL SYSTEM/Admins full,
+   Users read; uninstall `--remove-data` removes both. The first run found
+   that install opened the service without `SERVICE_START`, which
+   `ChangeServiceConfig2` needs for restart actions (Access denied, and the
+   steps after it were skipped); fixed. `crates/snailnet-service` (bin `snailnet-service`):
    `install` (LocalSystem, auto start, recovery restart 5 s / 30 s / none,
    also on non-crash failure; re-running updates it) / `uninstall
    [--remove-data]` / `run --console [--data-dir]` / hidden `service`.
@@ -158,12 +165,6 @@ ones come first.
    logs then aborts. `shaper` (moved out of the CLI's `events.rs`):
    sniffers + classifier + fast path; `spike` and `check` now use it.
    19 tests (store, crash guard, runner with a scripted fake engine).
-   **First thing next session:** run `scripts/service-smoke.ps1` elevated
-   (install, start on defaults, start with `down_mbps = 25`, stop, dump
-   logs, uninstall `--remove-data`) and check the report: service
-   RUNNING/STOPPED, config written, ACL, "shaping down at …" in the log, no
-   `running` marker left. The user declined the UAC prompt on 2026-11-14,
-   so ask before launching it.
 6. ~~**IPC**~~ **Done (2026-11-14).** `crates/snailnet-ipc`: protocol v1
    types (`ClientMsg{id, Request}`, `ServerMsg::{Reply, Stats, Event}`,
    `ServiceState`, `Snapshot{rev, state, config, apps}`, `StatsTick`),
@@ -195,9 +196,14 @@ ones come first.
    Verified end to end without admin (console service on a scratch dir
    and a test pipe): status, rules saved (shown as 38/57/5), overcommit
    refused, line set → shaping attempted → fail-open counted → state
-   "retrying" visible in `status` and `top`. **Not yet verified with real
-   shaping** (needs elevation): do it together with the service smoke
-   test above, then `snailnet top` during a download.
+   "retrying" visible in `status` and `top`. **Verified against the real
+   service while shaping** (2026-11-15, in the smoke test): `status` shows
+   "shaping", line 25 Mbps, 21 apps seen; `top` streams ticks. That run
+   showed 26 Mbps against a 23 Mbps cap: the hub divided the engine's
+   counters (published every 100 ms) by its own 250 ms poll gap, so each
+   tick could be off by ±40%. Snapshots now carry `taken: Instant` and the
+   hub and `spike` compute rates between those stamps (a re-read snapshot
+   changes nothing). Still to do: `snailnet top` during a real download.
 
    Deferred, worth doing before Phase 1 exit:
    - **Live rule swap without restart** (§9.6): the scheduler has
@@ -261,6 +267,9 @@ stall) under `spike --app a.exe=40 --app b.exe=60 --duration 32`, and ping
 (`-OutDir`, `-Down`, `-Factor`, `-Duration`); it needs a release build.
 
 ## Gotchas
+
+- Output of `snailnet top` captured through Windows PowerShell 5.1 shows
+  `↓` as `Γåô` (OEM code page); a real console shows it fine.
 
 - **The WinDivert driver stays loaded** after a run (`sc query WinDivert` →
   RUNNING), which locks `third_party/windivert/x64/WinDivert64.sys`. Git

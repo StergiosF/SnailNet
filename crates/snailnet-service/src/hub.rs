@@ -145,16 +145,21 @@ impl Hub {
         }
     }
 
-    /// The runner's latest numbers. Rates are since the previous call.
+    /// The runner's latest numbers. Rates are between the times the engine
+    /// took the snapshots; a snapshot already seen changes nothing.
     pub(crate) fn publish(&self, snap: &EngineSnapshot, apps: Option<Vec<AppInfo>>) {
         let now = Instant::now();
         let t_ms = now.duration_since(self.started).as_millis() as u64;
+        let at = snap.taken.unwrap_or(now);
         let mut i = self.lock();
         if let Some(apps) = apps {
             i.apps = apps;
         }
+        if i.last.as_ref().is_some_and(|l| at <= l.at) {
+            return;
+        }
         let tick = i.last.as_ref().map(|last| {
-            let secs = now.duration_since(last.at).as_secs_f64().max(1e-3);
+            let secs = at.duration_since(last.at).as_secs_f64().max(1e-3);
             StatsTick {
                 t_ms,
                 state: i.state.clone(),
@@ -166,7 +171,7 @@ impl Hub {
             i.tick = tick;
         }
         i.last = Some(Sample {
-            at: now,
+            at,
             down: snap.down.clone(),
             up: snap.up.clone(),
         });
@@ -372,7 +377,9 @@ mod tests {
     fn stats_are_rates_between_samples() {
         let (_t, hub) = hub();
         hub.set_state(ServiceState::Shaping);
-        let snap = |sent: u64, drops: u64| EngineSnapshot {
+        let base = Instant::now();
+        let snap = |ms: u64, sent: u64, drops: u64| EngineSnapshot {
+            taken: Some(base + std::time::Duration::from_millis(ms)),
             down: Some(DirectionStats {
                 rate_bytes_per_sec: 1_000_000,
                 classes: vec![(
@@ -387,18 +394,22 @@ mod tests {
             }),
             up: None,
         };
-        hub.publish(&snap(1_000, 1), None);
+        hub.publish(&snap(0, 1_000, 1), None);
         assert!(hub.latest_tick().down.is_none(), "one sample has no rate");
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        hub.publish(&snap(101_000, 4), Some(vec![]));
+        // 100 kB over 100 ms of the engine's clock = 8 Mbps exactly, however
+        // late the runner gets round to reading it.
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        hub.publish(&snap(100, 101_000, 4), Some(vec![]));
         let t = hub.latest_tick();
         assert_eq!(t.state, ServiceState::Shaping);
         let d = t.down.unwrap();
         assert_eq!(d.shaped_bps, 8_000_000);
         let c = &d.classes[0];
-        assert_eq!((c.drops, c.queued_bytes), (3, 77));
-        // 100 kB in ≥ 50 ms: at most 16 Mbps, and clearly nonzero.
-        assert!(c.bps > 1_000_000 && c.bps <= 16_000_000, "{}", c.bps);
+        assert_eq!((c.drops, c.queued_bytes, c.bps), (3, 77, 8_000_000));
+        // The same snapshot read again (the engine hasn't published since)
+        // keeps the last rate instead of computing 0 over a short gap.
+        hub.publish(&snap(100, 101_000, 4), None);
+        assert_eq!(hub.latest_tick().down.unwrap().classes[0].bps, 8_000_000);
         hub.clear_stats();
         assert!(hub.latest_tick().down.is_none());
     }

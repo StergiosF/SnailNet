@@ -185,7 +185,9 @@ fn totals(d: Option<&DirectionStats>) -> Totals {
 }
 
 struct Stats {
-    last_at: Duration,
+    /// When the engine took the last snapshot we read (rates are between
+    /// these, not between our own 1 s prints).
+    last_taken: Option<Instant>,
     last_down: Totals,
     last_up: Totals,
     last_counters: Counters,
@@ -194,7 +196,7 @@ struct Stats {
 impl Stats {
     fn new(snap: &Snapshot, counters: Counters) -> Self {
         Self {
-            last_at: Duration::ZERO,
+            last_taken: snap.taken,
             last_down: totals(snap.down.as_ref()),
             last_up: totals(snap.up.as_ref()),
             last_counters: counters,
@@ -203,7 +205,13 @@ impl Stats {
 
     fn print(&mut self, at: Duration, shaper: &Shaper) {
         let snap = shaper.snapshot();
-        let secs = (at - self.last_at).as_secs_f64().max(1e-3);
+        let taken = snap.taken.unwrap_or_else(Instant::now);
+        let secs = match self.last_taken {
+            Some(last) => taken.saturating_duration_since(last).as_secs_f64(),
+            // Nothing published before we started: count from our start.
+            None => at.as_secs_f64(),
+        }
+        .max(1e-3);
         for (arrow, d, last) in [
             ("↓", snap.down.as_ref(), &mut self.last_down),
             ("↑", snap.up.as_ref(), &mut self.last_up),
@@ -273,6 +281,6 @@ impl Stats {
         }
         println!("{line}");
         self.last_counters = c;
-        self.last_at = at;
+        self.last_taken = Some(taken);
     }
 }

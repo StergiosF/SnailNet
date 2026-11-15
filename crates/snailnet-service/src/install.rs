@@ -46,7 +46,9 @@ pub fn install() -> Result<()> {
         account_name: None, // LocalSystem
         account_password: None,
     };
-    let access = ServiceAccess::QUERY_CONFIG | ServiceAccess::CHANGE_CONFIG;
+    // START too: ChangeServiceConfig2 refuses SC_ACTION_RESTART recovery
+    // actions without it (ERROR_ACCESS_DENIED).
+    let access = ServiceAccess::QUERY_CONFIG | ServiceAccess::CHANGE_CONFIG | ServiceAccess::START;
     let service = match manager.open_service(SERVICE_NAME, access) {
         Ok(s) => {
             s.change_config(&info).context("updating the service")?;

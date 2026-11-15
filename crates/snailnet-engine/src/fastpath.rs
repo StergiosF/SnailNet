@@ -26,7 +26,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TrySendError, bounded};
 use snailnet_core::clock::{Clock, MonotonicClock, NANOS_PER_MILLI, Nanos};
@@ -172,6 +172,10 @@ pub struct DirectionStats {
 /// What the scheduler thread published last (every ~100 ms).
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
+    /// When the scheduler thread took it (`None`: never published). Rates
+    /// must be computed between these, not between the reader's own polls:
+    /// a reader polling every 250 ms sees snapshots 200–300 ms apart.
+    pub taken: Option<Instant>,
     pub down: Option<DirectionStats>,
     pub up: Option<DirectionStats>,
 }
@@ -568,6 +572,7 @@ fn publish(shared: &Shared, down: Option<&Scheduler<Queued>>, up: Option<&Schedu
     // Never block the scheduler on a reader.
     if let Ok(mut snap) = shared.snapshot.try_lock() {
         *snap = Snapshot {
+            taken: Some(Instant::now()),
             down: down.map(stats),
             up: up.map(stats),
         };
