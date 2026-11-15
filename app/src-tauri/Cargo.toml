@@ -1,0 +1,23 @@
+[package]
+name = "snailnet-app"
+description = "SnailNet tray app: Tauri 2 shell around the Svelte UI, a client of the service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "snailnet_app"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+snailnet-ipc = { path = "../../crates/snailnet-ipc" }
+tauri = { version = "2.12.5", features = [] }
+
+[lints]
+workspace = true

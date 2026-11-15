@@ -2,3 +2,5 @@
 node_modules/
 *.pcap
 *.pcapng
+app/dist/
+app/src-tauri/gen/

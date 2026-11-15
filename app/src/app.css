@@ -1,0 +1,165 @@
+/* SnailNet tokens: Windows 11 Fluent theme values (PLAN.md §14.1). The
+   window itself is Mica, so the page ground stays transparent and content
+   sits on translucent layer cards. Accent defaults to the Windows default
+   blue until the Rust side pushes the user's own (UISettings). */
+
+:root {
+  color-scheme: light;
+  --font-text: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+
+  --text-primary: rgb(0 0 0 / 0.894);
+  --text-secondary: rgb(0 0 0 / 0.62);
+  --text-tertiary: rgb(0 0 0 / 0.47);
+  --surface-fallback: #f3f3f3;
+  --surface-layer: rgb(255 255 255 / 0.5);
+  --surface-card: rgb(255 255 255 / 0.7);
+  --stroke-card: rgb(0 0 0 / 0.0578);
+  --stroke-divider: rgb(0 0 0 / 0.0803);
+  --fill-subtle-hover: rgb(0 0 0 / 0.0373);
+  --fill-subtle-pressed: rgb(0 0 0 / 0.0241);
+  --skeleton: rgb(0 0 0 / 0.06);
+
+  --accent: #005fb8;
+  --accent-text: #003e92;
+  --on-accent: #ffffff;
+  --accent-tint: rgb(0 95 184 / 0.09);
+
+  --caution: #9d5d00;
+  --caution-tint: #fff4ce;
+  --critical: #c42b1c;
+  --critical-tint: #fde7e9;
+  --close-hover: #c42b1c;
+
+  --focus-outer: rgb(0 0 0 / 0.894);
+  --focus-inner: #ffffff;
+  --selection: rgb(0 95 184 / 0.25);
+
+  --radius-control: 4px;
+  --radius-card: 8px;
+  --titlebar-h: 32px;
+  --gutter: 24px;
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --text-primary: #ffffff;
+    --text-secondary: rgb(255 255 255 / 0.786);
+    --text-tertiary: rgb(255 255 255 / 0.545);
+    --surface-fallback: #202020;
+    --surface-layer: rgb(58 58 58 / 0.3);
+    --surface-card: rgb(255 255 255 / 0.0512);
+    --stroke-card: rgb(0 0 0 / 0.1);
+    --stroke-divider: rgb(255 255 255 / 0.0837);
+    --fill-subtle-hover: rgb(255 255 255 / 0.0605);
+    --fill-subtle-pressed: rgb(255 255 255 / 0.0419);
+    --skeleton: rgb(255 255 255 / 0.07);
+
+    --accent: #60cdff;
+    --accent-text: #99ebff;
+    --on-accent: #000000;
+    --accent-tint: rgb(96 205 255 / 0.12);
+
+    --caution: #fce100;
+    --caution-tint: #433519;
+    --critical: #ff99a4;
+    --critical-tint: #442726;
+
+    --focus-outer: #ffffff;
+    --focus-inner: rgb(0 0 0 / 0.7);
+    --selection: rgb(96 205 255 / 0.3);
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --surface-card: Canvas;
+    --stroke-card: CanvasText;
+    --accent: Highlight;
+    --on-accent: HighlightText;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  /* Mica shows through; the fallback colour only matters if it can't. */
+  background: transparent;
+  color: var(--text-primary);
+  font: 14px/20px var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+#app {
+  height: 100%;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border: 4px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.icon {
+  font-family: var(--font-icons);
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  speak: never;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
