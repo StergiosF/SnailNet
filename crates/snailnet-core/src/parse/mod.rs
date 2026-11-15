@@ -3,4 +3,5 @@
 //! (PLAN.md §18.2).
 
 pub mod ip;
+pub mod quic;
 pub mod tls;

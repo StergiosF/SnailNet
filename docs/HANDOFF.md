@@ -303,9 +303,20 @@ WinDivert handle would disturb it).
    `ech` set when `encrypted_client_hello` is present (the SNI is then the
    outer name → unidentified, §8.4). 12 tests incl. proptests (garbage,
    corrupted/truncated hellos, any name at any record size).
-2. Next: QUIC Initial SNI (RFC 9001 Initial keys: HKDF-SHA256 +
-   AES-128-GCM + header protection; needs crypto crates — check with
-   Context7), then DNS answers, IP→domain cache, site packs.
+2. ~~**QUIC Initial SNI**~~ **Done.** `snailnet-core::parse::quic`:
+   `open_initial(datagram)` opens a client Initial of QUIC v1 or v2
+   (RFC 9001 / 9369 keys from the public salt + DCID; header protection
+   removed, AES-128-GCM tag checked) and returns its CRYPTO frames;
+   `CryptoAssembler` joins out-of-order / overlapping frames across
+   packets (Chrome shuffles them; a PQ hello needs two Initials), capped
+   at `MAX_HELLO`; feed `prefix()` to `tls::from_handshake`. Crypto is
+   pure-Rust RustCrypto (aes-gcm 0.11, aes 0.9, hkdf 0.13, sha2 0.11).
+   Tests: RFC key vectors for v1 and v2, the RFC A.2 header mask, a
+   seal → open round trip, a shuffled two-packet hello, tamper/version/
+   type/truncation rejection, proptests (garbage, corrupted headers,
+   assembler vs. a reference model).
+3. Next: DNS answers, then the IP→domain cache, site packs, and wiring
+   into the classifier (first payloads of :443 flows; per-flow assembler).
 
 ## What exists
 
