@@ -664,15 +664,17 @@ fn publish(
 }
 
 fn watchdog(engine: &dyn PacketEngine, shared: &Shared, limit: Duration) {
-    let limit_ns = limit.as_nanos() as Nanos;
     let tick = (limit / 10).clamp(Duration::from_millis(1), Duration::from_millis(50));
+    let mut meter = StallMeter::new(
+        limit.as_nanos() as Nanos,
+        2 * tick.as_nanos() as Nanos,
+        shared.clock.now(),
+        shared.heartbeat.load(Relaxed),
+    );
     while !shared.stop.load(Relaxed) && !shared.failing_open.load(Relaxed) {
         std::thread::sleep(tick);
-        let silent = shared
-            .clock
-            .now()
-            .saturating_sub(shared.heartbeat.load(Relaxed));
-        if silent > limit_ns {
+        let beat = shared.heartbeat.load(Relaxed);
+        if let Some(silent) = meter.observe(shared.clock.now(), beat) {
             shared.fail_open(
                 engine,
                 format!(
@@ -681,5 +683,91 @@ fn watchdog(engine: &dyn PacketEngine, shared: &Shared, limit: Duration) {
                 ),
             );
         }
+    }
+}
+
+/// How long the scheduler has been silent, counting only time the watchdog
+/// itself was awake to see.
+///
+/// The clock keeps running while the machine sleeps, but thread waits do
+/// not, so after a resume the watchdog may look before the scheduler has
+/// had a chance to beat. Comparing the heartbeat with `now` would then see
+/// hours of "stall" and fail open for nothing. Instead each observation
+/// adds at most `max_step` of silence, and any new beat resets the count.
+struct StallMeter {
+    limit: Nanos,
+    max_step: Nanos,
+    last_check: Nanos,
+    last_beat: Nanos,
+    silent: Nanos,
+}
+
+impl StallMeter {
+    fn new(limit: Nanos, max_step: Nanos, now: Nanos, beat: Nanos) -> Self {
+        Self {
+            limit,
+            max_step,
+            last_check: now,
+            last_beat: beat,
+            silent: 0,
+        }
+    }
+
+    /// Records one look at the heartbeat; returns the silence once it
+    /// exceeds the limit.
+    fn observe(&mut self, now: Nanos, beat: Nanos) -> Option<Nanos> {
+        let step = now.saturating_sub(self.last_check).min(self.max_step);
+        self.last_check = now;
+        if beat != self.last_beat {
+            self.last_beat = beat;
+            self.silent = 0;
+            return None;
+        }
+        self.silent += step;
+        (self.silent > self.limit).then_some(self.silent)
+    }
+}
+
+#[cfg(test)]
+mod stall_tests {
+    use super::*;
+
+    const MS: Nanos = NANOS_PER_MILLI;
+
+    #[test]
+    fn a_silent_scheduler_trips_after_the_limit() {
+        let mut m = StallMeter::new(500 * MS, 100 * MS, 0, 0);
+        let mut tripped = None;
+        for i in 1..=20 {
+            if let Some(s) = m.observe(i * 50 * MS, 0) {
+                tripped = Some((i, s));
+                break;
+            }
+        }
+        assert_eq!(tripped, Some((11, 550 * MS)));
+    }
+
+    #[test]
+    fn a_beat_resets_the_count() {
+        let mut m = StallMeter::new(500 * MS, 100 * MS, 0, 0);
+        for i in 1..=9 {
+            assert_eq!(m.observe(i * 50 * MS, 0), None);
+        }
+        assert_eq!(m.observe(500 * MS, 480 * MS), None);
+        for i in 11..=20 {
+            assert_eq!(m.observe(i * 50 * MS, 480 * MS), None);
+        }
+        assert!(m.observe(1050 * MS, 480 * MS).is_some());
+    }
+
+    #[test]
+    fn a_clock_jump_from_sleep_is_not_a_stall() {
+        let mut m = StallMeter::new(500 * MS, 100 * MS, 0, 0);
+        assert_eq!(m.observe(50 * MS, 40 * MS), None);
+        // The machine sleeps for 11 h; the watchdog looks first on resume.
+        let resumed = 11 * 3600 * 1000 * MS;
+        assert_eq!(m.observe(resumed, 40 * MS), None);
+        // The scheduler beats right after, and all is well.
+        assert_eq!(m.observe(resumed + 50 * MS, resumed + 10 * MS), None);
     }
 }
