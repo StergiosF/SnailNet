@@ -1,0 +1,89 @@
+# Site packs (PLAN.md §8.2): which domain names belong to a website, so a
+# rule like "YouTube 45%" catches its traffic inside any browser.
+#
+# `domains`: "example.com" matches that name only; "*.example.com" matches
+# any name under it (not example.com itself, so list both when needed).
+# The longest matching pattern wins across all sites. Ids are lowercase
+# letters, digits and '-'.
+#
+# First draft: check each list in the Phase 2 exit test (real browsers,
+# secure DNS on and off) and add what turns up as unidentified.
+#
+# Known gaps: Google Meet and Teams send call media over UDP to relay
+# addresses without a name (STUN/TURN), so only their page and signalling
+# traffic is recognised here.
+
+[[site]]
+id = "youtube"
+name = "YouTube"
+domains = [
+  "youtube.com", "*.youtube.com", "youtu.be",
+  "*.googlevideo.com", "*.ytimg.com", "yt3.ggpht.com",
+  "youtubei.googleapis.com", "youtube.googleapis.com",
+  "*.youtube-nocookie.com", "youtube-nocookie.com",
+]
+
+[[site]]
+id = "twitch"
+name = "Twitch"
+domains = [
+  "twitch.tv", "*.twitch.tv", "*.ttvnw.net", "*.jtvnw.net",
+  "*.twitchcdn.net", "*.twitchsvc.net",
+]
+
+[[site]]
+id = "netflix"
+name = "Netflix"
+domains = [
+  "netflix.com", "*.netflix.com", "*.netflix.net", "*.nflxvideo.net",
+  "*.nflximg.net", "*.nflximg.com", "*.nflxext.com", "*.nflxso.net",
+]
+
+[[site]]
+id = "disney-plus"
+name = "Disney+"
+domains = [
+  "disneyplus.com", "*.disneyplus.com", "*.disney-plus.net",
+  "*.dssott.com", "*.bamgrid.com",
+]
+
+[[site]]
+id = "prime-video"
+name = "Prime Video"
+domains = [
+  "primevideo.com", "*.primevideo.com", "*.aiv-cdn.net",
+  "*.aiv-delivery.net", "*.pv-cdn.net",
+]
+
+[[site]]
+id = "spotify"
+name = "Spotify"
+domains = [
+  "spotify.com", "*.spotify.com", "*.scdn.co", "*.spotifycdn.com",
+  "*.spotifycdn.net",
+]
+
+[[site]]
+id = "kick"
+name = "Kick"
+# Kick's video comes from Amazon IVS (live-video.net), which a few other
+# sites use too.
+domains = ["kick.com", "*.kick.com", "*.live-video.net"]
+
+[[site]]
+id = "zoom"
+name = "Zoom"
+domains = ["zoom.us", "*.zoom.us", "zoom.com", "*.zoom.com"]
+
+[[site]]
+id = "google-meet"
+name = "Google Meet"
+domains = ["meet.google.com", "*.meet.google.com", "meetings.googleapis.com"]
+
+[[site]]
+id = "teams"
+name = "Teams"
+domains = [
+  "teams.microsoft.com", "*.teams.microsoft.com", "teams.live.com",
+  "*.teams.live.com", "teams.cloud.microsoft", "*.teams.cloud.microsoft",
+]
