@@ -34,14 +34,17 @@ use snailnet_core::sites::{DomainCache, Names, SiteMatcher, SitePack};
 use snailnet_core::sniff::{FlowNames, Named, Via};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
-    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, NO_TAG, Nap, Snapshot, Tag,
+    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot, Tag,
 };
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
 use snailnet_engine::{Address, RecvBatch};
+use snailnet_ipc::NameTick;
 use snailnet_win::process::{WinProcesses, windows_dir};
 use snailnet_win::timer::HighResTimer;
 
+use crate::hub::Seen;
 use crate::runner;
+use crate::tags::{self, MAX_SITES, Site};
 
 pub type WinAttribution = Attribution<WinProcesses>;
 
@@ -229,10 +232,19 @@ pub trait Rules: Send + Sync + 'static {
     fn has_site_rules(&self) -> bool {
         false
     }
-    /// The class of a flow opened for `names` (SNI, or a DNS CNAME chain),
-    /// if a site rule claims it. Beats the app's class (PLAN.md §8.3).
-    fn site_class_of(&self, _names: &[String]) -> Option<ClassId> {
+    /// The site (id, display name) of a flow opened for `names` (SNI, or
+    /// a DNS CNAME chain), whether or not a rule targets it.
+    fn site_of(&self, _names: &[String]) -> Option<(&str, &str)> {
         None
+    }
+    /// The class of the site rule for `site`, if there is one. Beats the
+    /// app's class (PLAN.md §8.3).
+    fn site_class(&self, _site: &str) -> Option<ClassId> {
+        None
+    }
+    /// The class of a flow opened for `names`, if a site rule claims it.
+    fn site_class_of(&self, names: &[String]) -> Option<ClassId> {
+        self.site_of(names).and_then(|(id, _)| self.site_class(id))
     }
 }
 
@@ -271,8 +283,12 @@ impl Rules for PlanRules {
         self.plan.has_site_rules()
     }
 
-    fn site_class_of(&self, names: &[String]) -> Option<ClassId> {
-        let site = self.sites.site_of_any(names.iter().map(String::as_str))?;
+    fn site_of(&self, names: &[String]) -> Option<(&str, &str)> {
+        let id = self.sites.site_of_any(names.iter().map(String::as_str))?;
+        Some((id, self.sites.name(id).unwrap_or(id)))
+    }
+
+    fn site_class(&self, site: &str) -> Option<ClassId> {
         self.plan.site_class(site)
     }
 }
@@ -283,6 +299,10 @@ pub struct SiteState {
     names: Mutex<FlowNames>,
     cache: std::sync::RwLock<DomainCache>,
     clock: Arc<MonotonicClock>,
+    /// (id, name) per stats slot ([`tags::Site::Slot`]), in the order first
+    /// seen. Append-only for the shaper's life, so a slot means the same
+    /// site across rule changes and the hub's rates stay right.
+    slots: Mutex<Vec<(String, String)>>,
 }
 
 const FLOW_NAMES_CAP: usize = 16_384;
@@ -294,7 +314,33 @@ impl SiteState {
             names: Mutex::new(FlowNames::new(FLOW_NAMES_CAP)),
             cache: std::sync::RwLock::new(DomainCache::new(DNS_CACHE_CAP)),
             clock,
+            slots: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The stats slot for site `id`, given one if it has none yet (and
+    /// its display name updated). `None` once [`MAX_SITES`] are taken.
+    fn slot(&self, id: &str, name: &str) -> Option<u8> {
+        let mut slots = self.slots.lock().unwrap_or_else(|e| e.into_inner());
+        let k = match slots.iter().position(|(i, _)| i == id) {
+            Some(k) => {
+                if slots[k].1 != name {
+                    slots[k].1 = name.to_owned();
+                }
+                k
+            }
+            None if slots.len() < MAX_SITES => {
+                slots.push((id.to_owned(), name.to_owned()));
+                slots.len() - 1
+            }
+            None => return None,
+        };
+        u8::try_from(k).ok()
+    }
+
+    /// (id, name) per slot.
+    pub fn slots(&self) -> Vec<(String, String)> {
+        self.slots.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Record a DNS response (the UDP payload, or a TCP segment holding a
@@ -330,7 +376,9 @@ impl SiteState {
 }
 
 /// How packets were attributed to an app (packet counts), plus flows whose
-/// first packets beat their FLOW/SOCKET event. Readers `swap` them to 0.
+/// first packets beat their FLOW/SOCKET event. Readers `swap` the
+/// attribution ones to 0; the naming ones only grow (the hub and the log
+/// each take differences, see [`WhoCounters::names`]).
 #[derive(Default)]
 pub struct WhoCounters {
     pub by_flow: AtomicU64,
@@ -346,6 +394,19 @@ pub struct WhoCounters {
     pub named_ech: AtomicU64,
     pub unnamed: AtomicU64,
     pub naming: AtomicU64,
+}
+
+impl WhoCounters {
+    /// The naming counters so far.
+    pub fn names(&self) -> NameTick {
+        NameTick {
+            sni: self.named_sni.load(Relaxed),
+            dns: self.named_dns.load(Relaxed),
+            ech: self.named_ech.load(Relaxed),
+            none: self.unnamed.load(Relaxed),
+            naming: self.naming.load(Relaxed),
+        }
+    }
 }
 
 /// The rules every rx thread classifies by, swappable while shaping. The
@@ -393,6 +454,9 @@ pub struct AppClassifier {
     app_class: HashMap<AppId, ClassId>,
     pending: Pending,
     sites: Arc<SiteState>,
+    /// Site id → stats slot, this thread's copy of [`SiteState::slot`];
+    /// cleared with the rules so renamed custom sites are picked up.
+    site_slots: HashMap<String, Option<u8>>,
     clock: Arc<MonotonicClock>,
     /// Keyed per run, so nobody on the internet can aim flows at one bucket.
     /// Clones share the keys, so every rx thread hashes a flow the same.
@@ -410,6 +474,7 @@ impl Clone for AppClassifier {
             app_class: self.app_class.clone(),
             pending: self.pending.clone(),
             sites: self.sites.clone(),
+            site_slots: self.site_slots.clone(),
             clock: self.clock.clone(),
             flow_hasher: self.flow_hasher.clone(),
         }
@@ -423,6 +488,7 @@ impl AppClassifier {
         if g != self.seen {
             self.rules = self.live.load();
             self.app_class.clear();
+            self.site_slots.clear();
             self.seen = g;
         }
     }
@@ -435,17 +501,29 @@ impl AppClassifier {
             .or_insert_with(|| rules.class_of(&attribution.app(app)))
     }
 
+    fn site_slot(&mut self, id: &str, name: &str) -> Site {
+        let slot = match self.site_slots.get(id) {
+            Some(&slot) => slot,
+            None => {
+                let slot = self.sites.slot(id, name);
+                self.site_slots.insert(id.to_owned(), slot);
+                slot
+            }
+        };
+        slot.map_or(Site::None, Site::Slot)
+    }
+
     /// The site rule's class for this flow, if it has a name a site rule
-    /// claims. Only called while site rules exist.
+    /// claims, and its site for stats. Only called while site rules exist.
     fn site_class(
-        &self,
+        &mut self,
         key: FlowKey,
         pkt: &[u8],
         info: &PacketInfo,
         outbound: bool,
-    ) -> Option<ClassId> {
+    ) -> (Option<ClassId>, Site) {
         if !matches!(info.protocol, PROTO_TCP | PROTO_UDP) {
-            return None;
+            return (None, Site::None);
         }
         let named = {
             let cache = self.sites.cache.read().unwrap_or_else(|e| e.into_inner());
@@ -456,7 +534,7 @@ impl AppClassifier {
         match named {
             Named::Pending => {
                 who.naming.fetch_add(1, Relaxed);
-                None
+                (None, Site::None)
             }
             Named::Known { names, via } => {
                 match via {
@@ -466,15 +544,25 @@ impl AppClassifier {
                     Via::None => &who.unnamed,
                 }
                 .fetch_add(1, Relaxed);
-                self.rules.site_class_of(&names?)
+                let rules = self.rules.clone();
+                match names.as_deref().and_then(|n| rules.site_of(n)) {
+                    Some((id, name)) => (rules.site_class(id), self.site_slot(id, name)),
+                    // Only web connections count as unidentified (PLAN.md
+                    // 8.4): a game talking UDP to a bare IP never had a name.
+                    None if matches!(via, Via::Ech | Via::None) && key.remote.1 == 443 => {
+                        (None, Site::Unidentified)
+                    }
+                    None => (None, Site::None),
+                }
             }
         }
     }
 }
 
 impl Classifier for AppClassifier {
-    /// The tag is the packet's [`AppId`] ([`NO_TAG`] when unknown), so
-    /// per-tag byte counts are per-app.
+    /// The tag packs the packet's [`AppId`] and, while flows are named, its
+    /// site ([`tags`]), so per-tag byte counts give per-app and per-site
+    /// rates.
     fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
         self.refresh();
         let key = FlowKey::from_packet(info, outbound);
@@ -489,28 +577,28 @@ impl Classifier for AppClassifier {
                     Source::Socket => who.by_socket.fetch_add(1, Relaxed),
                     Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
-                (self.class_of(owner.app), owner.app)
+                (self.class_of(owner.app), Some(owner.app))
             }
             None => {
                 match self.pending.miss(key, self.clock.now()) {
                     Miss::Pending => who.pending.fetch_add(1, Relaxed),
                     Miss::Unknown => who.unknown.fetch_add(1, Relaxed),
                 };
-                (self.rules.other_class(), NO_TAG)
+                (self.rules.other_class(), None)
             }
         };
         // A site rule beats the app's rule, in any app (PLAN.md §8.3).
-        let class = if self.rules.has_site_rules() {
-            self.site_class(key, pkt, info, outbound)
-                .unwrap_or(app_class)
+        let (class, site) = if self.rules.has_site_rules() {
+            let (class, site) = self.site_class(key, pkt, info, outbound);
+            (class.unwrap_or(app_class), site)
         } else {
-            app_class
+            (app_class, Site::None)
         };
         let meta = PacketMeta {
             prio: self.rules.prio_of(class),
             ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
         };
-        (meta, tag)
+        (meta, tags::pack(tag, site))
     }
 }
 
@@ -583,6 +671,7 @@ impl Shaper {
             app_class: HashMap::new(),
             pending: Pending::default(),
             sites: sites.clone(),
+            site_slots: HashMap::new(),
             clock,
             flow_hasher: RandomState::new(),
         };
@@ -649,6 +738,11 @@ impl Shaper {
 
     pub fn who(&self) -> &WhoCounters {
         &self.who
+    }
+
+    /// (id, name) per site stats slot ([`tags::Site::Slot`]).
+    pub fn site_slots(&self) -> Vec<(String, String)> {
+        self.sites.slots()
     }
 
     pub fn attribution(&self) -> &WinAttribution {
@@ -726,8 +820,9 @@ impl runner::Running for Running {
         Some(self.shaper.snapshot())
     }
 
-    fn apps(&self) -> Vec<snailnet_ipc::AppInfo> {
-        self.shaper
+    fn seen(&self) -> Seen {
+        let apps = self
+            .shaper
             .attribution()
             .apps()
             .iter()
@@ -736,7 +831,12 @@ impl runner::Running for Running {
                 name: a.name.clone(),
                 exe: a.exe.clone(),
             })
-            .collect()
+            .collect();
+        Seen {
+            apps,
+            sites: self.shaper.site_slots(),
+            names: Some(self.shaper.who().names()),
+        }
     }
 
     fn apply(&mut self, plan: &Plan) -> Result<()> {
@@ -775,6 +875,7 @@ struct Report {
     down: Totals,
     up: Totals,
     counters: Counters,
+    names: NameTick,
 }
 
 impl Report {
@@ -785,6 +886,7 @@ impl Report {
             down: totals(snap.down.as_ref()),
             up: totals(snap.up.as_ref()),
             counters: s.counters(),
+            names: s.who().names(),
         }
     }
 
@@ -833,13 +935,15 @@ impl Report {
             (c.pool_exhausted - l.pool_exhausted) + (c.channel_full - l.channel_full),
             c.send_errors - l.send_errors,
         );
-        let (sni, by_dns, ech, none, naming) = (
-            take(&who.named_sni),
-            take(&who.named_dns),
-            take(&who.named_ech),
-            take(&who.unnamed),
-            take(&who.naming),
-        );
+        let names = who.names();
+        let NameTick {
+            sni,
+            dns: by_dns,
+            ech,
+            none,
+            naming,
+        } = names.since(&self.names);
+        self.names = names;
         let (named_flows, cached) = s.sites.sizes();
         tracing::info!(
             "site names (packets): sni {sni}, dns {by_dns}, ech {ech}, none {none}, naming {naming}; \
@@ -881,6 +985,29 @@ mod tests {
         assert_eq!(r.site_class_of(&chain), Some(1));
         assert_eq!(r.site_class_of(&["twitch.tv".to_string()]), None, "no rule");
         assert_eq!(r.site_class_of(&["example.com".to_string()]), None);
+        // Stats still see a site no rule targets.
+        assert_eq!(
+            r.site_of(&["www.twitch.tv".to_string()]),
+            Some(("twitch", "Twitch"))
+        );
+        assert_eq!(r.site_of(&chain), Some(("youtube", "YouTube")));
+        assert_eq!(r.site_of(&["example.com".to_string()]), None);
+    }
+
+    #[test]
+    fn site_slots_are_stable_capped_and_follow_renames() {
+        let s = SiteState::new(Arc::new(MonotonicClock::new()));
+        assert_eq!(s.slot("youtube", "YouTube"), Some(0));
+        assert_eq!(s.slot("twitch", "Twitch"), Some(1));
+        assert_eq!(s.slot("youtube", "YouTube"), Some(0));
+        assert_eq!(s.slot("twitch", "Twitch TV"), Some(1));
+        assert_eq!(s.slots()[1], ("twitch".into(), "Twitch TV".into()));
+        for k in 2..MAX_SITES {
+            assert_eq!(s.slot(&format!("s{k}"), "S"), Some(k as u8));
+        }
+        assert_eq!(s.slot("one-too-many", "X"), None);
+        assert_eq!(s.slot("youtube", "YouTube"), Some(0));
+        assert_eq!(s.slots().len(), MAX_SITES);
     }
 
     #[test]

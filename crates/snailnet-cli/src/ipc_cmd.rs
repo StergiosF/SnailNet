@@ -6,7 +6,8 @@ use anyhow::{Context, Result, bail};
 use snailnet_core::rules::{Config, Line, OTHER_CLASS, Profile, Rule, Target};
 use snailnet_core::scheduler::{Priority, shares};
 use snailnet_ipc::{
-    Client, FamilyTick, Reply, Request, ServerMsg, ServiceState, Snapshot, StatsTick,
+    Client, FamilyTick, NameTick, Reply, Request, ServerMsg, ServiceState, SiteTick, Snapshot,
+    StatsTick,
 };
 
 fn connect(pipe: &str) -> Result<Client> {
@@ -301,7 +302,48 @@ fn print_tick(t: &StatsTick) {
         if let Some(apps) = family_line(&d.families) {
             println!("{:>12}{apps}", "");
         }
+        if let Some(sites) = site_line(&d.sites) {
+            println!("{:>12}sites: {sites}", "");
+        }
     }
+    if let Some(names) = t.names.as_ref().and_then(name_line) {
+        println!("{:>12}{names}", "");
+    }
+}
+
+/// How the tick's packets got their site names, when any were named:
+/// `names: sni 900, dns 40, unidentified 15 (ech 12, none 3), naming 8`.
+fn name_line(n: &NameTick) -> Option<String> {
+    if *n == NameTick::default() {
+        return None;
+    }
+    Some(format!(
+        "names: sni {}, dns {}, unidentified {} (ech {}, none {}), naming {}",
+        n.sni,
+        n.dns,
+        n.unidentified(),
+        n.ech,
+        n.none,
+        n.naming
+    ))
+}
+
+/// The busiest sites, each under its app: `YouTube (brave) 7.00, ...`.
+fn site_line(sites: &[SiteTick]) -> Option<String> {
+    const SHOWN: usize = 5;
+    if sites.is_empty() {
+        return None;
+    }
+    let mut line = sites
+        .iter()
+        .take(SHOWN)
+        .map(|s| format!("{} ({}) {:.2}", s.name, s.family, s.bps as f64 / 1e6))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if sites.len() > SHOWN {
+        line += &format!(", +{} more", sites.len() - SHOWN);
+    }
+    Some(line)
 }
 
 /// The busiest families on one line: `Brave 8.00, Steam 6.00, +2 more`.
@@ -313,7 +355,13 @@ fn family_line(families: &[FamilyTick]) -> Option<String> {
     let mut line = families
         .iter()
         .take(SHOWN)
-        .map(|f| format!("{} {:.2}", f.name, f.bps as f64 / 1e6))
+        .map(|f| {
+            let mut s = format!("{} {:.2}", f.name, f.bps as f64 / 1e6);
+            if f.unidentified_bps > 0 {
+                s += &format!(" ({:.2} unidentified)", f.unidentified_bps as f64 / 1e6);
+            }
+            s
+        })
         .collect::<Vec<_>>()
         .join(", ");
     if families.len() > SHOWN {
@@ -372,11 +420,48 @@ mod tests {
             family: name.to_lowercase(),
             name: name.into(),
             bps: mbps * 1_000_000,
+            unidentified_bps: 0,
         };
-        let list: Vec<_> = (0..7).map(|k| f(&format!("App{k}"), 7 - k)).collect();
+        let mut list: Vec<_> = (0..7).map(|k| f(&format!("App{k}"), 7 - k)).collect();
         assert_eq!(
             family_line(&list).unwrap(),
             "App0 7.00, App1 6.00, App2 5.00, App3 4.00, App4 3.00, +2 more"
+        );
+        list[1].unidentified_bps = 250_000;
+        assert!(
+            family_line(&list)
+                .unwrap()
+                .starts_with("App0 7.00, App1 6.00 (0.25 unidentified), App2")
+        );
+    }
+
+    #[test]
+    fn site_and_name_lines() {
+        assert_eq!(site_line(&[]), None);
+        let s = |site: &str, family: &str, mbps: u64| SiteTick {
+            site: site.to_lowercase(),
+            name: site.into(),
+            family: family.into(),
+            bps: mbps * 1_000_000,
+        };
+        assert_eq!(
+            site_line(&[s("YouTube", "brave", 7), s("YouTube", "discord", 1)]).unwrap(),
+            "YouTube (brave) 7.00, YouTube (discord) 1.00"
+        );
+        let many: Vec<_> = (0..6).map(|k| s("S", "a", k)).collect();
+        assert!(site_line(&many).unwrap().ends_with(", +1 more"));
+
+        assert_eq!(name_line(&NameTick::default()), None);
+        let n = NameTick {
+            sni: 900,
+            dns: 40,
+            ech: 12,
+            none: 3,
+            naming: 8,
+        };
+        assert_eq!(
+            name_line(&n).unwrap(),
+            "names: sni 900, dns 40, unidentified 15 (ech 12, none 3), naming 8"
         );
     }
 }

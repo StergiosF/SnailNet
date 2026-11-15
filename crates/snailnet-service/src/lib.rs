@@ -9,6 +9,7 @@
 //!   (also used by `snailnet spike`).
 //! - [`runner`]: the supervisor loop: load config, shape, fail open, retry,
 //!   fall back to Safe mode.
+//! - [`tags`]: what the fast path's per-packet tag means (app + site).
 //! - [`hub`], [`ipc`]: shared state and the named-pipe server for the app
 //!   and CLI (§12).
 //! - [`svc`], [`install`]: the Windows service itself.
@@ -24,3 +25,4 @@ pub mod runner;
 pub mod shaper;
 pub mod store;
 pub mod svc;
+pub mod tags;

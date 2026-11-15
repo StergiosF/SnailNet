@@ -11,18 +11,31 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::rules::{Config, Line, Plan, Rule};
-use snailnet_engine::fastpath::{DirectionStats, NO_TAG, Snapshot as EngineSnapshot, Tag};
+use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
-    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, ServiceState, Snapshot, StatsTick,
+    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, ServiceState, SiteTick,
+    Snapshot, StatsTick,
 };
 use tokio::sync::broadcast;
 
 use crate::paths::DataDir;
 use crate::runner::StopSignal;
 use crate::store;
+use crate::tags::{self, Site};
 
 /// A refused change: the code and a message for the user.
 pub type Refusal = (ErrorCode, String);
+
+/// What the running shaper knows besides the engine's counters.
+#[derive(Debug, Clone, Default)]
+pub struct Seen {
+    /// Indexed by app id (the app part of a tag, [`tags`]).
+    pub apps: Vec<AppInfo>,
+    /// (id, name) indexed by site slot ([`tags::Site::Slot`]).
+    pub sites: Vec<(String, String)>,
+    /// Naming counters so far (they only grow while shaping runs).
+    pub names: Option<NameTick>,
+}
 
 pub struct Hub {
     dir: DataDir,
@@ -40,12 +53,14 @@ struct Inner {
     last: Option<Sample>,
     tick: Option<StatsTick>,
     apps: Vec<AppInfo>,
+    sites: Vec<(String, String)>,
 }
 
 struct Sample {
     at: Instant,
     down: Option<DirectionStats>,
     up: Option<DirectionStats>,
+    names: Option<NameTick>,
 }
 
 impl Hub {
@@ -62,6 +77,7 @@ impl Hub {
                 last: None,
                 tick: None,
                 apps: Vec::new(),
+                sites: Vec::new(),
             }),
         })
     }
@@ -143,30 +159,39 @@ impl Hub {
                 state: i.state.clone(),
                 down: None,
                 up: None,
+                names: None,
             },
         }
     }
 
     /// The runner's latest numbers. Rates are between the times the engine
     /// took the snapshots; a snapshot already seen changes nothing.
-    pub(crate) fn publish(&self, snap: &EngineSnapshot, apps: Option<Vec<AppInfo>>) {
+    pub(crate) fn publish(&self, snap: &EngineSnapshot, seen: Option<Seen>) {
         let now = Instant::now();
         let t_ms = now.duration_since(self.started).as_millis() as u64;
         let at = snap.taken.unwrap_or(now);
         let mut i = self.lock();
-        if let Some(apps) = apps {
-            i.apps = apps;
+        let mut names = None;
+        if let Some(seen) = seen {
+            i.apps = seen.apps;
+            i.sites = seen.sites;
+            names = seen.names;
         }
         if i.last.as_ref().is_some_and(|l| at <= l.at) {
             return;
         }
         let tick = i.last.as_ref().map(|last| {
             let secs = at.duration_since(last.at).as_secs_f64().max(1e-3);
+            let known = Known {
+                apps: &i.apps,
+                sites: &i.sites,
+            };
             StatsTick {
                 t_ms,
                 state: i.state.clone(),
-                down: dir_stats(snap.down.as_ref(), last.down.as_ref(), secs, &i.apps),
-                up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs, &i.apps),
+                down: dir_stats(snap.down.as_ref(), last.down.as_ref(), secs, known),
+                up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs, known),
+                names: names.zip(last.names).map(|(n, l)| n.since(&l)),
             }
         });
         if tick.is_some() {
@@ -176,6 +201,7 @@ impl Hub {
             at,
             down: snap.down.clone(),
             up: snap.up.clone(),
+            names,
         });
     }
 
@@ -262,13 +288,20 @@ impl Hub {
     }
 }
 
-/// `apps` is indexed by the engine's tags (app ids, in the order first
-/// seen); it is read after the snapshot, so it covers every tag in it.
+/// What a tag's parts index: apps by app id (in the order first seen) and
+/// sites by slot. Both are read after the snapshot, so they cover every tag
+/// in it.
+#[derive(Clone, Copy)]
+struct Known<'a> {
+    apps: &'a [AppInfo],
+    sites: &'a [(String, String)],
+}
+
 fn dir_stats(
     now: Option<&DirectionStats>,
     last: Option<&DirectionStats>,
     secs: f64,
-    apps: &[AppInfo],
+    known: Known<'_>,
 ) -> Option<DirStats> {
     let now = now?;
     let classes = now
@@ -290,21 +323,28 @@ fn dir_stats(
             }
         })
         .collect();
+    let (families, sites) = tag_ticks(&now.tags, last.map_or(&[][..], |l| &l.tags), secs, known);
     Some(DirStats {
         shaped_bps: now.rate_bytes_per_sec * 8,
         classes,
-        families: family_ticks(&now.tags, last.map_or(&[][..], |l| &l.tags), secs, apps),
+        families,
+        sites,
     })
 }
 
-/// Bytes per tag since `last` (both sorted by tag), summed per family.
-fn family_ticks(
+/// Bytes per tag since `last` (both sorted by tag), summed per family (with
+/// the unidentified part) and per (site, family).
+fn tag_ticks(
     now: &[(Tag, u64)],
     last: &[(Tag, u64)],
     secs: f64,
-    apps: &[AppInfo],
-) -> Vec<FamilyTick> {
-    let mut by_family: HashMap<(&str, &str), u64> = HashMap::new();
+    known: Known<'_>,
+) -> (Vec<FamilyTick>, Vec<SiteTick>) {
+    let bps = |bytes: u64| (bytes as f64 * 8.0 / secs) as u64;
+    // (family, name) → (bytes, unidentified bytes)
+    let mut by_family: HashMap<(&str, &str), (u64, u64)> = HashMap::new();
+    // (site slot, family) → bytes
+    let mut by_site: HashMap<(usize, &str), u64> = HashMap::new();
     for &(tag, bytes) in now {
         let before = last
             .binary_search_by_key(&tag, |&(t, _)| t)
@@ -313,28 +353,54 @@ fn family_ticks(
         if delta == 0 {
             continue;
         }
-        let key = match apps.get(tag as usize) {
-            Some(a) if tag != NO_TAG => (a.family.as_str(), a.name.as_str()),
-            _ => (UNKNOWN_ID, "Unknown"),
+        let (app, site) = tags::unpack(tag);
+        let key = match app.and_then(|a| known.apps.get(a as usize)) {
+            Some(a) => (a.family.as_str(), a.name.as_str()),
+            None => (UNKNOWN_ID, "Unknown"),
         };
-        *by_family.entry(key).or_default() += delta;
+        let f = by_family.entry(key).or_default();
+        f.0 += delta;
+        match site {
+            Site::Unidentified => f.1 += delta,
+            Site::Slot(k) if usize::from(k) < known.sites.len() => {
+                *by_site.entry((usize::from(k), key.0)).or_default() += delta;
+            }
+            Site::Slot(_) | Site::None => {}
+        }
     }
-    let mut out: Vec<FamilyTick> = by_family
+    let mut families: Vec<FamilyTick> = by_family
         .into_iter()
-        .map(|((family, name), bytes)| FamilyTick {
+        .map(|((family, name), (bytes, hidden))| FamilyTick {
             family: family.to_owned(),
             name: name.to_owned(),
-            bps: (bytes as f64 * 8.0 / secs) as u64,
+            bps: bps(bytes),
+            unidentified_bps: bps(hidden),
         })
         .collect();
-    out.sort_by(|a, b| b.bps.cmp(&a.bps).then_with(|| a.family.cmp(&b.family)));
-    out
+    families.sort_by(|a, b| b.bps.cmp(&a.bps).then_with(|| a.family.cmp(&b.family)));
+    let mut sites: Vec<SiteTick> = by_site
+        .into_iter()
+        .map(|((k, family), bytes)| SiteTick {
+            site: known.sites[k].0.clone(),
+            name: known.sites[k].1.clone(),
+            family: family.to_owned(),
+            bps: bps(bytes),
+        })
+        .collect();
+    sites.sort_by(|a, b| {
+        b.bps
+            .cmp(&a.bps)
+            .then_with(|| a.site.cmp(&b.site))
+            .then_with(|| a.family.cmp(&b.family))
+    });
+    (families, sites)
 }
 
 #[cfg(test)]
 mod tests {
     use snailnet_core::rules::Target;
     use snailnet_core::scheduler::ClassStats;
+    use snailnet_engine::fastpath::NO_TAG;
 
     use super::*;
 
@@ -440,7 +506,7 @@ mod tests {
         // 100 kB over 100 ms of the engine's clock = 8 Mbps exactly, however
         // late the runner gets round to reading it.
         std::thread::sleep(std::time::Duration::from_millis(30));
-        hub.publish(&snap(100, 101_000, 4), Some(vec![]));
+        hub.publish(&snap(100, 101_000, 4), Some(Seen::default()));
         let t = hub.latest_tick();
         assert_eq!(t.state, ServiceState::Shaping);
         let d = t.down.unwrap();
@@ -480,7 +546,13 @@ mod tests {
             }),
             up: None,
         };
-        hub.publish(&snap(0, vec![(0, 10_000), (3, 500)]), Some(apps.clone()));
+        let seen = |apps: &Vec<AppInfo>| {
+            Some(Seen {
+                apps: apps.clone(),
+                ..Seen::default()
+            })
+        };
+        hub.publish(&snap(0, vec![(0, 10_000), (3, 500)]), seen(&apps));
         // Over 100 ms: steam 50 + 25 kB, brave (new) 100 kB, discord idle,
         // unknown 1 kB.
         hub.publish(
@@ -494,12 +566,11 @@ mod tests {
                     (NO_TAG, 1_000),
                 ],
             ),
-            Some(apps),
+            seen(&apps),
         );
-        let fam: Vec<(String, String, u64)> = hub
-            .latest_tick()
-            .down
-            .unwrap()
+        let d = hub.latest_tick().down.unwrap();
+        assert!(d.sites.is_empty());
+        let fam: Vec<(String, String, u64)> = d
             .families
             .into_iter()
             .map(|f| (f.family, f.name, f.bps))
@@ -513,5 +584,138 @@ mod tests {
                 row(UNKNOWN_ID, "Unknown", 80_000),
             ]
         );
+    }
+
+    #[test]
+    fn per_site_rows_and_unidentified_bytes_come_from_the_tags() {
+        let (_t, hub) = hub();
+        let app = |family: &str, name: &str| AppInfo {
+            family: family.into(),
+            name: name.into(),
+            exe: format!("{family}.exe"),
+        };
+        let seen = |names: NameTick| {
+            Some(Seen {
+                apps: vec![app("brave", "Brave"), app("discord", "Discord")],
+                sites: vec![
+                    ("youtube".into(), "YouTube".into()),
+                    ("twitch".into(), "Twitch".into()),
+                ],
+                names: Some(names),
+            })
+        };
+        let (brave, discord) = (Some(0), Some(1));
+        let yt = tags::pack(brave, Site::Slot(0));
+        let yt_discord = tags::pack(discord, Site::Slot(0));
+        let twitch = tags::pack(brave, Site::Slot(1));
+        let hidden = tags::pack(brave, Site::Unidentified);
+        let plain = tags::pack(brave, Site::None);
+        let hidden_unknown = tags::pack(None, Site::Unidentified);
+        let base = Instant::now();
+        let snap = |ms: u64, mut tags: Vec<(Tag, u64)>| {
+            tags.sort_unstable();
+            EngineSnapshot {
+                taken: Some(base + std::time::Duration::from_millis(ms)),
+                down: Some(DirectionStats {
+                    rate_bytes_per_sec: 1_000_000,
+                    classes: vec![],
+                    tags,
+                }),
+                up: None,
+            }
+        };
+        let n0 = NameTick {
+            sni: 100,
+            dns: 10,
+            ech: 1,
+            none: 2,
+            naming: 3,
+        };
+        hub.publish(&snap(0, vec![(yt, 1_000), (twitch, 7)]), seen(n0));
+        let n1 = NameTick {
+            sni: 150,
+            dns: 10,
+            ech: 4,
+            none: 2,
+            naming: 5,
+        };
+        // Over 100 ms: Brave 50 kB YouTube + 10 kB unidentified + 5 kB
+        // other; Discord 25 kB YouTube; Twitch idle; 1 kB unidentified from
+        // an unknown app.
+        hub.publish(
+            &snap(
+                100,
+                vec![
+                    (yt, 51_000),
+                    (yt_discord, 25_000),
+                    (twitch, 7),
+                    (hidden, 10_000),
+                    (plain, 5_000),
+                    (hidden_unknown, 1_000),
+                ],
+            ),
+            seen(n1),
+        );
+        let t = hub.latest_tick();
+        let names = t.names.unwrap();
+        assert_eq!(names, n1.since(&n0));
+        assert_eq!(names.unidentified(), 3);
+        let d = t.down.unwrap();
+        let sites: Vec<(&str, &str, &str, u64)> = d
+            .sites
+            .iter()
+            .map(|s| (s.site.as_str(), s.name.as_str(), s.family.as_str(), s.bps))
+            .collect();
+        assert_eq!(
+            sites,
+            vec![
+                ("youtube", "YouTube", "brave", 4_000_000),
+                ("youtube", "YouTube", "discord", 2_000_000),
+            ]
+        );
+        let fam: Vec<(&str, u64, u64)> = d
+            .families
+            .iter()
+            .map(|f| (f.family.as_str(), f.bps, f.unidentified_bps))
+            .collect();
+        assert_eq!(
+            fam,
+            vec![
+                ("brave", 5_200_000, 800_000),
+                ("discord", 2_000_000, 0),
+                (UNKNOWN_ID, 80_000, 80_000),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_tag_naming_a_site_the_list_lacks_still_counts_for_its_app() {
+        let (_t, hub) = hub();
+        let tag = tags::pack(Some(0), Site::Slot(5));
+        let base = Instant::now();
+        let snap = |ms: u64, bytes: u64| EngineSnapshot {
+            taken: Some(base + std::time::Duration::from_millis(ms)),
+            down: Some(DirectionStats {
+                rate_bytes_per_sec: 1_000_000,
+                classes: vec![],
+                tags: vec![(tag, bytes)],
+            }),
+            up: None,
+        };
+        let seen = Seen {
+            apps: vec![AppInfo {
+                family: "brave".into(),
+                name: "Brave".into(),
+                exe: "brave.exe".into(),
+            }],
+            ..Seen::default()
+        };
+        hub.publish(&snap(0, 0), Some(seen.clone()));
+        hub.publish(&snap(100, 1_000), Some(seen));
+        let t = hub.latest_tick();
+        assert_eq!(t.names, None, "no name counters reported");
+        let d = t.down.unwrap();
+        assert!(d.sites.is_empty());
+        assert_eq!(d.families[0].bps, 80_000);
     }
 }

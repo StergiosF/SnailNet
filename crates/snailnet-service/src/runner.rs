@@ -33,11 +33,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 use snailnet_core::rules::Plan;
 use snailnet_engine::fastpath::Snapshot;
-use snailnet_ipc::{AppInfo, ServiceState};
+use snailnet_ipc::ServiceState;
 use tracing::{error, info, warn};
 
 use crate::crashguard::{self, CrashGuard};
-use crate::hub::Hub;
+use crate::hub::{Hub, Seen};
 use crate::store::{self, Source};
 
 /// Starts shaping for a plan. The real one is [`crate::shaper::WinEngine`].
@@ -55,9 +55,9 @@ pub trait Running {
     fn sample(&self) -> Option<Snapshot> {
         None
     }
-    /// Apps seen so far.
-    fn apps(&self) -> Vec<AppInfo> {
-        Vec::new()
+    /// Apps and sites seen so far, and how flows got their names.
+    fn seen(&self) -> Seen {
+        Seen::default()
     }
     /// Switch to a new plan without stopping. `Err` means it can't be done
     /// live (the runner restarts shaping instead); nothing was changed.
@@ -289,7 +289,7 @@ fn supervise<E: Engine>(
                         break Outcome::Failed(f);
                     }
                     if let Some(s) = running.sample() {
-                        hub.publish(&s, Some(running.apps()));
+                        hub.publish(&s, Some(running.seen()));
                     }
                     since_report += timing.poll;
                     if since_report >= timing.report_every {

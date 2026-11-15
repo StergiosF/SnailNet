@@ -209,6 +209,45 @@ pub struct StatsTick {
     /// `None`: that direction isn't shaped.
     pub down: Option<DirStats>,
     pub up: Option<DirStats>,
+    /// How flows got their site names since the previous tick (PLAN.md
+    /// §8.4), both directions. `None` from a service that doesn't report
+    /// it, or before the second sample.
+    #[serde(default)]
+    pub names: Option<NameTick>,
+}
+
+/// Packets by how their flow was named (PLAN.md §8.4). Flows are named only
+/// while a site rule exists, so all zero otherwise.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NameTick {
+    /// TLS or QUIC server name.
+    pub sni: u64,
+    /// The IP → domain cache (DNS answers).
+    pub dns: u64,
+    /// Encrypted Client Hello hid the name and DNS didn't know it.
+    pub ech: u64,
+    /// No usable name.
+    pub none: u64,
+    /// Still reading the flow's hello.
+    pub naming: u64,
+}
+
+impl NameTick {
+    /// Packets whose flow couldn't be identified (ECH or nothing usable).
+    pub fn unidentified(&self) -> u64 {
+        self.ech + self.none
+    }
+
+    /// `self - before`, per field (counters that went backwards give 0).
+    pub fn since(&self, before: &NameTick) -> NameTick {
+        NameTick {
+            sni: self.sni.saturating_sub(before.sni),
+            dns: self.dns.saturating_sub(before.dns),
+            ech: self.ech.saturating_sub(before.ech),
+            none: self.none.saturating_sub(before.none),
+            naming: self.naming.saturating_sub(before.naming),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -222,6 +261,23 @@ pub struct DirStats {
     /// (yet) is the family `unknown`.
     #[serde(default)]
     pub families: Vec<FamilyTick>,
+    /// Sites that sent anything since the previous tick, one row per
+    /// (site, family) so a UI can nest a site under its browser ("Brave ▸
+    /// YouTube"), busiest first. Only while a site rule exists (flows are
+    /// named only then).
+    #[serde(default)]
+    pub sites: Vec<SiteTick>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SiteTick {
+    /// What a site rule names (`youtube`).
+    pub site: String,
+    pub name: String,
+    /// The app family the traffic belongs to (`unknown` if not known).
+    pub family: String,
+    /// Bits per second sent since the previous tick.
+    pub bps: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,6 +287,11 @@ pub struct FamilyTick {
     pub name: String,
     /// Bits per second sent since the previous tick.
     pub bps: u64,
+    /// Part of `bps` in HTTPS connections whose site couldn't be identified
+    /// (ECH, or no name in the hello or DNS; PLAN.md §8.4). Only while a
+    /// site rule exists.
+    #[serde(default)]
+    pub unidentified_bps: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -412,17 +473,117 @@ mod tests {
                         queued_bytes: 3000,
                     }],
                     families: vec![FamilyTick {
-                        family: "steam".into(),
-                        name: "Steam".into(),
+                        family: "brave".into(),
+                        name: "Brave".into(),
                         bps: 8_500_000,
+                        unidentified_bps: 500_000,
+                    }],
+                    sites: vec![SiteTick {
+                        site: "youtube".into(),
+                        name: "YouTube".into(),
+                        family: "brave".into(),
+                        bps: 7_000_000,
                     }],
                 }),
                 up: None,
+                names: Some(NameTick {
+                    sni: 900,
+                    dns: 40,
+                    ech: 12,
+                    none: 3,
+                    naming: 8,
+                }),
             }),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
         ] {
             roundtrip(msg);
         }
+    }
+
+    /// A tick from a service built before per-site rows and name counts
+    /// still decodes (the new fields default), and a new tick decodes in an
+    /// old client (unknown fields are skipped).
+    #[test]
+    fn stats_ticks_stay_compatible_both_ways() {
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct OldFamily {
+            family: String,
+            name: String,
+            bps: u64,
+        }
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct OldDir {
+            shaped_bps: u64,
+            classes: Vec<ClassTick>,
+            families: Vec<OldFamily>,
+        }
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct OldTick {
+            t_ms: u64,
+            state: ServiceState,
+            down: Option<OldDir>,
+            up: Option<OldDir>,
+        }
+        let old = OldTick {
+            t_ms: 5,
+            state: ServiceState::Shaping,
+            down: Some(OldDir {
+                shaped_bps: 1,
+                classes: vec![],
+                families: vec![OldFamily {
+                    family: "steam".into(),
+                    name: "Steam".into(),
+                    bps: 2,
+                }],
+            }),
+            up: None,
+        };
+        let new: StatsTick = decode(&encode(&old).unwrap()).unwrap();
+        assert_eq!(new.names, None);
+        let d = new.down.as_ref().unwrap();
+        assert!(d.sites.is_empty());
+        assert_eq!(d.families[0].unidentified_bps, 0);
+
+        let mut tick = new;
+        tick.names = Some(NameTick::default());
+        tick.down.as_mut().unwrap().sites.push(SiteTick {
+            site: "youtube".into(),
+            name: "YouTube".into(),
+            family: "steam".into(),
+            bps: 1,
+        });
+        let back: OldTick = decode(&encode(&tick).unwrap()).unwrap();
+        assert_eq!(back, old);
+    }
+
+    #[test]
+    fn name_ticks_subtract_per_field() {
+        let a = NameTick {
+            sni: 10,
+            dns: 5,
+            ech: 3,
+            none: 2,
+            naming: 1,
+        };
+        let b = NameTick {
+            sni: 15,
+            dns: 5,
+            ech: 4,
+            none: 4,
+            naming: 0,
+        };
+        let d = b.since(&a);
+        assert_eq!(
+            d,
+            NameTick {
+                sni: 5,
+                dns: 0,
+                ech: 1,
+                none: 2,
+                naming: 0
+            }
+        );
+        assert_eq!(d.unidentified(), 3);
     }
 
     #[test]
