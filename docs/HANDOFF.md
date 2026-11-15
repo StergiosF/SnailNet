@@ -290,6 +290,23 @@ handle leaks).
 
 Then Phase 2 (website recognition), Phase 3 (Tauri UI), as in PLAN.md §21.
 
+### 3. Phase 2: website recognition (started 2026-11-16, during the soak)
+
+Pure-Rust parts first; **no driver runs until the soak ends** (a second
+WinDivert handle would disturb it).
+
+1. ~~**TLS ClientHello SNI**~~ **Done.** `snailnet-core::parse::tls`:
+   `from_tcp` (TLS records, joins a hello split across records/segments,
+   `NeedMore` until complete, gives up past `MAX_HELLO` = 16 KiB) and
+   `from_handshake` (bare message, for QUIC CRYPTO frames). Returns
+   `ClientHello { sni, ech }`: name lowercased and validated (`host_name`),
+   `ech` set when `encrypted_client_hello` is present (the SNI is then the
+   outer name → unidentified, §8.4). 12 tests incl. proptests (garbage,
+   corrupted/truncated hellos, any name at any record size).
+2. Next: QUIC Initial SNI (RFC 9001 Initial keys: HKDF-SHA256 +
+   AES-128-GCM + header protection; needs crypto crates — check with
+   Context7), then DNS answers, IP→domain cache, site packs.
+
 ## What exists
 
 | Crate | Role | Tests |
