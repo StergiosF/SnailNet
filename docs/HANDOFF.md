@@ -206,10 +206,20 @@ ones come first.
    changes nothing). Still to do: `snailnet top` during a real download.
 
    Deferred, worth doing before Phase 1 exit:
-   - **Live rule swap without restart** (§9.6): the scheduler has
-     `LiveConfig`, but `FastPath` takes fixed configs and `AppClassifier`
-     caches app → class. A restart flushes, so nothing is lost, but
-     attribution state is rebuilt (the port snapshot covers open flows).
+   - ~~**Live rule swap without restart**~~ **Done (2026-11-15).**
+     `FastPath` keeps a `LiveConfig` per shaped direction (the scheduler
+     thread `sync`s each pass); `FastPath::reconfigure` validates both
+     configs first and refuses a change of shaped directions
+     (`ReconfigureError::DirectionsChanged`). The classifier now holds
+     `Arc<dyn Rules>` behind `LiveRules` (mutex + generation; rx threads
+     reload and clear their app → class cache when the generation moves).
+     `Shaper::reconfigure` publishes scheduler first, then rules.
+     `Running::apply` (runner): a config change is applied live; a new or
+     dropped direction or a LAN-shaping change restarts as before. Verified
+     on the real driver in the smoke test (`rules brave=60`, `line --down
+     30` → "applied to the running shaper" twice, rate 27.6 Mbps, Brave's
+     traffic moved to its class within a tick, no restart).
+     Per-app rows in `top` were seen there too (Brave, Claude Code).
    - ~~**Per-app stats**~~ **Done (2026-11-15).** `Classifier::classify`
      returns `(PacketMeta, Tag)`; the service's tag is the `AppId`
      (`NO_TAG` when unknown). The scheduler thread counts bytes *sent* per
@@ -217,8 +227,7 @@ ones come first.
      The hub maps tags to apps (`apps()` is in `AppId` order) and sends
      `DirStats::families` (`FamilyTick { family, name, bps }`, busiest
      first, idle ones omitted, unknown → `unknown`/"Unknown").
-     `snailnet top` prints the top 5 under each direction. Not yet seen
-     with real traffic.
+     `snailnet top` prints the top 5 under each direction.
    - **Client verification** (§12.1: client PID → exe path/signature),
      and the CLI checking that the server is the service: not done; the
      DACL is the only gate. The pipe is byte mode, not message mode (the

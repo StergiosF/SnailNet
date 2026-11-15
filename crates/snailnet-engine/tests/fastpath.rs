@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use snailnet_core::parse::ip::PacketInfo;
 use snailnet_core::scheduler::{ClassConfig, PacketMeta, SchedulerConfig};
-use snailnet_engine::fastpath::{Classifier, FastPath, FastPathConfig, Nap, Tag};
+use snailnet_engine::fastpath::{Classifier, FastPath, FastPathConfig, Nap, ReconfigureError, Tag};
 use snailnet_engine::mock::MockEngine;
 
 const REMOTE: [u8; 4] = [8, 8, 4, 4];
@@ -284,4 +284,54 @@ fn starting_without_a_direction_is_an_error() {
         FastPathConfig::default(),
     );
     assert!(r.is_err());
+}
+
+#[test]
+fn reconfigure_applies_live_and_keeps_every_queued_packet() {
+    let engine = Arc::new(MockEngine::new());
+    // 10 kB/s: 50 kB queued would take five seconds.
+    let fp = start(&engine, 10_000, |_| {});
+    for i in 0..50 {
+        engine.inject(&inbound(REMOTE, PORT_B, 1000, i), false);
+        engine.inject(&inbound(REMOTE, PORT_A, 1000, 100 + i), false);
+    }
+    assert!(wait(|| fp.counters().queued == 100, Duration::from_secs(2)));
+    assert!(engine.sent_count() < 100);
+
+    // A direction that wasn't shaped can't be added live; a bad config is
+    // refused; neither changes anything.
+    assert!(matches!(
+        fp.reconfigure(Some(config(10_000)), Some(config(10_000))),
+        Err(ReconfigureError::DirectionsChanged)
+    ));
+    let mut bad = config(10_000);
+    bad.classes.clear();
+    assert!(matches!(
+        fp.reconfigure(Some(bad), None),
+        Err(ReconfigureError::Config(_))
+    ));
+
+    // 100× faster, and rule "a" removed: its queue moves to "other".
+    let started = Instant::now();
+    fp.reconfigure(
+        Some(SchedulerConfig {
+            rate_bytes_per_sec: 1_000_000,
+            burst_bytes: 20_000,
+            classes: vec![ClassConfig::new("other", 10_000)],
+        }),
+        None,
+    )
+    .unwrap();
+    assert!(engine.wait_for_sent(100, Duration::from_secs(2)));
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "new rate applied"
+    );
+    let ids: HashSet<u32> = engine.sent().iter().map(|s| id_of(&s.data)).collect();
+    assert_eq!(ids.len(), 100, "every packet exactly once");
+    std::thread::sleep(Duration::from_millis(150));
+    let down = fp.snapshot().down.unwrap();
+    assert_eq!(down.rate_bytes_per_sec, 1_000_000);
+    assert_eq!(down.classes.len(), 1);
+    assert_eq!(fp.stop(), None);
 }

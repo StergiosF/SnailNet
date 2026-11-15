@@ -14,8 +14,10 @@
 
 use std::collections::HashMap;
 use std::hash::{BuildHasher, RandomState};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{
+    AtomicBool, AtomicU64, Ordering::Acquire, Ordering::Relaxed, Ordering::Release,
+};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -197,14 +199,48 @@ pub struct WhoCounters {
     pub late_flows: AtomicU64,
 }
 
+/// The rules every rx thread classifies by, swappable while shaping. The
+/// generation tells an rx thread to reload them and drop its cache; the
+/// lock is only taken then, never per packet.
+struct LiveRules {
+    current: Mutex<Arc<dyn Rules>>,
+    generation: AtomicU64,
+}
+
+impl LiveRules {
+    fn new(rules: Arc<dyn Rules>) -> Self {
+        Self {
+            current: Mutex::new(rules),
+            generation: AtomicU64::new(0),
+        }
+    }
+
+    fn load(&self) -> Arc<dyn Rules> {
+        self.current
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn publish(&self, rules: Arc<dyn Rules>) {
+        let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+        *current = rules;
+        self.generation.fetch_add(1, Release);
+    }
+}
+
 /// Packet → app → class. Each rx thread has its own clone (caches and
 /// pending list); the attribution behind it is shared.
-pub struct AppClassifier<R> {
+pub struct AppClassifier {
     attribution: Arc<WinAttribution>,
     who: Arc<WhoCounters>,
-    rules: Arc<R>,
+    live: Arc<LiveRules>,
+    /// The rules this thread uses, as of generation `seen`.
+    rules: Arc<dyn Rules>,
+    seen: u64,
     /// App ids are never reused (a reused PID is a new process key and is
-    /// resolved afresh), so this needs no expiry. One entry per app.
+    /// resolved afresh), so this needs no expiry. One entry per app; cleared
+    /// when the rules change.
     app_class: HashMap<AppId, ClassId>,
     pending: Pending,
     clock: Arc<MonotonicClock>,
@@ -213,12 +249,14 @@ pub struct AppClassifier<R> {
     flow_hasher: RandomState,
 }
 
-impl<R> Clone for AppClassifier<R> {
+impl Clone for AppClassifier {
     fn clone(&self) -> Self {
         Self {
             attribution: self.attribution.clone(),
             who: self.who.clone(),
+            live: self.live.clone(),
             rules: self.rules.clone(),
+            seen: self.seen,
             app_class: self.app_class.clone(),
             pending: self.pending.clone(),
             clock: self.clock.clone(),
@@ -227,7 +265,17 @@ impl<R> Clone for AppClassifier<R> {
     }
 }
 
-impl<R: Rules> AppClassifier<R> {
+impl AppClassifier {
+    /// Pick up new rules if they changed since this thread last looked.
+    fn refresh(&mut self) {
+        let g = self.live.generation.load(Acquire);
+        if g != self.seen {
+            self.rules = self.live.load();
+            self.app_class.clear();
+            self.seen = g;
+        }
+    }
+
     fn class_of(&mut self, app: AppId) -> ClassId {
         let (rules, attribution) = (&self.rules, &self.attribution);
         *self
@@ -237,10 +285,11 @@ impl<R: Rules> AppClassifier<R> {
     }
 }
 
-impl<R: Rules> Classifier for AppClassifier<R> {
+impl Classifier for AppClassifier {
     /// The tag is the packet's [`AppId`] ([`NO_TAG`] when unknown), so
     /// per-tag byte counts are per-app.
     fn classify(&mut self, info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+        self.refresh();
         let key = FlowKey::from_packet(info, outbound);
         let who = self.who.clone();
         let (class, tag) = match self.attribution.lookup(&key) {
@@ -280,11 +329,11 @@ impl Nap for TimerNap {
 }
 
 /// What to shape and how.
-pub struct Spec<R> {
+pub struct Spec {
     /// `None`: that direction passes straight through.
     pub down: Option<SchedulerConfig>,
     pub up: Option<SchedulerConfig>,
-    pub rules: Arc<R>,
+    pub rules: Arc<dyn Rules>,
     pub shape_lan: bool,
     /// 1 or 2. 2 can reorder packets within a flow.
     pub rx_threads: usize,
@@ -297,10 +346,11 @@ pub struct Shaper {
     sniffers: Option<Sniffers>,
     who: Arc<WhoCounters>,
     attribution: Arc<WinAttribution>,
+    rules: Arc<LiveRules>,
 }
 
 impl Shaper {
-    pub fn start<R: Rules>(spec: Spec<R>) -> Result<Self> {
+    pub fn start(spec: Spec) -> Result<Self> {
         let lib = WinDivertLib::load()?;
         let mut filter = String::from(
             "!loopback and !impostor and (tcp or udp) and remotePort != 53 and localPort != 53",
@@ -321,10 +371,13 @@ impl Shaper {
                 .context("opening the NETWORK layer")?,
         );
         let who = Arc::new(WhoCounters::default());
+        let rules = Arc::new(LiveRules::new(spec.rules));
         let classifier = AppClassifier {
             attribution: attribution.clone(),
             who: who.clone(),
-            rules: spec.rules,
+            rules: rules.load(),
+            live: rules.clone(),
+            seen: 0,
             app_class: HashMap::new(),
             pending: Pending::default(),
             clock: Arc::new(MonotonicClock::new()),
@@ -348,7 +401,24 @@ impl Shaper {
             sniffers: Some(sniffers),
             who,
             attribution,
+            rules,
         })
+    }
+
+    /// New rules and scheduler configs, applied without stopping (PLAN.md
+    /// §9.6): nothing queued is dropped and attribution is kept. Fails if the
+    /// shaped directions differ; restart then.
+    pub fn reconfigure(
+        &self,
+        down: Option<SchedulerConfig>,
+        up: Option<SchedulerConfig>,
+        rules: Arc<dyn Rules>,
+    ) -> Result<()> {
+        // Scheduler first: from here on the rx threads should classify
+        // against the new class list, and the gap is a few packets at most.
+        self.fp().reconfigure(down, up)?;
+        self.rules.publish(rules);
+        Ok(())
     }
 
     fn fp(&self) -> &FastPath<WinDivert> {
@@ -422,13 +492,19 @@ impl runner::Engine for WinEngine {
             rx_threads: self.rx_threads,
         })?;
         let report = Report::new(&shaper);
-        Ok(Running { shaper, report })
+        Ok(Running {
+            shaper,
+            report,
+            shape_lan: plan.shape_lan,
+        })
     }
 }
 
 pub struct Running {
     shaper: Shaper,
     report: Report,
+    /// Fixed for the fast path's lifetime.
+    shape_lan: bool,
 }
 
 impl runner::Running for Running {
@@ -455,6 +531,14 @@ impl runner::Running for Running {
                 exe: a.exe.clone(),
             })
             .collect()
+    }
+
+    fn apply(&mut self, plan: &Plan) -> Result<()> {
+        if plan.shape_lan != self.shape_lan {
+            anyhow::bail!("LAN shaping changed");
+        }
+        self.shaper
+            .reconfigure(plan.down.clone(), plan.up.clone(), Arc::new(plan.clone()))
     }
 
     fn stop(self) -> Option<String> {

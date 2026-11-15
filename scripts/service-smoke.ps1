@@ -33,6 +33,12 @@ if ($cfg -notmatch 'down_mbps') { $cfg += "`n[line]`ndown_mbps = 25.0`n" }
 sc.exe start SnailNet | Out-Null; WaitState 'RUNNING'; Start-Sleep 3; Q
 Log '-- snailnet status'; & $cli status *>&1 | ForEach-Object { Log "$_" }
 Log '-- snailnet top --count 4'; & $cli top --count 4 *>&1 | ForEach-Object { Log "$_" }
+Log '-- live changes (expect "applied to the running shaper" in the log, no restart)'
+& $cli rules brave=60 *>&1 | ForEach-Object { Log "$_" }
+& $cli line --down 30 *>&1 | ForEach-Object { Log "$_" }
+Start-Sleep 1
+& $cli status *>&1 | ForEach-Object { Log "$_" }
+& $cli top --count 2 *>&1 | ForEach-Object { Log "$_" }
 Log ('-- WinDivert driver: ' + ((sc.exe query WinDivert | Select-String 'STATE') -join ' '))
 sc.exe stop SnailNet | Out-Null; WaitState 'STOPPED'; Q
 Log ('-- running marker left: ' + (Test-Path "$data\running"))

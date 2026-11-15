@@ -8,7 +8,8 @@
 //!   (back to top)         monitor only      ▼
 //!                               ┌──► start shaping ──fails──┐
 //!                               │        │ running          │
-//!                               │        ├─ config changed: stop, restart (not a failure)
+//!                               │        ├─ config changed: apply live, or if the
+//!                               │        │  directions changed, restart (not a failure)
 //!                               │        ▼                  │
 //!                               │   fail-open ──────────────┤ count it
 //!                               │                           ▼
@@ -17,8 +18,11 @@
 //!
 //! "Monitor only" means no WinDivert handles at all. The config lives in
 //! the [`Hub`], where IPC clients change it; a change wakes the loop
-//! ([`StopSignal::request_reload`]) and shaping restarts with the new plan
-//! (stopping flushes every queued packet, so nothing is lost). The loop
+//! ([`StopSignal::request_reload`]) and the new plan is applied to the
+//! running shaper (PLAN.md §9.6: queues and attribution kept). When it can't
+//! be (a direction started or stopped being shaped, or LAN shaping
+//! changed), shaping restarts instead; stopping flushes every queued packet,
+//! so nothing is lost either way. The loop
 //! exits on a stop request from any state; every exit path stops shaping
 //! first, so the network is back to normal before the service reports
 //! Stopped.
@@ -54,6 +58,12 @@ pub trait Running {
     /// Apps seen so far.
     fn apps(&self) -> Vec<AppInfo> {
         Vec::new()
+    }
+    /// Switch to a new plan without stopping. `Err` means it can't be done
+    /// live (the runner restarts shaping instead); nothing was changed.
+    fn apply(&mut self, plan: &Plan) -> Result<()> {
+        let _ = plan;
+        anyhow::bail!("live changes not supported")
     }
     /// Stop and close everything. Returns the fail-open reason, if any.
     fn stop(self) -> Option<String>;
@@ -257,7 +267,22 @@ fn supervise<E: Engine>(
                 let outcome = loop {
                     match stop.wait_any(timing.poll) {
                         Wake::Stop => break Outcome::Stop,
-                        Wake::Reload => break Outcome::Reload,
+                        Wake::Reload => {
+                            let (plan, profile) = hub.plan();
+                            if !plan.shapes_anything() {
+                                break Outcome::Reload;
+                            }
+                            match running.apply(&plan) {
+                                Ok(()) => {
+                                    info!("settings changed; applied to the running shaper");
+                                    log_plan(&plan, &profile);
+                                }
+                                Err(e) => {
+                                    info!("settings changed; restarting shaping ({e:#})");
+                                    break Outcome::Reload;
+                                }
+                            }
+                        }
                         Wake::Timeout => {}
                     }
                     if let Some(f) = running.failure() {
@@ -281,10 +306,7 @@ fn supervise<E: Engine>(
                         }
                         break Ended::Stopped;
                     }
-                    (Outcome::Reload, None) => {
-                        info!("settings changed; restarting shaping with the new rules");
-                        continue;
-                    }
+                    (Outcome::Reload, None) => continue,
                     (Outcome::Reload, Some(f)) | (Outcome::Failed(_), Some(f)) => f,
                     (Outcome::Failed(f), None) => f,
                 }
@@ -370,6 +392,8 @@ mod tests {
         live: Arc<AtomicUsize>,
         /// Plans it was started with, in order.
         plans: Arc<Mutex<Vec<Plan>>>,
+        /// Plans applied live, in order.
+        applied: Arc<Mutex<Vec<Plan>>>,
         stop_after_starts: Option<(usize, StopSignal)>,
     }
 
@@ -377,6 +401,9 @@ mod tests {
         polls: Cell<usize>,
         fail_after: Option<usize>,
         live: Arc<AtomicUsize>,
+        applied: Arc<Mutex<Vec<Plan>>>,
+        /// Shaped directions, fixed at start like the real fast path.
+        dirs: (bool, bool),
     }
 
     impl Engine for Fake {
@@ -401,6 +428,8 @@ mod tests {
                 polls: Cell::new(0),
                 fail_after,
                 live: self.live.clone(),
+                applied: self.applied.clone(),
+                dirs: (plan.down.is_some(), plan.up.is_some()),
             })
         }
     }
@@ -416,6 +445,14 @@ mod tests {
 
         fn sample(&self) -> Option<Snapshot> {
             Some(Snapshot::default())
+        }
+
+        fn apply(&mut self, plan: &Plan) -> Result<()> {
+            if (plan.down.is_some(), plan.up.is_some()) != self.dirs {
+                anyhow::bail!("directions changed");
+            }
+            self.applied.lock().unwrap().push(plan.clone());
+            Ok(())
         }
 
         fn stop(self) -> Option<String> {
@@ -450,6 +487,7 @@ mod tests {
             starts: Default::default(),
             live: Default::default(),
             plans: Default::default(),
+            applied: Default::default(),
             stop_after_starts: None,
         }
     }
@@ -524,13 +562,40 @@ mod tests {
         assert_eq!(f.live.load(Ordering::SeqCst), 0);
     }
 
+    fn rate(p: &Plan) -> u64 {
+        p.down.as_ref().unwrap().rate_bytes_per_sec
+    }
+
     #[test]
-    fn a_rule_change_restarts_shaping_with_the_new_plan() {
+    fn a_change_to_the_shaped_directions_is_applied_live() {
+        let (_t, d) = setup(true);
+        let engine = fake(&[]);
+        let applied = engine.applied.clone();
+        let (r, f) = run_with(&d, engine, 1_000, |hub| {
+            eventually(|| hub.state() == ServiceState::Shaping);
+            let line = Line {
+                down_mbps: Some(50.0),
+                ..Line::default()
+            };
+            hub.set_line(line, hub.rev()).unwrap();
+            eventually(|| !applied.lock().unwrap().is_empty());
+        });
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(f.plans.lock().unwrap().len(), 1, "not restarted");
+        let applied = f.applied.lock().unwrap();
+        assert_eq!(applied.len(), 1);
+        assert!(rate(&applied[0]) > rate(&f.plans.lock().unwrap()[0]));
+        assert_eq!(f.live.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn shaping_a_new_direction_restarts_with_the_new_plan() {
         let (_t, d) = setup(true);
         let (r, f) = run_with(&d, fake(&[]), 1_000, |hub| {
             eventually(|| hub.state() == ServiceState::Shaping);
             let line = Line {
                 down_mbps: Some(50.0),
+                up_mbps: Some(10.0),
                 ..Line::default()
             };
             hub.set_line(line, hub.rev()).unwrap();
@@ -540,8 +605,9 @@ mod tests {
         assert_eq!(r.unwrap(), Ended::Stopped);
         let plans = f.plans.lock().unwrap();
         assert_eq!(plans.len(), 2, "restarted once");
-        let rate = |p: &Plan| p.down.as_ref().unwrap().rate_bytes_per_sec;
+        assert!(plans[1].up.is_some());
         assert!(rate(&plans[1]) > rate(&plans[0]));
+        assert!(f.applied.lock().unwrap().is_empty());
         assert_eq!(f.live.load(Ordering::SeqCst), 0);
         // A reload is not a failure.
         assert_eq!(std::fs::read_to_string(d.crash_log()).unwrap(), "");

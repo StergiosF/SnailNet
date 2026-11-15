@@ -33,7 +33,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TrySendError, bounde
 use snailnet_core::clock::{Clock, MonotonicClock, NANOS_PER_MILLI, Nanos};
 use snailnet_core::parse::ip::{self, PROTO_TCP, PacketInfo, is_local_network};
 use snailnet_core::scheduler::{
-    ClassStats, ConfigError, Dequeue, Packet, PacketMeta, Scheduler, SchedulerConfig,
+    ClassStats, ConfigError, Dequeue, LiveConfig, Packet, PacketMeta, Scheduler, SchedulerConfig,
 };
 
 use crate::batch::DEFAULT_BATCH;
@@ -108,6 +108,15 @@ pub enum StartError {
     Spawn(#[from] std::io::Error),
     #[error("nothing to shape: give a download and/or upload config")]
     NothingToShape,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ReconfigureError {
+    #[error("invalid scheduler config: {0}")]
+    Config(#[from] ConfigError),
+    /// Which directions are shaped is fixed when the fast path starts.
+    #[error("the shaped directions changed; restart the fast path instead")]
+    DirectionsChanged,
 }
 
 /// A packet sitting in a scheduler queue.
@@ -200,6 +209,8 @@ struct Shared {
     heartbeat: AtomicU64,
     counters: AtomicCounters,
     snapshot: Mutex<Snapshot>,
+    /// The scheduler thread picks up a new config on its next pass.
+    live: [Option<LiveConfig>; 2],
 }
 
 impl Shared {
@@ -247,8 +258,11 @@ impl<E: PacketEngine + 'static> FastPath<E> {
         }
         let clock = MonotonicClock::new();
         let now = clock.now();
-        let down = down.map(|c| Scheduler::new(c, now)).transpose()?;
-        let up = up.map(|c| Scheduler::new(c, now)).transpose()?;
+        let live = [
+            down.map(LiveConfig::new).transpose()?,
+            up.map(LiveConfig::new).transpose()?,
+        ];
+        let [down, up] = [0, 1].map(|d| live[d].as_ref().map(|l| Scheduler::from_live(l, now)));
         let shared = Arc::new(Shared {
             clock,
             stop: AtomicBool::new(false),
@@ -257,6 +271,7 @@ impl<E: PacketEngine + 'static> FastPath<E> {
             heartbeat: AtomicU64::new(now),
             counters: AtomicCounters::default(),
             snapshot: Mutex::new(Snapshot::default()),
+            live,
         });
         let pool = PacketPool::new(config.small_buffers, config.large_buffers);
         let (tx, rx) = bounded::<Item>(config.channel_depth.max(1));
@@ -320,6 +335,35 @@ impl<E: PacketEngine + 'static> FastPath<E> {
 
     pub fn counters(&self) -> Counters {
         self.shared.counters.load()
+    }
+
+    /// Switch the shaped directions to new configs without stopping
+    /// (PLAN.md §9.6): queued packets stay, classes are matched by name
+    /// (see [`Scheduler::reconfigure`]). Both configs are checked before
+    /// either is applied. Packets the rx threads classified against the old
+    /// class list may land in the wrong class for a moment; none are lost.
+    pub fn reconfigure(
+        &self,
+        down: Option<SchedulerConfig>,
+        up: Option<SchedulerConfig>,
+    ) -> Result<(), ReconfigureError> {
+        let new = [down, up];
+        if new
+            .iter()
+            .zip(&self.shared.live)
+            .any(|(n, l)| n.is_some() != l.is_some())
+        {
+            return Err(ReconfigureError::DirectionsChanged);
+        }
+        for c in new.iter().flatten() {
+            c.validate()?;
+        }
+        for (c, live) in new.into_iter().zip(&self.shared.live) {
+            if let (Some(c), Some(live)) = (c, live) {
+                live.publish(c)?;
+            }
+        }
+        Ok(())
     }
 
     /// Why the fast path failed open, if it did. Traffic is flowing
@@ -496,6 +540,11 @@ fn schedule_loop(
     'run: loop {
         let now = clock.now();
         shared.heartbeat.store(now, Relaxed);
+        for (s, live) in [down.as_mut(), up.as_mut()].into_iter().zip(&shared.live) {
+            if let (Some(s), Some(live)) = (s, live) {
+                s.sync(live, now);
+            }
+        }
         if shared.stop.load(Relaxed) || shared.failing_open.load(Relaxed) {
             break;
         }
