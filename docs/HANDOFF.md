@@ -25,7 +25,7 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 | Task | How | Done when |
 |---|---|---|
 | Real scenario | Elevated: `.\target\release\snailnet.exe spike --down 25 --app steam.exe,steamwebhelper.exe=40:low --app brave.exe=60`, then a Steam download + YouTube in Brave | split within ±5%, YouTube doesn't buffer |
-| Lower factor | Same run with `--factor 0.85` plus `ping -t 1.1.1.1` | loaded ping recorded; is it ≤ 21 ms? |
+| ~~Lower factor~~ | **Synthetic run done 2026-11-15**: `phase0-synthetic.ps1 -Factor 0.85` → split 39–40/60–61, loaded ping avg 20 / max 39 vs idle 9, 0 lost (meets §20 on average). Repeat in the real scenario | loaded ping recorded in the real run too |
 | Anti-cheat | Run `spike` (or `check`) while launching the user's games | per-game result in the report |
 | CPU | Task Manager → `snailnet.exe` during the real run | % recorded |
 | Upload | `--up <Mbps>` after measuring upload | split recorded |

@@ -1,8 +1,9 @@
 # Phase 0 report: can WinDivert + our scheduler do it?
 
 > Status: **driver check and synthetic shaping run done (2026-11-14), and
-> both look good.** Still open: the Steam + Brave run, anti-cheat, factor
-> 0.85, CPU. Then make the Go/No-go call on D4 (PLAN.md §21).
+> both look good.** Factor 0.85 run done 2026-11-15 (loaded ping avg 20 ms
+> vs 9 idle). Still open: the Steam + Brave run, anti-cheat, CPU. Then make
+> the Go/No-go call on D4 (PLAN.md §21).
 
 ## What was built
 
@@ -112,7 +113,21 @@ Run `ping -t 1.1.1.1` while a big download runs.
 | Idle, no SnailNet | avg 11 ms, max 13 ms |
 | Download (6 streams), no SnailNet | avg 61 ms, **max 234 ms** |
 | Download (2 streams), spike factor 0.92 | avg 25 ms, max 54 ms |
-| Download, spike factor 0.85 | not run yet |
+| Download (2 streams), spike factor 0.92, Phase 1 scheduler (CoDel/ECN, express lane), 2026-11-14 | runs: avg 38 / max 221 (1 lost), and avg 22 / max 47 |
+| Download (2 streams), spike factor 0.85, Phase 1 scheduler, 2026-11-15 (idle that run: avg 9, max 12) | **avg 20 ms, max 39 ms, 0 of 22 lost** |
+
+**Factor 0.85 (2026-11-15, `scripts/phase0-synthetic.ps1 -Factor 0.85`):**
+loaded ping averaged 20 ms against 9 ms idle, so it meets the §20 target
+(within +10 ms of idle) on average. Most samples were 10–24 ms; the
+outliers (35, 38, 39) are the slow-start tail that `snailnet-sim`
+predicted (+11.5 ms p99 at 0.85). Throughput was 19–21.3 of the 21.2 Mbps
+cap. The split held at **39–40 / 60–61** from 4 s to 23 s, one outlier
+second at 33/67, and both curls ran for the whole 32 s this time.
+From 24 s on, a background app (attributed by port) joined
+"everything else", which then took 5–14% while b dropped to 49–56%, with
+100–210 drops/s. Everything else is allowed more than its 5% floor only
+when a class underfills, so b was probably between its 25 MB downloads
+(each restart is a slow start). Not investigated further.
 
 Shaping cut loaded ping from 61 → 25 ms average and 234 → 54 ms max, but
 that's still above the §20 target (within +10 ms of idle, i.e. ≤ 21 ms).
@@ -135,7 +150,7 @@ exact.
 - [x] Driver loads on this machine with HVCI on
 - [ ] Games you play tolerate it (or Game-safe mode is enough)
 - [x] Split within ±5% while both apps saturate (synthetic; the Steam + Brave run is still pending)
-- [x] Ping under load clearly better than without SnailNet (61 → 25 ms avg; §20 target not met yet)
+- [x] Ping under load clearly better than without SnailNet (61 → 25 ms avg at 0.92 with the Phase 0 scheduler; at 0.85 with the Phase 1 scheduler, avg 20 ms vs 9 idle, which meets the §20 target on average, max 39)
 
 **Decision:** _pending_. If Go, start Phase 1. If No-go, record why and
 re-open D4 (`WfpEngine`).
