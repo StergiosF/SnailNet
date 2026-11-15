@@ -5,7 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::clock::{NANOS_PER_SEC, Nanos};
 use crate::parse::tls::host_name;
@@ -20,7 +20,7 @@ pub enum SiteError {
 
 /// One website: an id for rules (`site:youtube`), a display name, and the
 /// domain patterns that belong to it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SiteDef {
     pub id: String,

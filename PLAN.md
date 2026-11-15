@@ -74,7 +74,7 @@ Settled during the planning interview. Change these only deliberately, and note 
 | D4 | Engine | **WinDivert 2.2** behind a `PacketEngine` trait | Signed, proven, per-process info; can be swapped for a custom WFP driver later. **Phase 0: Go (2026-11-15)**, see `docs/phase0-report.md`; anti-cheat still untested |
 | D5 | Line speed | Auto speed test, adaptive afterwards, manual override, **Low-latency mode** | % needs a 100%; low latency is the standout feature |
 | D6 | Primary use | Gaming ping + taming big downloads (game download 40% / YouTube 60%) | Drives defaults and presets |
-| D7 | Per-site rules | **Yes**, YouTube, Twitch, etc. inside browsers | YouTube is a tab, not an app |
+| D7 | Per-site rules | **Yes**, YouTube, Twitch, etc. inside browsers; **a site rule applies in every app and beats the app's rule** (2026-11-16, §8.3) | YouTube is a tab, not an app |
 | D8 | Priority | **% = how much, priority = who goes first** | Priority lowers latency without changing bandwidth shares |
 | D9 | v1 extras | Smart (Focus boost, Low-latency mode) + Control (profiles, block, new-app prompt, app families) | Differentiators plus essentials |
 | D10 | Unlisted apps | One **"Everything else"** slice | New apps can never starve your rules |
@@ -345,7 +345,7 @@ v1 packs: YouTube, Twitch, Netflix, Disney+, Prime Video, Spotify, Kick, Zoom, G
 ### 8.3 Matching and precedence
 
 1. A flow belongs to an **app family** (from PID).
-2. If that family is a browser (or any app the user enables "per-site" on), and the flow's domain matches a site rule → the flow's class is the **site rule**.
+2. If the flow's domain matches a site rule → the flow's class is the **site rule**, **in any app** (decided 2026-11-16: no browser list or per-app switch; a site beats the app's own rule, so the Spotify app counts as Spotify and a YouTube video in Discord as YouTube).
 3. Else → the app's rule, else Everything else.
 
 In the UI, sites appear **nested under the browser** ("Chrome ▸ YouTube"), but in the split bar a site can have its own slice.

@@ -32,6 +32,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::classify::App;
 use crate::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};
+use crate::sites::{SiteDef, SitePack};
 
 /// The schema version this build writes and reads.
 pub const CONFIG_VERSION: u32 = 1;
@@ -57,6 +58,10 @@ pub struct Config {
     pub line: Line,
     #[serde(default)]
     pub profiles: Vec<Profile>,
+    /// The user's own sites (PLAN.md §8.2 "Add a custom site"). One with a
+    /// shipped site's id replaces that site.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<SiteDef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -132,7 +137,8 @@ pub struct Target {
 pub enum TargetKind {
     Family,
     Exe,
-    /// Recognised from Phase 2 (PLAN.md §8). Until then it matches nothing.
+    /// A website from the site packs or the user's custom sites (PLAN.md
+    /// §8). Matched per flow by name, in any app, before app rules (§8.3).
     Site,
 }
 
@@ -151,7 +157,15 @@ impl Target {
         }
     }
 
-    /// Does this target cover `app`?
+    pub fn site(id: &str) -> Self {
+        Self {
+            kind: TargetKind::Site,
+            id: id.into(),
+        }
+    }
+
+    /// Does this target cover `app`? (Site targets never do: they match
+    /// flows, see [`Plan::site_class`].)
     pub fn matches(&self, app: &App) -> bool {
         let id = self.id.to_lowercase();
         match self.kind {
@@ -273,6 +287,7 @@ impl Default for Config {
                 name: "Balanced".into(),
                 rules: Vec::new(),
             }],
+            sites: Vec::new(),
         }
     }
 }
@@ -349,6 +364,27 @@ impl Config {
                 self.active_profile
             ));
         }
+        for (i, s) in self.sites.iter().enumerate() {
+            s.validate()
+                .map_err(|e| RulesError::Invalid(e.to_string()))?;
+            if self.sites[..i].iter().any(|t| t.id == s.id) {
+                return bad(format!("custom site {:?} is defined twice", s.id));
+            }
+        }
+        let pack = SitePack::builtin();
+        let known = |id: &str| {
+            pack.sites.iter().any(|s| s.id == id) || self.sites.iter().any(|s| s.id == id)
+        };
+        for p in &self.profiles {
+            for r in &p.rules {
+                if r.target.kind == TargetKind::Site && !known(&r.target.id.to_lowercase()) {
+                    return bad(format!(
+                        "profile {:?}: {} is not a known site",
+                        p.id, r.target
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -403,6 +439,7 @@ impl Config {
             targets: rules.iter().map(|r| r.target.clone()).collect(),
             prios: rules.iter().map(|r| r.priority).collect(),
             shape_lan: !self.settings.lan_exempt,
+            custom_sites: self.sites.clone(),
         }
     }
 }
@@ -447,6 +484,8 @@ pub struct Plan {
     pub targets: Vec<Target>,
     pub prios: Vec<Priority>,
     pub shape_lan: bool,
+    /// For the domain → site matcher, with the shipped packs.
+    pub custom_sites: Vec<SiteDef>,
 }
 
 impl Plan {
@@ -466,6 +505,19 @@ impl Plan {
             .iter()
             .position(|t| t.matches(app))
             .unwrap_or(self.other_class())
+    }
+
+    /// The class of a flow recognised as site `id`, if a rule claims that
+    /// site. Takes precedence over [`Plan::class_of`] (PLAN.md §8.3).
+    pub fn site_class(&self, id: &str) -> Option<usize> {
+        self.targets
+            .iter()
+            .position(|t| t.kind == TargetKind::Site && t.id.eq_ignore_ascii_case(id))
+    }
+
+    /// Whether flows need to be named at all.
+    pub fn has_site_rules(&self) -> bool {
+        self.targets.iter().any(|t| t.kind == TargetKind::Site)
     }
 
     pub fn prio_of(&self, class: usize) -> Priority {
@@ -706,5 +758,44 @@ name = "Gaming"
         assert!(l("fast").is_err());
         assert_eq!(String::from(Limit::Mbps(2.5)), "2.5 Mbps");
         assert_eq!(String::from(Limit::Percent(20)), "20%");
+    }
+
+    #[test]
+    fn site_rules_take_their_own_class() {
+        let text = with_profile(&(rule("family", "brave", 3000) + &rule("site", "YouTube", 4000)));
+        let p = Config::parse(&text).unwrap().plan();
+        assert!(p.has_site_rules());
+        assert_eq!(p.site_class("youtube"), Some(1));
+        assert_eq!(p.site_class("twitch"), None);
+        let app = App {
+            family: "youtube".into(),
+            ..App::unknown()
+        };
+        assert_eq!(
+            p.class_of(&app),
+            p.other_class(),
+            "a site never matches an app"
+        );
+        let no_sites = Config::parse(&with_profile(&rule("family", "brave", 3000)))
+            .unwrap()
+            .plan();
+        assert!(!no_sites.has_site_rules());
+    }
+
+    #[test]
+    fn unknown_sites_are_refused_and_custom_ones_accepted() {
+        let e = err(&with_profile(&rule("site", "myintranet", 1000)));
+        assert!(e.contains("site:myintranet is not a known site"), "{e}");
+        let text = with_profile(&rule("site", "myintranet", 1000))
+            + "[[sites]]\nid = \"myintranet\"\nname = \"Intranet\"\ndomains = [\"*.corp.example\"]\n";
+        let c = Config::parse(&text).unwrap();
+        assert_eq!(c.plan().custom_sites[0].id, "myintranet");
+        assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
+        let twice = text.clone()
+            + "[[sites]]\nid = \"myintranet\"\nname = \"Again\"\ndomains = [\"a.example\"]\n";
+        assert!(err(&twice).contains("defined twice"));
+        let bad = with_profile("")
+            + "[[sites]]\nid = \"x\"\nname = \"X\"\ndomains = [\"not a domain\"]\n";
+        assert!(err(&bad).contains("not a domain pattern"));
     }
 }
