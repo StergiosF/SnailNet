@@ -18,11 +18,16 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   only when asked). CI (`.github/workflows/ci.yml`, `fuzz.yml`) has never
   run on GitHub yet.
 - **Next, in order (pick with the user):**
-  1. **Phase 3 continued** (no user needed): the split bar (§14.3, the
-     signature component), rule editor, system accent via `UISettings`,
-     Windows 10 fallback for Mica (today the window is transparent +
-     `mica` only, so Win10 would show through), Snap layouts on the
-     custom maximize button, tray + flyout, first run.
+  1. **Phase 3 continued** (no user needed). Done 2026-11-16: the split
+     bar (§14.3), the **rule editor** (side panel: give a slice, on/off,
+     share or "only when free", priority, ceilings per direction,
+     remove; picker for sites + seen apps; list rows open it, quiet
+     rules stay listed), **system accent** via `UISettings`
+     (`window.rs`), **Windows 10 fallback** (solid layer colour, no
+     Acrylic). Open user questions: Acrylic on Win10 after all? Snap
+     layouts need a hack (wry hosts WebView2 windowed; see the comment
+     in `TitleBar.svelte`): do it, or wait for upstream? Still to do:
+     tray + flyout, first run, then look at it all in a real window.
   2. **Phase 2 exit check** (needs the user): start the service, play
      YouTube in Brave with secure DNS on and off, watch `snailnet top`
      (`names:`/`sites:` lines) and the log; add missing domains to
@@ -44,7 +49,12 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 - Svelte: `src/lib/service.svelte.ts` (runes store), `types.ts` (mirrors
   the IPC serde JSON — keep in step with `snailnet-ipc`), `format.ts`
   (§14.7 number rules, vitest), `i18n/en.json` (all strings), components
-  `TitleBar`, `Header`, `InfoBar`, `AppList`, `Snail`. Tokens in
+  `TitleBar`, `Header`, `InfoBar`, `AppList`, `Snail`, `SplitBar`,
+  `RuleEditor` (+ `Segmented`, `ToggleSwitch`). `rules.ts` holds the
+  rule edits as pure functions (a rule is a bar *slice* when enabled with
+  share > 0; giving one carves from Everything else first), `editor.svelte.ts`
+  which panel is open, `system.ts` the accent/backdrop. The IPC `Snapshot`
+  now carries `sites` (every site a rule may name). Tokens in
   `src/app.css` (Fluent light/dark/high contrast; Segoe Fluent Icons).
 - Gate: `npm run check`, `npm run lint`, `npm test` in `app/` plus the
   cargo gate. Versions pinned exactly (Tauri 2.12.5, Svelte 5.57.3, Vite

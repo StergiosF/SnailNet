@@ -1,6 +1,6 @@
 <script lang="ts">
   // The split bar (PLAN.md §14.3): one slice per enabled rule of the active
-  // profile, then Everything else. Drag a divider to trade share between
+  // profile with a share above 0, then Everything else. Drag a divider to trade share between
   // its neighbours (1% steps, Shift 5%, Alt 0.1%), or focus it and use the
   // arrow keys; click a slice to type its percentage. Each slice's inner
   // fill shows what it's using right now against what it's guaranteed.
@@ -8,12 +8,13 @@
   import { className, mbps, percent, targetLabel } from "../format";
   import { t } from "../i18n";
   import { service } from "../service.svelte";
+  import { isSlice } from "../rules";
   import { TOTAL, moveDivider, normalize, setShare } from "../split";
   import type { SaveError } from "../types";
 
   const KEY_SAVE_DELAY_MS = 600;
 
-  const rules = $derived(service.activeProfile?.rules.filter((r) => r.enabled) ?? []);
+  const rules = $derived(service.activeProfile?.rules.filter(isSlice) ?? []);
   const saved = $derived(normalize(rules.map((r) => r.share)));
 
   let draft = $state<number[] | null>(null);

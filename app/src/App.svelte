@@ -1,10 +1,11 @@
 <script lang="ts">
   // Main window: title bar, header, the state that needs attention (if
-  // any), the live list.
+  // any), the split bar, the live list, and the rule editor's side panel.
   import { onMount } from "svelte";
   import AppList from "./lib/components/AppList.svelte";
   import Header from "./lib/components/Header.svelte";
   import InfoBar from "./lib/components/InfoBar.svelte";
+  import RuleEditor from "./lib/components/RuleEditor.svelte";
   import SplitBar from "./lib/components/SplitBar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import { stateKind } from "./lib/format";
@@ -87,6 +88,7 @@
     {/if}
     <AppList {loading} />
   </main>
+  <RuleEditor />
 </div>
 
 <style>

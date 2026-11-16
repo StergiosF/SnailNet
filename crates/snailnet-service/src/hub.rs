@@ -11,10 +11,11 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::rules::{Config, Line, Plan, Rule};
+use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
-    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, ServiceState, SiteTick,
-    Snapshot, StatsTick,
+    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, ServiceState, SiteInfo,
+    SiteTick, Snapshot, StatsTick,
 };
 use tokio::sync::broadcast;
 
@@ -143,6 +144,7 @@ impl Hub {
             state: i.state.clone(),
             config: i.config.clone(),
             apps: i.apps.clone(),
+            sites: known_sites(&i.config),
         }
     }
 
@@ -396,6 +398,29 @@ fn tag_ticks(
     (families, sites)
 }
 
+/// Every site a rule may name (custom sites replace shipped ones with the
+/// same id), sorted by display name.
+fn known_sites(config: &Config) -> Vec<SiteInfo> {
+    let pack = SitePack::builtin();
+    let mut out: Vec<SiteInfo> = pack
+        .sites
+        .iter()
+        .filter(|s| !config.sites.iter().any(|c| c.id == s.id))
+        .chain(&config.sites)
+        .map(|s| SiteInfo {
+            id: s.id.clone(),
+            name: s.name.clone(),
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use snailnet_core::rules::Target;
@@ -421,6 +446,26 @@ mod tests {
             ceiling: None,
             enabled: true,
         }
+    }
+
+    #[test]
+    fn the_snapshot_lists_known_sites_with_custom_ones_replacing_shipped() {
+        let mut config = Config::default();
+        config.sites.push(snailnet_core::sites::SiteDef {
+            id: "youtube".into(),
+            name: "My Tube".into(),
+            domains: vec!["mytube.example".into()],
+        });
+        let sites = known_sites(&config);
+        let tubes: Vec<_> = sites.iter().filter(|s| s.id == "youtube").collect();
+        assert_eq!(tubes.len(), 1);
+        assert_eq!(tubes[0].name, "My Tube");
+        assert!(sites.len() >= 5, "the shipped pack is listed too");
+        let names: Vec<String> = sites.iter().map(|s| s.name.to_lowercase()).collect();
+        assert!(names.is_sorted());
+
+        let (_t, hub) = hub();
+        assert_eq!(hub.snapshot().sites, known_sites(&Config::default()));
     }
 
     #[test]

@@ -3,7 +3,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Latest, Link, SaveError, ServiceState, Snapshot, StatsTick } from "./types";
+import { withBar } from "./rules";
+import type { Latest, Link, Rule, SaveError, ServiceState, Snapshot, StatsTick } from "./types";
 
 class Service {
   link = $state<Link>({ kind: "connecting" });
@@ -23,16 +24,19 @@ class Service {
   /** Display names of sites seen in the stats, kept after they go quiet. */
   siteNames = $state<Record<string, string>>({});
 
-  /** Save new slice sizes for the active profile's enabled rules, in order
-   *  (`shares` is the bar's full list; Everything else is dropped). Resolves
-   *  to the new revision; rejects with a SaveError. */
-  async saveShares(shares: number[]): Promise<number> {
+  /** Save the active profile's rules. Resolves to the new revision;
+   *  rejects with a SaveError (a stale `rev` is a conflict). */
+  async saveRules(rules: Rule[]): Promise<number> {
     const snap = this.snapshot;
     const profile = this.activeProfile;
     if (!snap || !profile) throw { kind: "failed", message: "not connected" } satisfies SaveError;
-    let k = 0;
-    const rules = profile.rules.map((r) => (r.enabled ? { ...r, share: shares[k++] ?? r.share } : r));
     return invoke<number>("set_rules", { profileId: profile.id, rules, rev: snap.rev });
+  }
+
+  /** Save new slice sizes (the bar's full list; Everything else is
+   *  dropped) onto the active profile's slices, in order. */
+  async saveShares(shares: number[]): Promise<number> {
+    return this.saveRules(withBar(this.activeProfile?.rules ?? [], shares));
   }
 
   async start(): Promise<void> {

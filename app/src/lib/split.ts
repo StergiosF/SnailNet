@@ -74,6 +74,32 @@ export function setShare(shares: number[], i: number, value: number): number[] {
   return out;
 }
 
+/** A new slice of up to `want`, inserted before Everything else: taken from
+ *  Everything else first (down to its floor), then from the rules in
+ *  proportion to what they have above 1% (PLAN.md §11.1). The new slice
+ *  may come out smaller than `want`, even 0, when there's no room. */
+export function addSlice(shares: number[], want: number): number[] {
+  const last = shares.length - 1;
+  const other = shares[last] ?? TOTAL;
+  const fromOther = Math.max(0, Math.min(want, other - FLOOR));
+  const rules = shares.slice(0, last);
+  const room = rules.map((s) => Math.max(0, s - MIN_RULE));
+  const fromRules = Math.min(want - fromOther, room.reduce((a, b) => a + b, 0));
+  const taken = apportion(fromRules, room);
+  return [...rules.map((s, k) => s - (taken[k] ?? 0)), fromOther + fromRules, other - fromOther];
+}
+
+/** Drop slice `i` (a rule); every other slice, Everything else included,
+ *  gets a part of its share in proportion to its size (PLAN.md §9.7). */
+export function removeSlice(shares: number[], i: number): number[] {
+  const last = shares.length - 1;
+  if (i < 0 || i >= last) return shares;
+  const freed = shares[i] ?? 0;
+  const rest = shares.filter((_, j) => j !== i);
+  const extra = apportion(freed, rest);
+  return rest.map((s, k) => s + (extra[k] ?? 0));
+}
+
 export function isValid(shares: number[]): boolean {
   const sum = shares.reduce((a, b) => a + b, 0);
   return sum === TOTAL && (shares[shares.length - 1] ?? 0) >= FLOOR;

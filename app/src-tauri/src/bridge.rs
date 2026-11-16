@@ -204,6 +204,7 @@ mod tests {
             state: ServiceState::Shaping,
             config: Default::default(),
             apps: Vec::new(),
+            sites: Vec::new(),
         }
     }
 

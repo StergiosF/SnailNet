@@ -26,10 +26,21 @@ export interface Target {
 
 export interface Rule {
   target: Target;
-  /** Basis points: 4500 = 45%. */
+  /** Basis points: 4500 = 45%. 0 = only when the line is free. */
   share: number;
   priority: Priority;
+  /** Hard caps per direction, as snailnet-core writes them: "20%" or
+   *  "5 Mbps". Absent = no cap. */
+  ceiling?: { down?: string; up?: string };
   enabled: boolean;
+}
+
+/** A ceiling, parsed (rules.ts parseLimit / formatLimit). */
+export type Limit = { unit: "percent"; value: number } | { unit: "mbps"; value: number };
+
+export interface SiteInfo {
+  id: string;
+  name: string;
 }
 
 export interface Profile {
@@ -63,6 +74,8 @@ export interface Snapshot {
   state: ServiceState;
   config: Config;
   apps: AppInfo[];
+  /** Every site a rule may name (missing from older services). */
+  sites?: SiteInfo[];
 }
 
 export interface ClassTick {

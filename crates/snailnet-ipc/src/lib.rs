@@ -190,6 +190,17 @@ pub struct Snapshot {
     pub config: Config,
     /// Apps seen since shaping last started.
     pub apps: Vec<AppInfo>,
+    /// Every site a rule may name: the shipped pack plus the user's own,
+    /// sorted by name. Missing from older services.
+    #[serde(default)]
+    pub sites: Vec<SiteInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SiteInfo {
+    /// What a site rule names (`youtube`).
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -451,6 +462,10 @@ mod tests {
                         family: "steam".into(),
                         name: "Steam".into(),
                         exe: "steam.exe".into(),
+                    }],
+                    sites: vec![SiteInfo {
+                        id: "youtube".into(),
+                        name: "YouTube".into(),
                     }],
                 }),
             },
