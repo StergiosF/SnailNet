@@ -3,13 +3,17 @@
   // any), the split bar, the live list, and the rule editor's side panel.
   import { onMount } from "svelte";
   import AppList from "./lib/components/AppList.svelte";
+  import FirstRun from "./lib/components/FirstRun.svelte";
   import Header from "./lib/components/Header.svelte";
   import InfoBar from "./lib/components/InfoBar.svelte";
+  import LineDialog from "./lib/components/LineDialog.svelte";
   import RuleEditor from "./lib/components/RuleEditor.svelte";
   import SplitBar from "./lib/components/SplitBar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import { stateKind } from "./lib/format";
   import { t } from "./lib/i18n";
+  import { dismissFirstRun, firstRunDismissed, needsFirstRun } from "./lib/line";
+  import { lineDialog } from "./lib/lineDialog.svelte";
   import { service } from "./lib/service.svelte";
   import { startSystem } from "./lib/system";
 
@@ -20,7 +24,25 @@
     });
   });
 
-  type Bar = { severity: "info" | "caution" | "critical"; title: string; message: string };
+  // First run (§14.5): once the service answers with no speed set; it
+  // then stays until finished, even after a speed is saved.
+  let firstRunDone = $state(firstRunDismissed());
+  let firstRun = $state(false);
+  $effect(() => {
+    if (needsFirstRun(service.link, service.snapshot, firstRunDone)) firstRun = true;
+  });
+  function finishFirstRun() {
+    dismissFirstRun();
+    firstRunDone = true;
+    firstRun = false;
+  }
+
+  type Bar = {
+    severity: "info" | "caution" | "critical";
+    title: string;
+    message: string;
+    action?: { label: string; onclick: () => void };
+  };
 
   const bar = $derived.by((): Bar | null => {
     const link = service.link;
@@ -45,7 +67,12 @@
     if (s === null) return null;
     switch (stateKind(s)) {
       case "unshaped":
-        return { severity: "info", title: t("state.unshaped.title"), message: t("state.unshaped.body") };
+        return {
+          severity: "info",
+          title: t("state.unshaped.title"),
+          message: t("state.unshaped.body"),
+          action: { label: t("state.unshaped.action"), onclick: () => lineDialog.show() },
+        };
       case "retrying":
         return {
           severity: "caution",
@@ -75,20 +102,25 @@
 
 <div class="window">
   <TitleBar />
-  <main>
-    <Header />
-    {#if bar}
-      <div class="bar"><InfoBar {...bar} /></div>
-    {/if}
-    {#if service.link.kind === "connecting"}
-      <p class="visually-hidden" role="status">{t("link.connecting")}</p>
-    {/if}
-    {#if service.link.kind === "connected" && service.snapshot}
-      <SplitBar />
-    {/if}
-    <AppList {loading} />
-  </main>
+  {#if firstRun}
+    <FirstRun onfinish={finishFirstRun} />
+  {:else}
+    <main>
+      <Header />
+      {#if bar}
+        <div class="bar"><InfoBar {...bar} /></div>
+      {/if}
+      {#if service.link.kind === "connecting"}
+        <p class="visually-hidden" role="status">{t("link.connecting")}</p>
+      {/if}
+      {#if service.link.kind === "connected" && service.snapshot}
+        <SplitBar />
+      {/if}
+      <AppList {loading} />
+    </main>
+  {/if}
   <RuleEditor />
+  <LineDialog />
 </div>
 
 <style>

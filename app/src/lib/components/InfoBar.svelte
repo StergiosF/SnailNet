@@ -1,18 +1,28 @@
 <script lang="ts">
-  // A Windows-style InfoBar: severity icon, bold title, message. Used for
-  // the service and connection states of PLAN.md §14.8.
+  // A Windows-style InfoBar: severity icon, bold title, message, and an
+  // optional action button. Used for the service and connection states of
+  // PLAN.md §14.8.
   let {
     severity,
     title,
     message,
-  }: { severity: "info" | "caution" | "critical"; title: string; message: string } = $props();
+    action,
+  }: {
+    severity: "info" | "caution" | "critical";
+    title: string;
+    message: string;
+    action?: { label: string; onclick: () => void };
+  } = $props();
 
   const glyph = { info: "", caution: "", critical: "" };
 </script>
 
-<div class="infobar {severity}" role={severity === "info" ? "status" : "alert"}>
+<div class="infobar {severity}">
   <i class="icon" aria-hidden="true">{glyph[severity]}</i>
-  <p><strong>{title}</strong> {message}</p>
+  <p role={severity === "info" ? "status" : "alert"}><strong>{title}</strong> {message}</p>
+  {#if action}
+    <button type="button" class="btn" onclick={action.onclick}>{action.label}</button>
+  {/if}
 </div>
 
 <style>
@@ -45,6 +55,7 @@
     color: var(--critical);
   }
   p {
+    flex: 1;
     margin: 0;
     max-width: 75ch;
     color: var(--text-primary);
@@ -52,5 +63,10 @@
   strong {
     font-weight: 600;
     margin-right: 8px;
+  }
+  .btn {
+    flex: none;
+    align-self: center;
+    margin: -6px 0;
   }
 </style>

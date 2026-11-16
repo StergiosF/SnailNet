@@ -3,6 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { withSpeeds } from "./line";
 import { withBar } from "./rules";
 import type { Latest, Link, Rule, SaveError, ServiceState, Snapshot, StatsTick } from "./types";
 
@@ -37,6 +38,15 @@ class Service {
    *  dropped) onto the active profile's slices, in order. */
   async saveShares(shares: number[]): Promise<number> {
     return this.saveRules(withBar(this.activeProfile?.rules ?? [], shares));
+  }
+
+  /** Save the line speed (PLAN.md §12.2 `SetLine`); null = don't shape
+   *  that direction. Keeps the factor. Resolves to the new revision;
+   *  rejects with a SaveError. */
+  async saveLine(down: number | null, up: number | null): Promise<number> {
+    const snap = this.snapshot;
+    if (!snap) throw { kind: "failed", message: "not connected" } satisfies SaveError;
+    return invoke<number>("set_line", { line: withSpeeds(snap.config.line, down, up), rev: snap.rev });
   }
 
   async start(): Promise<void> {

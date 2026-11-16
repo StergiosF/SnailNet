@@ -13,6 +13,7 @@
 //! returns the latest of each.
 
 pub mod bridge;
+pub mod line;
 pub mod window;
 
 use std::sync::atomic::AtomicBool;
@@ -173,7 +174,12 @@ pub fn run() {
                 })?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![current, set_rules, window::system])
+        .invoke_handler(tauri::generate_handler![
+            current,
+            set_rules,
+            line::set_line,
+            window::system
+        ])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");
 }
