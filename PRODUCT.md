@@ -7,8 +7,8 @@
 web
 
 (A Windows 10/11 x64 desktop app: Tauri 2 shell, Svelte 5 UI rendered in
-WebView2. It should feel like part of Windows, so Windows 11 conventions
-outrank web conventions.)
+WebView2. Windows conventions for behaviour (caption buttons, tray,
+keyboard, high contrast); its own look, not Windows'.)
 
 ## Users
 
@@ -66,8 +66,10 @@ priorities and absolute limits and make the user do the arithmetic.
 - Name: **SnailNet**. Tagline: "Put the bandwidth hogs in the slow lane."
 - A tiny snail glyph in the tray and on empty states only; never in the
   way.
-- Native Windows 11 look (PLAN.md §14.1, decisions D11–D13); the user
-  delegated visual judgment within that brief.
+- Its own calm dark look, "the Ledger" (PLAN.md §14.1, D11–D13): a
+  sentence on who is using the line, then the slices in large,
+  hyperlegible type. Chosen by the user from real-size mockups over
+  Windows 11 native ("looks like a Windows application").
 
 ## Evidence on Hand
 
@@ -86,7 +88,7 @@ marketing). Do not fabricate usage or proof.
 
 ## Accessibility & Inclusion
 
-WCAG 2.2 AA contrast in light and dark; full keyboard operation; visible
-Fluent-style focus; live speeds throttled for screen readers (on request,
+WCAG 2.2 AA contrast on the dark ground; full keyboard operation; visible
+focus; live speeds throttled for screen readers (on request,
 not 4× a second); respects Windows text scaling and high-contrast mode; no
 information by colour alone (PLAN.md §14.9).

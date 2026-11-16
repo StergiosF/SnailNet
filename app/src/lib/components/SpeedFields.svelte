@@ -95,21 +95,22 @@
     font-size: 12px;
     color: var(--text-secondary);
   }
-  /* A Fluent TextBox with the unit inside, like the rule editor's boxes. */
+  /* A text box with the unit inside. */
   .box {
     display: flex;
     align-items: center;
-    height: 32px;
-    border: 1px solid var(--stroke-card);
-    border-bottom-color: var(--text-tertiary);
+    height: 40px;
     border-radius: var(--radius-control);
-    background: var(--surface-card);
+    background: var(--surface-2);
+  }
+  .box:hover {
+    background: var(--surface-3);
   }
   .box:focus-within {
-    border-bottom: 2px solid var(--accent);
+    outline: 2px solid var(--focus-outer);
   }
   .box.invalid {
-    border-bottom: 2px solid var(--critical);
+    box-shadow: inset 0 0 0 1.5px var(--critical);
   }
   input {
     flex: 1;
@@ -136,22 +137,19 @@
   }
   .error {
     margin: 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--critical);
   }
   .hint {
     margin: 8px 0 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--text-secondary);
   }
   @media (forced-colors: active) {
     .box {
-      border-color: CanvasText;
-    }
-    .box:focus-within {
-      border-bottom-color: Highlight;
+      border: 1px solid CanvasText;
     }
   }
 </style>

@@ -1,62 +1,37 @@
 <script lang="ts">
-  // The tray flyout (PLAN.md §14.4): a glance while a game launches or a
-  // video stalls. Total speeds, what SnailNet is doing, the three busiest
-  // apps or sites with their slice, and the way to the main window. It
-  // hides on Escape and when it loses focus (tray.rs). Profile pills and
-  // Pause come with Phase 5.
+  // The tray flyout (PLAN.md §14.4): the quickest way to see who is using
+  // the line and to give something more. The main window's sentence (or
+  // the state that needs attention), a small live strip, every slice with
+  // − % +, and the way to the main window. It hides on Escape and when it
+  // loses focus (tray.rs).
   import { getCurrentWindow, Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import { mbps, stateKind, targetLabel, totalBps } from "../format";
+  import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
-  import { listRows, ruleChip } from "../rules";
+  import { glance, ledger, parts, statusText } from "../ledger";
+  import { noticeOf } from "../notice";
+  import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
-  import { startSystem } from "../system";
+  import type { Target } from "../types";
+  import { ui } from "../ui.svelte";
+  import AppIcon from "./AppIcon.svelte";
   import Snail from "./Snail.svelte";
 
-  const TOP = 3;
-
   onMount(() => {
-    void startSystem();
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
   });
 
-  const rules = $derived(service.activeProfile?.rules ?? []);
-  const rows = $derived(
-    listRows(service.stats?.down, service.stats?.up, rules, (target) =>
-      targetLabel(target, service.snapshot?.apps ?? [], service.siteNames),
-    )
-      .filter((r) => !r.idle)
-      .slice(0, TOP),
-  );
-  const down = $derived(totalBps(service.stats?.down));
-  const up = $derived(totalBps(service.stats?.up));
-
-  /** One line on what SnailNet is doing, and whether it needs a look. */
-  const status = $derived.by((): { text: string; tone: "ok" | "info" | "caution" } => {
-    const link = service.link;
-    if (link.kind === "connecting") return { text: t("link.connecting"), tone: "info" };
-    if (link.kind === "not_running") return { text: t("link.not_running.title"), tone: "caution" };
-    if (link.kind === "lost") return { text: t("link.lost.title"), tone: "caution" };
-    if (link.kind !== "connected") return { text: t("flyout.cantControl"), tone: "caution" };
-    const s = service.state;
-    if (s === null) return { text: t("link.connecting"), tone: "info" };
-    switch (stateKind(s)) {
-      case "starting":
-        return { text: t("state.starting"), tone: "info" };
-      case "unshaped":
-        return { text: t("state.unshaped.title"), tone: "info" };
-      case "retrying":
-        return { text: t("state.retrying.title"), tone: "caution" };
-      case "safe_mode":
-        return { text: t("state.safe_mode.title"), tone: "caution" };
-      case "shaping": {
-        const lowLatency = service.snapshot?.config.settings.low_latency ?? false;
-        return { text: t(lowLatency ? "flyout.sharing.lowLatency" : "flyout.sharing"), tone: "ok" };
-      }
-    }
-  });
+  const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
+  const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
+  const book = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
+  const lineMbps = $derived(service.snapshot?.config.line.down_mbps);
+  const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
+  const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
+  const notice = $derived(noticeOf(service.link, service.state, () => void openMain()));
+  const strip = $derived(book ? parts(book) : []);
+  const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));
 
   async function openMain() {
     const main = await Window.getByLabel("main");
@@ -71,50 +46,75 @@
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") void getCurrentWindow().hide();
   }
+  const ink = (i: number, shade: number) => (i >= 0 ? `var(--ink-${i})` : `var(--stone-${shade})`);
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 <div class="flyout">
-  <header>
-    <h1>{t("app.name")}</h1>
-    <p class="totals num">
-      <span aria-label="{t('header.down')} {mbps(down)} Mbps"><i class="icon" aria-hidden="true">&#xE896;</i>{mbps(down)}</span>
-      <span aria-label="{t('header.up')} {mbps(up)} Mbps"><i class="icon" aria-hidden="true">&#xE898;</i>{mbps(up)}</span>
-      <span class="unit" aria-hidden="true">Mbps</span>
-    </p>
-  </header>
-  <p class="status" data-tone={status.tone}>
-    <span class="dot" aria-hidden="true"></span>{status.text}
-  </p>
+  <p class="app">{t("app.name")}</p>
+  {#if notice}
+    <h1>{notice.title}</h1>
+    <p class="detail" role={notice.severity === "info" ? "status" : "alert"}>{notice.message}</p>
+  {:else if sentence}
+    <h1>{sentence.title}</h1>
+    <p class="detail">{sentence.detail}</p>
+  {:else}
+    <h1 class="wait">{t("link.connecting")}</h1>
+  {/if}
 
-  <section aria-labelledby="top-heading">
-    <h2 id="top-heading">{t("flyout.top")}</h2>
-    {#if rows.length === 0}
-      <div class="quiet">
-        <Snail size={32} />
-        <p>{t("flyout.quiet")}</p>
-      </div>
-    {:else}
-      <ul>
-        {#each rows as r (r.key)}
-          <li>
-            <span class="name">{r.name}</span>
-            <span class="speed num" aria-label="{t('list.down')} {mbps(r.down)} Mbps">
-              <i class="icon" aria-hidden="true">&#xE896;</i>{mbps(r.down)}
-            </span>
-            <span class="chip" class:ruled={r.rule >= 0}>{r.fixed ? "" : ruleChip(rules, r.rule)}</span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </section>
+  {#if book && service.stats}
+    <div class="bar" aria-hidden="true">
+      {#each strip as p (p.key)}
+        <i style:width="{(p.bps / scale) * 100}%" style:background={ink(p.ink, p.shade)}></i>
+      {/each}
+    </div>
+  {/if}
 
-  <footer>
-    <button type="button" class="accent-button" onclick={() => void openMain()}>
-      {t("flyout.open")}<i class="icon" aria-hidden="true">&#xE8A7;</i>
-    </button>
-  </footer>
+  {#if book}
+    <ul aria-label={t("split.label")}>
+      {#each book.slices as s (s.key)}
+        {@const pct = s.share === null ? null : Math.round(s.share / 100)}
+        <li>
+          <AppIcon target={s.target} name={s.name} size={20} />
+          <span class="who">
+            <b>{s.name}</b>
+            <span>{s.bps >= 50_000 ? `${mbps(s.bps)} Mbps · ` : ""}{statusText(s.status)}</span>
+          </span>
+          {#if s.enabled}
+            <button
+              type="button"
+              class="step"
+              disabled={!canStep(ui.rules, s.rule, -1)}
+              aria-label={t("row.less", { name: s.name })}
+              onclick={() => ui.change(stepShare(ui.rules, s.rule, -1))}>−</button
+            >
+            <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name: s.name, pct })}>
+              {#if pct === null}<small>{t("row.free")}</small>{:else}{pct}<small>%</small>{/if}
+            </output>
+            <button
+              type="button"
+              class="step"
+              disabled={!canStep(ui.rules, s.rule, 1)}
+              aria-label={t("row.more", { name: s.name })}
+              onclick={() => ui.change(stepShare(ui.rules, s.rule, 1))}>+</button
+            >
+          {:else}
+            <span class="n off">{t("row.off")}</span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <div class="quiet"><Snail size={32} /></div>
+  {/if}
+  {#if ui.error}
+    <p class="error" role="alert">{ui.error}</p>
+  {/if}
+
+  <button type="button" class="btn open" onclick={() => void openMain()}>
+    {t("flyout.open")}<i class="icon" aria-hidden="true">&#xE8A7;</i>
+  </button>
 </div>
 
 <style>
@@ -122,160 +122,135 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 16px 16px 0;
-    /* Windows 11 rounds the borderless window and draws its edge. */
+    padding: 16px;
     overflow: hidden;
   }
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+  .app {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
   }
   h1 {
     margin: 0;
-    font: 600 14px/20px var(--font-text);
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 700;
+    text-wrap: balance;
   }
-  .totals {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    margin: 0;
-    font: 600 20px/28px var(--font-display);
-  }
-  .totals span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .totals .icon {
-    font-size: 12px;
+  h1.wait {
     color: var(--text-secondary);
-  }
-  .totals .unit {
-    font: 12px/16px var(--font-text);
-    color: var(--text-secondary);
-  }
-  .status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 4px 0 16px;
-    font-size: 12px;
-    line-height: 16px;
-    color: var(--text-secondary);
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background: var(--text-tertiary);
-  }
-  .status[data-tone="ok"] .dot {
-    background: var(--accent);
-  }
-  .status[data-tone="caution"] .dot {
-    background: var(--caution);
-  }
-  .status[data-tone="caution"] {
-    color: var(--text-primary);
-  }
-  section {
-    flex: 1;
-    min-height: 0;
-  }
-  h2 {
-    margin: 0 0 4px;
-    font-size: 12px;
-    line-height: 16px;
     font-weight: 600;
+  }
+  .detail {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.4;
     color: var(--text-secondary);
+  }
+  .bar {
+    display: flex;
+    gap: 2px;
+    flex: none;
+    height: 8px;
+    margin-top: 14px;
+    border-radius: 3px;
+    background: var(--surface-1);
+    overflow: hidden;
+  }
+  .bar i {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 2px;
+    border-radius: 2px;
   }
   ul {
-    margin: 0;
+    flex: 1;
+    min-height: 0;
+    margin: 12px -8px 0;
     padding: 0;
     list-style: none;
-    border: 1px solid var(--stroke-card);
-    border-radius: var(--radius-card);
-    background: var(--surface-card);
+    overflow-y: auto;
   }
   li {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 64px 96px;
-    align-items: center;
-    gap: 12px;
-    min-height: 40px;
-    padding: 0 12px;
-  }
-  li + li {
-    border-top: 1px solid var(--stroke-divider);
-  }
-  .name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .speed {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
-    gap: 4px;
+    gap: 10px;
+    min-height: 48px;
+    padding: 0 8px;
+    border-radius: var(--radius-control);
   }
-  .speed .icon {
-    font-size: 10px;
-    color: var(--text-secondary);
+  li:hover {
+    background: var(--surface-1);
   }
-  .chip {
-    justify-self: end;
+  .who {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .who b {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .who span {
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 12px;
-    line-height: 16px;
     color: var(--text-secondary);
   }
-  .chip.ruled {
-    color: var(--accent-text);
+  .step {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+  }
+  .step:hover:not(:disabled) {
+    background: var(--surface-3);
+    color: var(--text-primary);
+  }
+  .step:disabled {
+    opacity: 0.35;
+  }
+  .n {
+    flex: none;
+    width: 50px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .n small {
+    font-size: 12px;
     font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .n.off {
+    width: auto;
+    font-size: 13px;
+    color: var(--text-secondary);
   }
   .quiet {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--stroke-card);
-    border-radius: var(--radius-card);
-    background: var(--surface-card);
+    flex: 1;
+    display: grid;
+    place-items: center;
   }
-  .quiet p {
-    margin: 0;
-    color: var(--text-secondary);
+  .error {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--critical);
   }
-  footer {
-    display: flex;
-    justify-content: flex-end;
-    margin: 16px -16px 0;
-    padding: 12px 16px;
-    border-top: 1px solid var(--stroke-card);
-    background: var(--surface-layer);
+  .open {
+    flex: none;
+    margin-top: 12px;
   }
-  .accent-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 32px;
-    padding: 0 16px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
-    background: var(--accent);
-    color: var(--on-accent);
-    font: inherit;
-    font-weight: 600;
-  }
-  .accent-button:hover {
-    filter: brightness(1.08);
-  }
-  .accent-button .icon {
+  .open .icon {
     font-size: 12px;
   }
 </style>

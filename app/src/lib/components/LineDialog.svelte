@@ -104,65 +104,63 @@
 </dialog>
 
 <style>
-  /* Fluent ContentDialog: a layer card over a smoke backdrop, the actions
-     in a darker footer band. */
   dialog {
-    width: min(448px, calc(100vw - 48px));
+    width: min(440px, calc(100vw - 48px));
     max-height: calc(100vh - 48px);
     padding: 0;
     overflow: auto;
-    border: 1px solid var(--stroke-card);
-    border-radius: var(--radius-card);
-    background: var(--surface-ground);
+    border: 0;
+    border-radius: 16px;
+    background: var(--surface-1);
     color: var(--text-primary);
-    box-shadow: 0 32px 64px rgb(0 0 0 / 0.19), 0 2px 21px rgb(0 0 0 / 0.15);
+    box-shadow:
+      0 0 0 1px var(--stroke-card),
+      0 24px 64px rgb(0 0 0 / 0.5);
   }
   dialog[open] {
-    animation: dialog-in 167ms var(--ease-out);
+    animation: rise 180ms var(--ease-out);
   }
   dialog::backdrop {
-    /* Fluent's smoke fill, the same in both themes. */
-    background: rgb(0 0 0 / 0.3);
+    background: rgb(0 0 0 / 0.5);
   }
-  @keyframes dialog-in {
+  @keyframes rise {
     from {
       opacity: 0;
-      transform: scale(1.05);
+      transform: translateY(8px);
     }
   }
   .content {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 24px;
-    background: var(--surface-layer);
+    padding: 24px 24px 8px;
   }
   h2 {
     margin: 0;
-    font: 600 20px/28px var(--font-display);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 700;
   }
   .content > p {
     margin: 0 0 4px;
     max-width: 60ch;
+    color: var(--text-secondary);
   }
   .error {
     margin: 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--critical);
   }
   .footer {
     display: flex;
+    flex-direction: row-reverse;
     gap: 8px;
-    padding: 24px;
-    border-top: 1px solid var(--stroke-divider);
-  }
-  .footer .btn {
-    flex: 1;
+    padding: 16px 24px 24px;
   }
   @media (forced-colors: active) {
     dialog {
-      border-color: CanvasText;
+      border: 1px solid CanvasText;
     }
   }
 </style>

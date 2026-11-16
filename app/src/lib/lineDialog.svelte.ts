@@ -1,5 +1,5 @@
 // Whether the connection-speed dialog is open, and which box it focuses.
-// Opened from the header's line figures and the "Watching only" InfoBar.
+// Opened from the header's line button and the "Watching only" notice.
 
 export type Direction = "down" | "up";
 

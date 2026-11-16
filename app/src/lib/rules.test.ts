@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   addRule,
   barShares,
+  canStep,
+  shareOf,
+  stepShare,
   clampLimit,
   formatLimit,
-  listRows,
   parseLimit,
   pickable,
   removeRule,
@@ -13,7 +15,7 @@ import {
   setRuleShare,
 } from "./rules";
 import { FLOOR, TOTAL, addSlice, isValid, removeSlice } from "./split";
-import type { DirStats, Rule, Target } from "./types";
+import type { Rule, Target } from "./types";
 
 const fam = (id: string): Target => ({ kind: "family", id });
 const rule = (id: string, share: number, extra: Partial<Rule> = {}): Rule => ({
@@ -105,32 +107,6 @@ describe("limits", () => {
   });
 });
 
-describe("listRows", () => {
-  const dir = (fams: [string, number][], sites: [string, number][] = []): DirStats => ({
-    shaped_bps: 0,
-    classes: [],
-    families: fams.map(([family, bps]) => ({ family, name: family.toUpperCase(), bps, unidentified_bps: 0 })),
-    sites: sites.map(([site, bps]) => ({ site, name: `S-${site}`, family: "brave", bps })),
-  });
-  const label = (t: Target) => `L-${t.id}`;
-
-  it("lists apps and sites by speed, then quiet rules by name", () => {
-    const rules = [rule("zed", 1000), rule("steam", 2000), { ...rule("x", 0), target: { kind: "site" as const, id: "youtube" } }];
-    const rows = listRows(dir([["steam", 5], ["brave", 1]], [["youtube", 3]]), null, rules, label);
-    expect(rows.map((r) => [r.key, r.rule, r.idle])).toEqual([
-      ["family:steam", 1, false],
-      ["site:youtube", 2, false],
-      ["family:brave", -1, false],
-      ["family:zed", 0, true],
-    ]);
-    expect(rows[3]?.name).toBe("L-zed");
-  });
-  it("marks unknown traffic as not ruleable", () => {
-    const rows = listRows(dir([["unknown", 5]]), null, [], label);
-    expect(rows[0]?.fixed).toBe(true);
-  });
-});
-
 describe("pickable", () => {
   it("offers sites then apps, minus ruled ones, filtered", () => {
     const sites = [{ id: "youtube", name: "YouTube" }, { id: "twitch", name: "Twitch" }];
@@ -142,5 +118,46 @@ describe("pickable", () => {
     const all = pickable(sites, apps, [rule("steam", 1000)], "");
     expect(all.map((p) => p.name)).toEqual(["YouTube", "Twitch", "Brave"]);
     expect(pickable(sites, apps, [], "tw").map((p) => p.target.id)).toEqual(["twitch"]);
+  });
+});
+
+describe("stepShare", () => {
+  const r: Rule[] = [
+    { target: { kind: "site", id: "youtube" }, share: 4500, priority: "normal", enabled: true },
+    { target: { kind: "family", id: "brave" }, share: 3000, priority: "normal", enabled: true },
+  ];
+
+  it("moves a slice 5% and the others make room", () => {
+    const up = stepShare(r, 0, 1);
+    expect(shareOf(up, 0)).toBe(5000);
+    expect(shareOf(up, -1)).toBeGreaterThanOrEqual(500);
+    expect(barShares(up).reduce((a, b) => a + b, 0)).toBe(10_000);
+  });
+
+  it("lands on a multiple of 5", () => {
+    const odd: Rule[] = [{ ...r[0]!, share: 4300 }, r[1]!];
+    expect(shareOf(stepShare(odd, 0, 1), 0)).toBe(4500);
+    expect(shareOf(stepShare(odd, 0, -1), 0)).toBe(4000);
+  });
+
+  it("steps Everything else too, never below 5%", () => {
+    expect(shareOf(stepShare(r, -1, 1), -1)).toBe(3000);
+    const full: Rule[] = [{ ...r[0]!, share: 6000 }, { ...r[1]!, share: 3500 }];
+    expect(canStep(full, -1, -1)).toBe(false);
+  });
+
+  it("gives an only-when-free rule a 5% slice, and never steps an off rule", () => {
+    const free: Rule[] = [{ ...r[0]!, share: 0 }, r[1]!];
+    expect(shareOf(stepShare(free, 0, 1), 0)).toBe(500);
+    expect(canStep(free, 0, -1)).toBe(false);
+    const off: Rule[] = [{ ...r[0]!, enabled: false }, r[1]!];
+    expect(canStep(off, 0, 1)).toBe(false);
+  });
+
+  it("keeps a rule at 1% at least", () => {
+    const small: Rule[] = [{ ...r[0]!, share: 300 }, r[1]!];
+    expect(shareOf(stepShare(small, 0, -1), 0)).toBe(100);
+    const tiny: Rule[] = [{ ...r[0]!, share: 100 }, r[1]!];
+    expect(canStep(tiny, 0, -1)).toBe(false);
   });
 });

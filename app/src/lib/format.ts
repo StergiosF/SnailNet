@@ -1,7 +1,7 @@
 // Numbers as PLAN.md §14.7 writes them: Mbps with one decimal below 100 and
 // none from 100 up; percentages as integers.
 
-import type { AppInfo, DirStats, FamilyTick, ServiceState, Target } from "./types";
+import type { AppInfo, ServiceState, Target } from "./types";
 
 /** "36.8", "120", "0.0" (no unit). */
 export function mbps(bps: number): string {
@@ -12,36 +12,6 @@ export function mbps(bps: number): string {
 /** Basis points → "45%". */
 export function percent(basisPoints: number): string {
   return `${Math.round(basisPoints / 100)}%`;
-}
-
-/** What a direction is moving right now, all classes together. */
-export function totalBps(dir: DirStats | null | undefined): number {
-  return dir ? dir.classes.reduce((sum, c) => sum + c.bps, 0) : 0;
-}
-
-export interface AppRate {
-  family: string;
-  name: string;
-  down: number;
-  up: number;
-}
-
-/** One row per app family with both directions, busiest first. */
-export function appRates(
-  down: DirStats | null | undefined,
-  up: DirStats | null | undefined,
-): AppRate[] {
-  const rows = new Map<string, AppRate>();
-  const add = (list: FamilyTick[] | undefined, key: "down" | "up") => {
-    for (const f of list ?? []) {
-      const row = rows.get(f.family) ?? { family: f.family, name: f.name, down: 0, up: 0 };
-      row[key] += f.bps;
-      rows.set(f.family, row);
-    }
-  };
-  add(down?.families, "down");
-  add(up?.families, "up");
-  return [...rows.values()].sort((a, b) => b.down + b.up - (a.down + a.up));
 }
 
 /** A rule target as people read it: the app's or site's own name when

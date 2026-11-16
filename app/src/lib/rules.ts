@@ -5,10 +5,8 @@
 // a slice carves it out of Everything else first, taking one away hands it
 // back to the other slices in proportion.
 
-import { appRates, percent } from "./format";
-import { t } from "./i18n";
-import { MIN_RULE, addSlice, normalize, removeSlice, setShare } from "./split";
-import type { DirStats, Limit, Priority, Rule, SiteInfo, Target } from "./types";
+import { MIN_RULE, addSlice, normalize, removeSlice, setOther, setShare } from "./split";
+import type { Limit, Priority, Rule, SiteInfo, Target } from "./types";
 
 /** A new slice's starting size: 20%. */
 export const NEW_SLICE = 2000;
@@ -145,81 +143,7 @@ export function clampLimit(l: Limit): Limit {
     : { unit: "mbps", value: Math.min(10_000, Math.max(0.1, Math.round(l.value * 10) / 10)) };
 }
 
-/** One row of the app list: an app or a site with traffic now, or a rule
- *  whose target is quiet. */
-export interface Row {
-  key: string;
-  target: Target;
-  name: string;
-  down: number;
-  up: number;
-  /** Index of its rule in the profile, or -1. */
-  rule: number;
-  /** Has no traffic now (listed because it has a rule). */
-  idle: boolean;
-  /** Can't have a rule (traffic SnailNet couldn't tie to an app). */
-  fixed: boolean;
-}
-
 const UNKNOWN_FAMILY = "unknown";
-
-export function listRows(
-  down: DirStats | null | undefined,
-  up: DirStats | null | undefined,
-  rules: Rule[],
-  label: (t: Target) => string,
-): Row[] {
-  const ruleOf = (t: Target) => rules.findIndex((r) => sameTarget(r.target, t));
-  const rows: Row[] = appRates(down, up).map((a) => {
-    const target: Target = { kind: "family", id: a.family };
-    return {
-      key: `family:${a.family}`,
-      target,
-      name: a.name,
-      down: a.down,
-      up: a.up,
-      rule: ruleOf(target),
-      idle: false,
-      fixed: a.family === UNKNOWN_FAMILY,
-    };
-  });
-  const sites = new Map<string, Row>();
-  const addSites = (dir: DirStats | null | undefined, key: "down" | "up") => {
-    for (const s of dir?.sites ?? []) {
-      const target: Target = { kind: "site", id: s.site };
-      const row = sites.get(s.site) ?? {
-        key: `site:${s.site}`,
-        target,
-        name: s.name,
-        down: 0,
-        up: 0,
-        rule: ruleOf(target),
-        idle: false,
-        fixed: false,
-      };
-      row[key] += s.bps;
-      sites.set(s.site, row);
-    }
-  };
-  addSites(down, "down");
-  addSites(up, "up");
-  const active = [...rows, ...sites.values()].sort((a, b) => b.down + b.up - (a.down + a.up));
-  const quiet: Row[] = rules
-    .map((r, i) => ({ r, i }))
-    .filter(({ r }) => !active.some((row) => sameTarget(row.target, r.target)))
-    .map(({ r, i }) => ({
-      key: `${r.target.kind}:${r.target.id.toLowerCase()}`,
-      target: r.target,
-      name: label(r.target),
-      down: 0,
-      up: 0,
-      rule: i,
-      idle: true,
-      fixed: false,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  return [...active, ...quiet];
-}
 
 /** Things a new rule can name: known sites, then apps seen, without the
  *  ones that already have a rule; filtered by `query` (name or id). */
@@ -247,15 +171,31 @@ export function pickable(
   return out;
 }
 
-/** A row's slice chip: "40% · Low", "When free · High", "Rule off", or
- *  "Everything else" when `i` is -1 (no rule). */
-export function ruleChip(rules: Rule[], i: number): string {
-  const rule = rules[i];
-  if (!rule) return t("list.chip.everything");
-  if (!rule.enabled) return t("list.chip.off");
-  const share = shownShare(rules, i);
-  return t("list.chip", {
-    share: share === null ? t("list.chip.free") : percent(share),
-    priority: t(`priority.${rule.priority}`),
-  });
+/** Set Everything else's slice in basis points; the slices make room. */
+export function setOtherShare(rules: Rule[], bp: number): Rule[] {
+  return withBar(rules, setOther(barShares(rules), bp));
+}
+
+/** One − / + step of a slice: 5%, landing on a multiple of 5. */
+export const STEP = 500;
+
+/** A slice's share as the bar has it; `i` -1 is Everything else. */
+export function shareOf(rules: Rule[], i: number): number | null {
+  return i < 0 ? (barShares(rules).at(-1) ?? null) : shownShare(rules, i);
+}
+
+/** Rule `i` (or Everything else, -1) one step bigger or smaller. A rule
+ *  never steps below 1%, and an "only when free" rule steps up to 5%. */
+export function stepShare(rules: Rule[], i: number, dir: 1 | -1): Rule[] {
+  const cur = shareOf(rules, i) ?? 0;
+  const next = dir > 0 ? Math.floor(cur / STEP) * STEP + STEP : Math.ceil(cur / STEP) * STEP - STEP;
+  return i < 0 ? setOtherShare(rules, next) : setRuleShare(rules, i, Math.max(MIN_RULE, next));
+}
+
+/** Whether a step changes anything (a disabled rule never steps). */
+export function canStep(rules: Rule[], i: number, dir: 1 | -1): boolean {
+  if (i >= 0 && !rules[i]?.enabled) return false;
+  const before = shareOf(rules, i) ?? 0;
+  const after = shareOf(stepShare(rules, i, dir), i) ?? 0;
+  return dir > 0 ? after > before : after < before;
 }

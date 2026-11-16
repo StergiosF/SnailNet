@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appRates, className, mbps, percent, stateKind, targetLabel, totalBps } from "./format";
-import type { DirStats } from "./types";
-
-const dir = (families: [string, number][], classes: number[] = []): DirStats => ({
-  shaped_bps: 23_000_000,
-  classes: classes.map((bps, i) => ({ name: `c${i}`, bps, drops: 0, queued_bytes: 0 })),
-  families: families.map(([family, bps]) => ({ family, name: family, bps, unidentified_bps: 0 })),
-  sites: [],
-});
-
+import { className, mbps, percent, stateKind, targetLabel } from "./format";
 describe("mbps", () => {
   it("keeps one decimal below 100 and none above", () => {
     expect(mbps(36_800_000)).toBe("36.8");
@@ -26,27 +17,6 @@ describe("percent", () => {
   it("turns basis points into a whole percentage", () => {
     expect(percent(4500)).toBe("45%");
     expect(percent(3333)).toBe("33%");
-  });
-});
-
-describe("totals and rows", () => {
-  it("sums every class of a direction", () => {
-    expect(totalBps(dir([], [1_000_000, 500_000]))).toBe(1_500_000);
-    expect(totalBps(null)).toBe(0);
-  });
-  it("merges directions per family, busiest first", () => {
-    const rows = appRates(
-      dir([
-        ["steam", 30_000_000],
-        ["discord", 1_000_000],
-      ]),
-      dir([
-        ["discord", 2_000_000],
-        ["brave", 40_000_000],
-      ]),
-    );
-    expect(rows.map((r) => r.family)).toEqual(["brave", "steam", "discord"]);
-    expect(rows[2]).toEqual({ family: "discord", name: "discord", down: 1_000_000, up: 2_000_000 });
   });
 });
 

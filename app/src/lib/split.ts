@@ -104,3 +104,18 @@ export function isValid(shares: number[]): boolean {
   const sum = shares.reduce((a, b) => a + b, 0);
   return sum === TOTAL && (shares[shares.length - 1] ?? 0) >= FLOOR;
 }
+
+/** Set Everything else to `value`; the rules give or take in proportion
+ *  to what they have above 1%. */
+export function setOther(shares: number[], value: number): number[] {
+  const last = shares.length - 1;
+  if (last < 0) return shares;
+  if (last === 0) return [TOTAL];
+  const rules = shares.slice(0, last);
+  const minSum = MIN_RULE * rules.length;
+  const v = Math.max(FLOOR, Math.min(TOTAL - minSum, Math.round(value)));
+  let weights = rules.map((s) => Math.max(0, s - MIN_RULE));
+  if (weights.every((w) => w === 0)) weights = rules.map(() => 1);
+  const extra = apportion(TOTAL - v - minSum, weights);
+  return [...rules.map((_, k) => MIN_RULE + (extra[k] ?? 0)), v];
+}

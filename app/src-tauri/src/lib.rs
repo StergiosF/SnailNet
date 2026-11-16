@@ -14,10 +14,10 @@
 
 pub mod autostart;
 pub mod bridge;
+pub mod icon;
 pub mod line;
 pub mod tray;
 pub mod tray_icon;
-pub mod window;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -173,10 +173,10 @@ pub fn run() {
         }))
         .plugin(autostart::plugin())
         .manage(shared.clone())
+        .manage(icon::Icons::default())
         .setup(move |app| {
             // Before the tray, so its "Start with Windows" check is current.
             autostart::setup(app);
-            window::setup(app);
             tray::setup(app)?;
             let sink = TauriSink {
                 app: app.handle().clone(),
@@ -199,9 +199,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             current,
+            icon::app_icon,
             set_rules,
             line::set_line,
-            window::system,
             autostart::autostart_enabled,
             autostart::set_autostart
         ])

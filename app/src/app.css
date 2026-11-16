@@ -1,114 +1,79 @@
-/* SnailNet tokens: Windows 11 Fluent theme values (PLAN.md §14.1). The
-   page ground is Fluent's solid window colour (Mica can't show through
-   WebView2 here) and content sits on translucent layer cards. Accent follows the user's Windows accent
-   (UISettings, pushed live by src/lib/system.ts as --sys-accent-*), with
-   the Windows default blue as the fallback. Fluent mapping: light theme
-   fills with Dark1 and writes with Dark2, dark theme Light2 and Light3. */
+/* SnailNet's look (PLAN.md §14.1, the Ledger): its own dark ground, not
+   Windows' light/dark or accent. Warm near-black, soft rounded surfaces
+   one step lighter, warm off-white type in one hyperlegible family, and
+   colour only where it carries meaning: each slice's ink. Windows high
+   contrast mode replaces all of it with system colours. */
+
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
 
 :root {
-  color-scheme: light;
-  --font-text: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+  --font-text: "Atkinson Hyperlegible Next Variable", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-display: var(--font-text);
   --font-icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
 
-  --text-primary: rgb(0 0 0 / 0.894);
-  --text-secondary: rgb(0 0 0 / 0.62);
-  --text-tertiary: rgb(0 0 0 / 0.47);
-  --surface-ground: #f3f3f3;
-  --surface-layer: rgb(255 255 255 / 0.5);
-  --surface-card: rgb(255 255 255 / 0.7);
-  --stroke-card: rgb(0 0 0 / 0.0578);
-  --stroke-divider: rgb(0 0 0 / 0.0803);
-  --fill-subtle-hover: rgb(0 0 0 / 0.0373);
-  --fill-subtle-pressed: rgb(0 0 0 / 0.0241);
-  --skeleton: rgb(0 0 0 / 0.06);
+  /* Ground and the surfaces on it, each a step lighter. */
+  --surface-ground: #121211;
+  --surface-1: #1b1a19;
+  --surface-2: #232220;
+  --surface-3: #2d2b29;
+  /* Older names the dialogs and controls read. */
+  --surface-layer: transparent;
+  --surface-card: var(--surface-1);
+  --stroke-card: rgb(255 255 255 / 0.07);
+  --stroke-divider: rgb(255 255 255 / 0.06);
+  --fill-subtle-hover: rgb(255 255 255 / 0.05);
+  --fill-subtle-pressed: rgb(255 255 255 / 0.03);
+  --skeleton: rgb(255 255 255 / 0.06);
 
-  --accent: var(--sys-accent-dark1, #005fb8);
-  --accent-text: var(--sys-accent-dark2, #003e92);
-  --on-accent: #ffffff;
-  --accent-tint: color-mix(in srgb, var(--accent) 9%, transparent);
+  /* Type: 15.4:1, 7.5:1 and 4.6:1 on the ground. */
+  --text-primary: #f1ede6;
+  --text-secondary: #a8a399;
+  --text-tertiary: #858076;
 
-  --caution: #9d5d00;
-  --caution-tint: #fff4ce;
-  --critical: #c42b1c;
-  --critical-tint: #fde7e9;
+  /* The one strong action per view is light on dark, not a hue. */
+  --accent: #f1ede6;
+  --accent-text: #f1ede6;
+  --on-accent: #121211;
+  --accent-tint: rgb(255 255 255 / 0.06);
+
+  --caution: #e8b04a;
+  --caution-tint: #2a2316;
+  --critical: #f2907e;
+  --critical-tint: #2e1b17;
   --close-hover: #c42b1c;
 
-  --focus-outer: rgb(0 0 0 / 0.894);
-  --focus-inner: #ffffff;
-  --selection: color-mix(in srgb, var(--accent) 25%, transparent);
+  --focus-outer: #f1ede6;
+  --focus-inner: #121211;
+  --selection: rgb(241 237 230 / 0.25);
 
-  /* Split-bar slices: calm hues, tinted ground + dark ink (≥ 7:1). */
-  --slice-1-bg: #cdede6;
-  --slice-1-fg: #0b3d35;
-  --slice-2-bg: #d6e6fa;
-  --slice-2-fg: #0a2f5c;
-  --slice-3-bg: #e4ddf8;
-  --slice-3-fg: #34225f;
-  --slice-4-bg: #f8e6c4;
-  --slice-4-fg: #4d3300;
-  --slice-5-bg: #f7d9df;
-  --slice-5-fg: #5a1a2a;
-  --slice-6-bg: #ddebc9;
-  --slice-6-fg: #2d4011;
-  --slice-other-bg: rgb(0 0 0 / 0.05);
-  --slice-other-fg: rgb(0 0 0 / 0.66);
+  /* Slice inks, in rule order; Everything else is stone. All ≥ 6:1 on
+     the ground, and every slice is also named in words. */
+  --ink-0: #e07c62;
+  --ink-1: #dcae55;
+  --ink-2: #8fb89a;
+  --ink-3: #8aa9cc;
+  --ink-4: #c79abd;
+  --ink-5: #b8b56c;
+  --stone-0: #b3ad9f;
+  --stone-1: #99948a;
+  --stone-2: #847f76;
+  --stone-3: #716d65;
+  --stone-4: #5f5c56;
+  --free-hatch: repeating-linear-gradient(135deg, #3a3835 0 2px, transparent 2px 6px);
 
-  --radius-control: 4px;
-  --radius-card: 8px;
+  --radius-control: 10px;
+  --radius-card: 12px;
   --titlebar-h: 32px;
-  --gutter: 24px;
-  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --text-primary: #ffffff;
-    --text-secondary: rgb(255 255 255 / 0.786);
-    --text-tertiary: rgb(255 255 255 / 0.545);
-    --surface-ground: #202020;
-    --surface-layer: rgb(58 58 58 / 0.3);
-    --surface-card: rgb(255 255 255 / 0.0512);
-    --stroke-card: rgb(0 0 0 / 0.1);
-    --stroke-divider: rgb(255 255 255 / 0.0837);
-    --fill-subtle-hover: rgb(255 255 255 / 0.0605);
-    --fill-subtle-pressed: rgb(255 255 255 / 0.0419);
-    --skeleton: rgb(255 255 255 / 0.07);
-
-    --accent: var(--sys-accent-light2, #60cdff);
-    --accent-text: var(--sys-accent-light3, #99ebff);
-    --on-accent: #000000;
-    --accent-tint: color-mix(in srgb, var(--accent) 12%, transparent);
-
-    --caution: #fce100;
-    --caution-tint: #433519;
-    --critical: #ff99a4;
-    --critical-tint: #442726;
-
-    --slice-1-bg: #1f4a43;
-    --slice-1-fg: #cff3eb;
-    --slice-2-bg: #213c5e;
-    --slice-2-fg: #d8e8fc;
-    --slice-3-bg: #3a2f5e;
-    --slice-3-fg: #e6defa;
-    --slice-4-bg: #4f3b14;
-    --slice-4-fg: #f8e7c6;
-    --slice-5-bg: #552a35;
-    --slice-5-fg: #f8dce2;
-    --slice-6-bg: #34461f;
-    --slice-6-fg: #e0eecd;
-    --slice-other-bg: rgb(255 255 255 / 0.06);
-    --slice-other-fg: rgb(255 255 255 / 0.79);
-
-    --focus-outer: #ffffff;
-    --focus-inner: rgb(0 0 0 / 0.7);
-    --selection: color-mix(in srgb, var(--accent) 30%, transparent);
-  }
+  --gutter: 40px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (forced-colors: active) {
   :root {
+    --surface-1: Canvas;
+    --surface-2: Canvas;
+    --surface-3: Canvas;
     --surface-card: Canvas;
     --stroke-card: CanvasText;
     --accent: Highlight;
@@ -127,11 +92,10 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  /* Fluent's solid layer colour, what Windows shows when Mica is off (the
-     window has no Mica: see src-tauri/src/window.rs). */
   background: var(--surface-ground);
   color: var(--text-primary);
-  font: 14px/20px var(--font-text);
+  font: 15px/1.4 var(--font-text);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
@@ -151,16 +115,15 @@ body {
 
 :focus-visible {
   outline: 2px solid var(--focus-outer);
-  outline-offset: 1px;
-  box-shadow: 0 0 0 1px var(--focus-inner);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
   width: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--text-tertiary);
-  border: 4px solid transparent;
+  background: var(--surface-3);
+  border: 3px solid transparent;
   border-radius: 6px;
   background-clip: content-box;
 }
@@ -180,51 +143,85 @@ body {
   speak: never;
 }
 
-/* Fluent buttons for components that share them (dialogs, first run):
-   `.btn` is the standard button, `.btn.btn-accent` the one main action. */
+input,
+button,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Buttons shared by dialogs, first run and the flyout: `.btn` a soft
+   surface, `.btn.btn-accent` the one main action (light on dark). */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 32px;
-  min-width: 96px;
+  min-height: 36px;
   padding: 0 16px;
-  border: 1px solid var(--stroke-card);
+  border: 0;
   border-radius: var(--radius-control);
-  background: var(--surface-card);
+  background: var(--surface-2);
   color: var(--text-primary);
-  font: inherit;
-  transition: background-color 83ms linear;
+  transition: background-color 120ms linear;
 }
 .btn:hover:not(:disabled) {
-  background:
-    linear-gradient(var(--fill-subtle-hover), var(--fill-subtle-hover)),
-    var(--surface-card);
+  background: var(--surface-3);
 }
 .btn:active:not(:disabled) {
-  background:
-    linear-gradient(var(--fill-subtle-pressed), var(--fill-subtle-pressed)),
-    var(--surface-card);
-  color: var(--text-secondary);
+  background: var(--surface-1);
 }
 .btn-accent {
-  border-color: transparent;
   background: var(--accent);
   color: var(--on-accent);
   font-weight: 600;
 }
 .btn-accent:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.08);
+  background: #ffffff;
 }
 .btn-accent:active:not(:disabled) {
-  background: var(--accent);
-  color: var(--on-accent);
-  filter: brightness(0.92);
+  background: #d9d4cc;
 }
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
+}
+.btn-quiet {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+@media (forced-colors: active) {
+  .btn {
+    border: 1px solid ButtonText;
+  }
+}
+
+/* A text box on a surface. */
+.field {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.field:hover {
+  background: var(--surface-3);
+}
+.field:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 0;
+}
+.field::placeholder {
+  color: var(--text-tertiary);
+}
+@media (forced-colors: active) {
+  .field {
+    border-color: CanvasText;
+  }
 }
 
 .visually-hidden {

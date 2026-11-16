@@ -120,10 +120,6 @@
     place-items: center;
     overflow-y: auto;
     padding: 32px var(--gutter);
-    /* The same content layer as the main window's. */
-    background: var(--surface-layer);
-    border-top: 1px solid var(--stroke-card);
-    border-top-left-radius: var(--radius-card);
   }
   .step,
   form {
@@ -146,21 +142,25 @@
   }
   h1 {
     margin: 8px 0 0;
-    font: 600 28px/36px var(--font-display);
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
     text-wrap: balance;
   }
   .lead {
     margin: 0;
     max-width: 60ch;
-    color: var(--text-primary);
+    font-size: 16px;
+    color: var(--text-secondary);
   }
   .privacy {
     display: flex;
     align-items: flex-start;
     gap: 8px;
     margin: 4px 0 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--text-secondary);
   }
   .privacy .icon {
@@ -168,8 +168,8 @@
   }
   .error {
     margin: 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--critical);
   }
   .actions {

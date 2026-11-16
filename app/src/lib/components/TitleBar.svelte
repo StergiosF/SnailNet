@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Custom title bar (PLAN.md §14.2): app glyph + name in a drag region,
+  // Custom title bar (PLAN.md §14.2): the app name in a drag region,
   // Windows 11 caption buttons drawn with Segoe Fluent Icons like the
   // system's own. Snap layouts on hover over Maximize are not available:
   // with decorations off, WebView2 owns the mouse over the page and only
@@ -9,7 +9,6 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { t } from "../i18n";
-  import Snail from "./Snail.svelte";
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -25,7 +24,6 @@
 
 <header class="titlebar" data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
-    <Snail size={16} />
     <span data-tauri-drag-region>{t("app.name")}</span>
   </div>
   <div class="caption">
@@ -60,7 +58,7 @@
     padding-left: 16px;
     font-size: 12px;
     line-height: 16px;
-    color: var(--text-primary);
+    color: var(--text-secondary);
   }
   .caption {
     display: flex;
@@ -70,12 +68,13 @@
     border: 0;
     padding: 0;
     background: transparent;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     font-size: 10px;
     transition: background-color 83ms linear;
   }
   .caption button:hover {
     background: var(--fill-subtle-hover);
+    color: var(--text-primary);
   }
   .caption button:active {
     background: var(--fill-subtle-pressed);

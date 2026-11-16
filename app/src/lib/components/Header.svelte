@@ -1,154 +1,148 @@
 <script lang="ts">
-  // Header (PLAN.md §14.2): the active profile as the page title, live
-  // totals against the line, and the Low-latency indicator. Profile
-  // switching, ping and Pause arrive with Phases 4–5.
-  import { mbps, totalBps } from "../format";
+  // The top of the main window (PLAN.md §14.2): one sentence that answers
+  // "who is using my internet, and is it a problem?", or, when something
+  // needs attention (§14.8), that instead, in the same place. On the
+  // right, the line as the user set it; it opens the speed dialog.
   import { t } from "../i18n";
+  import type { Glance } from "../ledger";
   import { lineDialog } from "../lineDialog.svelte";
   import { service } from "../service.svelte";
+  import type { Notice } from "../ui.svelte";
 
-  const down = $derived(service.stats?.down ?? null);
-  const up = $derived(service.stats?.up ?? null);
+  let { glance, notice }: { glance: Glance | null; notice: Notice | null } = $props();
+
   const line = $derived(service.snapshot?.config.line ?? {});
-  const lowLatency = $derived(service.snapshot?.config.settings.low_latency ?? false);
-  const live = $derived(service.link.kind === "connected" && service.stats !== null);
   const canSet = $derived(service.link.kind === "connected" && service.snapshot !== null);
+  const fig = (v: number | undefined) => (v === undefined ? "–" : String(Math.round(v * 10) / 10));
+  const hasLine = $derived(line.down_mbps !== undefined || line.up_mbps !== undefined);
 
-  /** "of 25.0 Mbps", or "not shared out" without a speed. */
-  const of = (lineMbps: number | undefined) =>
-    lineMbps !== undefined ? t("header.ofLine", { line: mbps(lineMbps * 1e6) }) : t("header.notShaped");
-
-  const rates = $derived([
-    { key: "down" as const, glyph: "", label: t("header.down"), now: down, of: of(line.down_mbps) },
-    { key: "up" as const, glyph: "", label: t("header.up"), now: up, of: of(line.up_mbps) },
-  ]);
+  const glyph = { info: "", caution: "", critical: "" };
 </script>
 
-<div class="header">
-  <h1>{service.activeProfile?.name ?? t("app.name")}</h1>
-
-  <dl class="rates" aria-live="off">
-    {#each rates as d (d.key)}
-      <div class="rate">
-        <dt>
-          <i class="icon" aria-hidden="true">{d.glyph}</i>
-          <span class="visually-hidden">{d.label}</span>
-        </dt>
-        <dd>
-          <span class="value num" class:idle={!live}>{live ? mbps(totalBps(d.now)) : "–"}</span>
-          {#if canSet}
-            <button
-              type="button"
-              class="of num"
-              aria-label={t("line.change", {
-                dir: d.label,
-                value: d.of,
-              })}
-              onclick={() => lineDialog.show(d.key)}
-            >
-              {d.of}<i class="icon edit" aria-hidden="true">&#xE70F;</i>
-            </button>
-          {:else}
-            <span class="of num">{d.of}</span>
-          {/if}
-        </dd>
-      </div>
-    {/each}
-    {#if lowLatency}
-      <div class="pill">
-        <span class="dot" aria-hidden="true"></span>{t("header.lowLatency")}
-      </div>
+<header class="head">
+  <div class="words">
+    {#if notice}
+      <h1 class="notice {notice.severity}">
+        <i class="icon" aria-hidden="true">{glyph[notice.severity]}</i>{notice.title}
+      </h1>
+      <p role={notice.severity === "info" ? "status" : "alert"}>{notice.message}</p>
+      {#if notice.action}
+        <button type="button" class="btn btn-accent action" onclick={notice.action.onclick}>
+          {notice.action.label}
+        </button>
+      {/if}
+    {:else if glance}
+      <h1>{glance.title}</h1>
+      <p>{glance.detail}</p>
+    {:else}
+      <div class="loading" aria-hidden="true"><span></span></div>
     {/if}
-  </dl>
-</div>
+  </div>
+
+  {#if canSet}
+    <button
+      type="button"
+      class="line"
+      onclick={() => lineDialog.show()}
+      aria-label={hasLine
+        ? t("header.line.label", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
+        : t("header.line.set")}
+    >
+      {#if hasLine}
+        <span class="k">{t("header.line")}</span>
+        <span class="v">{fig(line.down_mbps)}<small>↓</small> {fig(line.up_mbps)}<small>↑ Mbps</small></span>
+      {:else}
+        <span class="v">{t("header.line.set")}</span>
+      {/if}
+      <i class="icon pen" aria-hidden="true">&#xE70F;</i>
+    </button>
+  {/if}
+</header>
 
 <style>
-  .header {
+  .head {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
-    flex-wrap: wrap;
-    padding: 12px var(--gutter) 20px;
+    align-items: flex-start;
+    gap: 32px;
+    padding: 20px var(--gutter) 0;
+  }
+  .words {
+    flex: 1;
+    min-width: 0;
   }
   h1 {
     margin: 0;
-    font: 600 28px/36px var(--font-display);
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
   }
-  .rates {
+  h1 .icon {
+    font-size: 22px;
+    margin-right: 12px;
+    vertical-align: -1px;
+  }
+  .caution .icon {
+    color: var(--caution);
+  }
+  .critical .icon {
+    color: var(--critical);
+  }
+  p {
+    margin: 6px 0 0;
+    max-width: 68ch;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .action {
+    margin-top: 14px;
+  }
+  .loading span {
+    display: block;
+    width: 60%;
+    height: 22px;
+    margin: 6px 0;
+    border-radius: 6px;
+    background: var(--skeleton);
+  }
+  .line {
     display: flex;
     align-items: center;
-    gap: 24px;
-    margin: 0;
-  }
-  .rate {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  dt .icon {
-    font-size: 14px;
-    color: var(--text-secondary);
-  }
-  dd {
-    margin: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-  }
-  .value {
-    font: 600 20px/28px var(--font-display);
-    font-variant-numeric: tabular-nums;
-    min-width: 3.2ch;
-    text-align: right;
-  }
-  .value.idle {
-    color: var(--text-tertiary);
-  }
-  .of {
-    font-size: 12px;
-    line-height: 16px;
-    color: var(--text-secondary);
-  }
-  /* The line figure doubles as the way to change it: a quiet text button
-     (Fluent subtle button) with a pencil so it reads as editable. */
-  button.of {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 24px;
-    margin: -4px -6px;
-    padding: 4px 6px;
+    gap: 10px;
+    flex: none;
+    height: 40px;
+    padding: 0 14px;
     border: 0;
     border-radius: var(--radius-control);
-    background: transparent;
-    font-family: inherit;
+    background: var(--surface-1);
+    transition: background-color 120ms linear;
   }
-  button.of:hover {
-    background: var(--fill-subtle-hover);
-    color: var(--text-primary);
+  .line:hover {
+    background: var(--surface-2);
   }
-  button.of:active {
-    background: var(--fill-subtle-pressed);
+  .k {
+    font-size: 13px;
+    color: var(--text-secondary);
   }
-  .edit {
-    font-size: 10px;
+  .v {
+    font-size: 16px;
+    font-weight: 600;
   }
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 24px;
-    padding: 0 10px;
-    border-radius: 12px;
-    background: var(--accent-tint);
-    color: var(--accent-text);
+  small {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 1px;
+  }
+  .pen {
     font-size: 12px;
+    color: var(--text-secondary);
   }
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
+  @media (forced-colors: active) {
+    .line {
+      border: 1px solid ButtonText;
+    }
   }
 </style>

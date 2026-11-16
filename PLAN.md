@@ -78,9 +78,9 @@ Settled during the planning interview. Change these only deliberately, and note 
 | D8 | Priority | **% = how much, priority = who goes first** | Priority lowers latency without changing bandwidth shares |
 | D9 | v1 extras | Smart (Focus boost, Low-latency mode) + Control (profiles, block, new-app prompt, app families) | Differentiators plus essentials |
 | D10 | Unlisted apps | One **"Everything else"** slice | New apps can never starve your rules |
-| D11 | % input | **Split bar** with draggable dividers, always 100%, click a segment to type a number | Clearest picture of the whole line |
-| D12 | Main screen | Live app list + split bar; **tray flyout** for quick actions | One screen does everything |
-| D13 | Style | **Windows 11 native** (Mica, Fluent, system accent, light/dark) | Calm and premium, feels like part of Windows |
+| D11 | % input | **− % + per slice** (5% steps, always 100%: the other slices make room); the split bar with draggable dividers was built, then replaced (2026-11-16) | Readable at a glance, one click to give something more, the same in the flyout |
+| D12 | Main screen | **The Ledger**: a sentence on who is using the line, a live strip, then the slices as rows with their settings in place; **tray flyout** with the same rows for quick changes | One screen does everything |
+| D13 | Style | **SnailNet's own dark look** (§14.1), chosen by the user over Windows 11 native (2026-11-16: "looks like a Windows application") | Distinctive, calm and premium |
 | D14 | Platform | Windows 10/11 x64 | WinDivert has no official ARM64 build |
 | D15 | UI stack | **Tauri 2 + Svelte 5 + TypeScript** | Premium UI with a small installer; Rust core |
 | D16 | Runtime | **Windows service** (LocalSystem) + per-user tray app | No admin prompt on launch, shaping from boot |
@@ -628,75 +628,61 @@ everything_else_share = 1500          # basis points
 
 ## 14. UI / UX specification
 
-> Design workflow (from the global rules): use `design-taste-frontend`'s `references/app-screens.md` to set the screen direction (this is an app screen, not a landing page), then build and audit with `impeccable` before calling UI work done. The decisions in this plan (D11–D13) are the brief.
+> The direction was picked by the user from real-size mockups (2026-11-16, `docs/HANDOFF-ui.md`): "B · Ledger", then "a bit more modern and simple". D11–D13 and this section are the brief.
 
-### 14.1 Visual language: Windows 11 native
+### 14.1 Visual language: the Ledger
 
-- **Material:** Mica window background (Tauri `windowEffects: ["mica"]`; Windows 10 fallback: Acrylic, else a solid layer colour). Content sits on subtle layer cards (`1px` stroke, 8 px radius), as in Windows Settings.
-- **Type:** Segoe UI Variable (Display for the 28 px title, Text for body); 14 px body, 12 px caption; tabular numerals for all speeds.
-- **Colour:** neutral Fluent greys; **system accent colour** (read via `UISettings` in the Rust side → CSS variable) for the active profile, focused states and the user's own slices. Each split-bar slice gets a calm, distinguishable hue from a fixed palette that passes contrast in both themes; app icons sit on the slice.
-- **Theme:** follows the system light/dark live; manual override in settings.
-- **Icons:** Fluent System Icons (MIT), 16/20 px.
-- **Motion:** 150–250 ms ease-out for layout, numbers tween over 300 ms, split-bar segments spring gently while dragging. Respect `prefers-reduced-motion`. Nothing loops or pulses except the live-speed digits.
+- **Ground:** SnailNet's own dark look, the same whatever Windows' theme or accent: a warm near-black ground (`#121211`) painted by the page, with soft surfaces one step lighter for rows, controls and dialogs (no strokes, no cards, 10–16 px radius). No Mica (it can't show through WebView2 here).
+- **Type:** one family, Atkinson Hyperlegible Next (bundled, OFL), chosen for the job: digits that can't be misread. A sentence-sized headline (28 px bold), 15–17 px body, tabular numerals for every speed and percentage.
+- **Colour:** warm off-white type in three steps (primary, secondary, tertiary, all ≥ 4.5:1). Colour only where it carries meaning: each slice's ink (six muted inks in rule order; Everything else is stone). The one main action per view is light on dark, not a hue. Spare room is hatched, never shown by colour alone.
+- **Icons:** each app's own icon from its .exe (Rust `app_icon`, cached), a letter tile in the site's colour for websites, four squares for Everything else; Segoe Fluent Icons for the few UI glyphs.
+- **Motion:** 120–400 ms ease-out (bars ease to new widths, dialogs rise 8 px). Respect `prefers-reduced-motion`. Nothing loops or pulses.
+- **High contrast:** Windows high-contrast mode replaces the palette with system colours.
 - **Mascot:** a tiny snail glyph in the tray and on empty states only. Never in the way.
 
 ### 14.2 Window structure
 
-Main window, default 960 × 640, min 720 × 480, custom title bar (Tauri `decorations: false` with Windows snap layouts preserved via the caption-button area).
+Main window, default 960 × 640, min 720 × 480, custom title bar (Tauri `decorations: false`, Windows caption buttons drawn in the page).
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ 🐌 SnailNet     [ Gaming ▾ ]          ▼ 42.1 / 100   ▲ 3.2 / 20 Mbps │
-│                                       ● Low latency  · ping 18 ms  ⏸ │
-├─────────────────────────────────────────────────────────────────────┤
-│  DOWNLOAD ⇄ UPLOAD (linked)                                          │
-│  ┌──────────────────────┬─────────────────────────┬───────────────┐  │
-│  │ ◼ Steam   40%        │ ▶ YouTube   45%         │ Everything 15%│  │
-│  └──────────────────────┴─────────────────────────┴───────────────┘  │
-│                                                                      │
-│  ACTIVE                                                     Sort ▾   │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │ [ic] Steam              ▼ 36.8  ▲ 0.4   40% · Low     ●Online ▸│  │
-│  │ [ic] Chrome ▸ YouTube   ▼ 4.9   ▲ 0.2   45% · Normal  ●Online ▸│  │
-│  │ [ic] Fortnite  🎮 boost ▼ 0.3   ▲ 0.1   Everything · High   ▸  │  │
-│  │ [ic] Discord            ▼ 0.1   ▲ 0.1   Everything · Normal ▸  │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-│  IDLE (6) ▸                                                          │
-│                                                     ⚙ Settings      │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ SnailNet                                                   –  □  ✕  │
+│ Steam is using the most of your line.           [ Line 25↓ 40↑ ✎ ]  │
+│ It runs on room Brave isn't using. YouTube and Discord still get all │
+│ they ask for.                                                        │
+│ ████████████▌█▐██████████████▌███▌▏                         ░░░      │
+│ ▶ YouTube 9.8  ◼ Steam 10.3  ◼ Discord 2.4    23.0 of 25.0 Mbps ·   │
+│                                2.0 kept free for low ping [Down|Up] │
+│ [▶]  YouTube   9.8 Mbps · gets all it asks for        [−] 45% [+]   │
+│      ▬▬▬▬▬▬▬▬▬▬▬▬▬▬                                                  │
+│ [ic] Brave     0.4 Mbps · lending 6.5 it isn't using  [−] 30% [+]   │
+│      Goes first [High|Normal|Low]  ☐ Only when the line is free      │
+│      [Add a speed limit]                                   Remove   │
+│ [▦]  Everything else  12.8 Mbps · 7.0 of it is spare room [−] 25% [+]│
+│      (Steam 10.3) (Discord 2.4) (Claude Code 0.1) [+ Give Steam a slice]│
+│ [+]  Add a slice for an app or website                               │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Header:** profile switcher, live totals vs capacity, Low-latency pill (click → explanation popover + toggle), live ping, Pause.
-- **Split bar:** see 14.3. The "linked" chip toggles between one shared bar and two stacked bars (Download / Upload).
-- **App list:** one row per family or site. Row anatomy: icon · name (+ badges: 🎮 Game, ⚡ Boosted, 🔒 Blocked) · ↓/↑ speed (tabular, 1 decimal) · slice chip (`40% · Low` or `Everything · Normal`) · Online/Blocked toggle · chevron.
-- **Row expand / side panel** (the rule editor): share (number field synced to the bar), ceiling (None / % / Mbps per direction), priority (segmented control High · Normal · Low), "This is a game" / "Never boost", separate up/down, members (processes or domains), "Split out / Merge", delete rule.
+- **Headline:** one sentence on who is using the most, then whether that's a problem for anyone: whose unused room it runs on, who still gets all they ask for, who wants more room (`ledger.ts` `glance`, from per-class rates and queues). When something needs attention (§14.8) its message takes this place, with its action.
+- **Line:** the line as the user set it; opens the speed dialog. What low-latency mode keeps free shows only as the hatched end of the strip ("2.0 kept free for low ping"), so the header carries one number per direction.
+- **Live strip:** as long as the line; a part per slice in its ink (Everything else split per app in stone), the free part hatched; the three biggest users named under it; Download / Upload switch.
+- **Slices:** the active profile's rules in order, then Everything else. Row: icon · name · Mbps and its status in words ("gets all it asks for", "lending 6.5 it isn't using", "7.0 of it is spare room", "using its whole slice, wants more", "quiet right now") · a thin bar (the slice, and live use on the same scale; use beyond the slice hatched) · − % +.
+- **Settings in place:** clicking a rule's row opens them under it: Goes first (High · Normal · Low), Only when the line is free, Add a speed limit (Download / Upload, Mbps or %), Remove. A site's row says it works in every browser and comes before the browser's own slice.
+- **Everything else:** its apps as small buttons with their speed (four, then "N more"); pick one, then "Give it a slice" (20%, from Everything else first). Traffic SnailNet can't tie to an app shows as "Unrecognised" and can't get a slice.
+- **Add a slice:** a dialog with search, listing known websites and seen apps without a rule.
+- **Not built yet, so not shown:** profiles, pause, block, speed test, ping.
 
-### 14.3 The split bar (signature component)
+### 14.3 Changing a share
 
-- A full-width bar, 44 px high; each segment shows icon + name + % (collapsing to icon + % below 80 px, then a tooltip only).
-- **Drag a divider** → the two neighbours trade share (1% steps; hold `Shift` for 5%; `Alt` for 0.1%). Live Mbps hint under the cursor ("≈ 36.8 Mbps").
-- **Click a segment** → inline number input; typing 40 rebalances the *other* segments proportionally, never Everything else below 5%.
-- **Drag a segment** onto another to reorder (purely visual).
-- **Drop an app row onto the bar** → creates a rule with a sensible starting slice (taken from Everything else first).
-- **Live fill:** each segment shows a subtle inner fill for actual current usage vs its slice, so you *see* sharing happen (YouTube using 25% of its 45%, with Steam's fill visibly extending into the unused part as a hatched overflow).
-- **Keyboard:** Tab focuses dividers; ←/→ moves by 1% (Shift 5%); Enter on a segment opens the number input; screen-reader labels like "Divider between Steam 40 percent and YouTube 45 percent".
+- **− / +** move a slice 5% to the next multiple of 5; the others make room in proportion, Everything else never below 5%, a rule never below 1% (`rules.ts` `stepShare`, `split.ts`). Everything else has − / + too.
+- Changes show at once and save after 300 ms, so a few quick clicks are one save; a save waits for the previous one's revision, so they never conflict with each other (`ui.svelte.ts`).
+- **Only when the line is free** (0%) is a setting in the row, not the bottom of the − button.
+- The split bar with draggable dividers (before 2026-11-16) is gone: dividers were hard to hit, small slices were unreadable, and reading it took arithmetic.
 
 ### 14.4 Tray flyout
 
-A Windows 11-style quick panel (360 × ~420), anchored above the tray icon, Mica background, closes on blur:
-
-```
-┌──────────────────────────────┐
-│ SnailNet        ▼ 42 ▲ 3 Mbps │
-│ ● Low latency · ping 18 ms    │
-│ [Balanced][Gaming][Streaming] │  ← profile pills
-│ Top now                       │
-│  Steam      ▼ 36.8   40%      │
-│  YouTube    ▼  4.9   45%      │
-│  Fortnite   ▼  0.3   ⚡ High  │
-│ [⏸ Pause 15 min]  [Open ↗]    │
-└──────────────────────────────┘
-```
+A quick panel (360 × 420), anchored above the tray icon, closes on blur and Escape: the main window's headline (or the state that needs attention), a small live strip, every slice with its status and − % + (the quickest way to give the game or YouTube more), and "Open SnailNet". Profiles and Pause come with Phase 5.
 
 Tray icon states: normal (snail), paused (amber), blocked apps present (small dot), safe mode (warning).
 
@@ -730,7 +716,7 @@ Empty (no traffic yet) · Loading/connecting to service · Service not running (
 
 ### 14.9 Accessibility
 
-WCAG 2.2 AA contrast in both themes; full keyboard operation; visible focus rings (Fluent style); live speed regions throttled for screen readers (announce on request, not 4× per second); respects Windows text scaling; no information by colour alone (slices also carry labels/icons).
+WCAG 2.2 AA contrast on the dark ground; full keyboard operation (rows, − / + and settings are buttons and native radios); visible focus rings; a share change is announced (polite live region on the percentage), live speeds are not; respects Windows text scaling and high-contrast mode; no information by colour alone (slices carry names and icons, spare room is hatched, statuses are words).
 
 ---
 

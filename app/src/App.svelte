@@ -1,24 +1,26 @@
 <script lang="ts">
-  // Main window: title bar, header, the state that needs attention (if
-  // any), the split bar, the live list, and the rule editor's side panel.
+  // Main window (PLAN.md §14.2, the Ledger): title bar; a sentence on who
+  // is using the line (or the state that needs attention); the live strip;
+  // the slices, each with − % + and its settings in place; dialogs.
   import { onMount } from "svelte";
-  import AppList from "./lib/components/AppList.svelte";
+  import AddSlice from "./lib/components/AddSlice.svelte";
   import FirstRun from "./lib/components/FirstRun.svelte";
   import Header from "./lib/components/Header.svelte";
-  import InfoBar from "./lib/components/InfoBar.svelte";
   import LineDialog from "./lib/components/LineDialog.svelte";
-  import RuleEditor from "./lib/components/RuleEditor.svelte";
-  import SplitBar from "./lib/components/SplitBar.svelte";
+  import SliceList from "./lib/components/SliceList.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
-  import { stateKind } from "./lib/format";
+  import UsageStrip from "./lib/components/UsageStrip.svelte";
+  import { targetLabel } from "./lib/format";
   import { t } from "./lib/i18n";
+  import { glance, ledger } from "./lib/ledger";
   import { dismissFirstRun, firstRunDismissed, needsFirstRun } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
   import { service } from "./lib/service.svelte";
-  import { startSystem } from "./lib/system";
+  import { noticeOf } from "./lib/notice";
+  import { ui } from "./lib/ui.svelte";
+  import type { Target } from "./lib/types";
 
   onMount(() => {
-    void startSystem();
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
@@ -37,67 +39,20 @@
     firstRun = false;
   }
 
-  type Bar = {
-    severity: "info" | "caution" | "critical";
-    title: string;
-    message: string;
-    action?: { label: string; onclick: () => void };
-  };
-
-  const bar = $derived.by((): Bar | null => {
-    const link = service.link;
-    switch (link.kind) {
-      case "connecting":
-      case "connected":
-        break;
-      case "not_running":
-        return { severity: "caution", title: t("link.not_running.title"), message: t("link.not_running.body") };
-      case "rejected":
-        return { severity: "critical", title: t("link.rejected.title"), message: t("link.rejected.body") };
-      case "denied":
-        return {
-          severity: "critical",
-          title: t("link.denied.title"),
-          message: t("link.denied.body", { detail: link.detail }),
-        };
-      case "lost":
-        return { severity: "caution", title: t("link.lost.title"), message: t("link.lost.body") };
-    }
-    const s = service.state;
-    if (s === null) return null;
-    switch (stateKind(s)) {
-      case "unshaped":
-        return {
-          severity: "info",
-          title: t("state.unshaped.title"),
-          message: t("state.unshaped.body"),
-          action: { label: t("state.unshaped.action"), onclick: () => lineDialog.show() },
-        };
-      case "retrying":
-        return {
-          severity: "caution",
-          title: t("state.retrying.title"),
-          message: t("state.retrying.body", {
-            reason: typeof s === "object" && "Retrying" in s ? s.Retrying.reason : "",
-          }),
-        };
-      case "safe_mode":
-        return {
-          severity: "critical",
-          title: t("state.safe_mode.title"),
-          message: t("state.safe_mode.body", {
-            failures: typeof s === "object" && "SafeMode" in s ? s.SafeMode.failures : 0,
-          }),
-        };
-      default:
-        return null;
-    }
-  });
-
-  const loading = $derived(
-    service.link.kind === "connecting" ||
-      (service.link.kind === "connected" && service.stats === null),
+  const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
+  const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
+  const dirStats = $derived(ui.dir === "down" ? service.stats?.down : service.stats?.up);
+  const book = $derived(connected ? ledger(ui.rules, dirStats, label) : null);
+  const lineMbps = $derived(
+    ui.dir === "down" ? service.snapshot?.config.line.down_mbps : service.snapshot?.config.line.up_mbps,
   );
+  const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
+  const loading = $derived(
+    service.link.kind === "connecting" || (service.link.kind === "connected" && service.stats === null),
+  );
+  const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
+
+  const notice = $derived(noticeOf(service.link, service.state, () => lineDialog.show()));
 </script>
 
 <div class="window">
@@ -106,20 +61,19 @@
     <FirstRun onfinish={finishFirstRun} />
   {:else}
     <main>
-      <Header />
-      {#if bar}
-        <div class="bar"><InfoBar {...bar} /></div>
-      {/if}
+      <Header glance={sentence} {notice} />
       {#if service.link.kind === "connecting"}
         <p class="visually-hidden" role="status">{t("link.connecting")}</p>
       {/if}
-      {#if service.link.kind === "connected" && service.snapshot}
-        <SplitBar />
+      {#if book && service.stats}
+        <UsageStrip ledger={book} {lineBps} />
       {/if}
-      <AppList {loading} />
+      {#if service.link.kind === "connecting" || connected}
+        <SliceList ledger={book} {loading} canEdit={connected} />
+      {/if}
     </main>
   {/if}
-  <RuleEditor />
+  <AddSlice />
   <LineDialog />
 </div>
 
@@ -132,13 +86,5 @@
   main {
     flex: 1;
     overflow-y: auto;
-    /* The content layer: the window ground stays visible under the title
-       bar only, as in Windows Settings. */
-    background: var(--surface-layer);
-    border-top: 1px solid var(--stroke-card);
-    border-top-left-radius: var(--radius-card);
-  }
-  .bar {
-    padding: 0 var(--gutter) 16px;
   }
 </style>
