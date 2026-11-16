@@ -4,6 +4,21 @@ Start a fresh session with: **"read docs/HANDOFF-ui.md and continue"**.
 Written 2026-11-16. The general project handoff is `docs/HANDOFF.md`;
 this file is only about the app's look and usability.
 
+## Status (2026-11-16, later)
+
+- **Direction chosen:** "B · Ledger" from three real-size mockups
+  (Console, Ledger, Pipe), then "a bit more modern and simple" (round 2,
+  approved). Built in commit b982e7a; PLAN.md §14.1–14.4, §14.9,
+  D11–D13 and PRODUCT.md now describe it.
+- **Done in code, gates green:** main window (sentence, live strip,
+  slice rows with − % +, settings in place, Everything else's apps, Add a
+  slice dialog), real exe icons (`src-tauri/src/icon.rs`), tray flyout,
+  line dialog, first run, every §14.8 state as the headline. Model and
+  wording in `app/src/lib/ledger.ts` (tested).
+- **Not yet:** the user hasn't seen the built app. Next: run it with
+  the service, get the user's screenshots, fix what they say; then
+  update `docs/HANDOFF.md` and delete `.impeccable/` scratch.
+
 ## The task
 
 Make the SnailNet desktop app (`app/`, Tauri 2 + Svelte 5) look
