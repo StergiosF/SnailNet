@@ -45,8 +45,12 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
      (marker file `autostart-default-applied` in the app config dir);
      tray menu has a checkable "Start with Windows"; commands
      `autostart_enabled` / `set_autostart` for a future settings page).
-     Next: **look at it all in a real window** (nothing has been seen
-     yet), then the settings page (§14.5).
+     Seen in a real window 2026-11-16: Mica couldn't show through
+     WebView2 (white page), so the windows are now opaque with a solid
+     ground (commit 0f932a5). The user then rejected the look ("plain,
+     looks like a Windows application") and a first redesign ("AI
+     slop"). **Next: the redesign in `docs/HANDOFF-ui.md`**, then the
+     settings page (§14.6).
   2. **Phase 2 exit check** (needs the user): start the service, play
      YouTube in Brave with secure DNS on and off, watch `snailnet top`
      (`names:`/`sites:` lines) and the log; add missing domains to
