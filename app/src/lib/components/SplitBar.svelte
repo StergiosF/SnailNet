@@ -311,7 +311,7 @@
     border: 1px solid var(--stroke-card);
     border-bottom: 2px solid var(--accent);
     border-radius: var(--radius-control);
-    background: var(--surface-fallback);
+    background: var(--surface-ground);
     color: var(--text-primary);
     font: inherit;
     font-variant-numeric: tabular-nums;
@@ -347,7 +347,7 @@
     padding: 4px 8px;
     border: 1px solid var(--stroke-card);
     border-radius: var(--radius-control);
-    background: var(--surface-fallback);
+    background: var(--surface-ground);
     color: var(--text-primary);
     font-size: 12px;
     line-height: 16px;

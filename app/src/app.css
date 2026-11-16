@@ -1,6 +1,6 @@
 /* SnailNet tokens: Windows 11 Fluent theme values (PLAN.md §14.1). The
-   window itself is Mica, so the page ground stays transparent and content
-   sits on translucent layer cards. Accent follows the user's Windows accent
+   page ground is Fluent's solid window colour (Mica can't show through
+   WebView2 here) and content sits on translucent layer cards. Accent follows the user's Windows accent
    (UISettings, pushed live by src/lib/system.ts as --sys-accent-*), with
    the Windows default blue as the fallback. Fluent mapping: light theme
    fills with Dark1 and writes with Dark2, dark theme Light2 and Light3. */
@@ -14,7 +14,7 @@
   --text-primary: rgb(0 0 0 / 0.894);
   --text-secondary: rgb(0 0 0 / 0.62);
   --text-tertiary: rgb(0 0 0 / 0.47);
-  --surface-fallback: #f3f3f3;
+  --surface-ground: #f3f3f3;
   --surface-layer: rgb(255 255 255 / 0.5);
   --surface-card: rgb(255 255 255 / 0.7);
   --stroke-card: rgb(0 0 0 / 0.0578);
@@ -67,7 +67,7 @@
     --text-primary: #ffffff;
     --text-secondary: rgb(255 255 255 / 0.786);
     --text-tertiary: rgb(255 255 255 / 0.545);
-    --surface-fallback: #202020;
+    --surface-ground: #202020;
     --surface-layer: rgb(58 58 58 / 0.3);
     --surface-card: rgb(255 255 255 / 0.0512);
     --stroke-card: rgb(0 0 0 / 0.1);
@@ -127,19 +127,14 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  /* Mica shows through; the fallback colour only matters if it can't. */
-  background: transparent;
+  /* Fluent's solid layer colour, what Windows shows when Mica is off (the
+     window has no Mica: see src-tauri/src/window.rs). */
+  background: var(--surface-ground);
   color: var(--text-primary);
   font: 14px/20px var(--font-text);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
-}
-
-/* No Mica (Windows 10, see src-tauri/src/window.rs): paint the layer
-   colour Mica would have given, so the desktop doesn't show through. */
-html.solid-backdrop {
-  background: var(--surface-fallback);
 }
 
 #app {

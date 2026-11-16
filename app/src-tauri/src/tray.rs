@@ -12,8 +12,6 @@ use crate::bridge::Link;
 use crate::tray_icon;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::utils::WindowEffect;
-use tauri::utils::config::WindowEffectsConfig;
 use tauri::{
     App, AppHandle, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
@@ -46,15 +44,10 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         .maximizable(false)
         .minimizable(false)
         .decorations(false)
-        .transparent(true)
         .shadow(true)
         .skip_taskbar(true)
         .always_on_top(true)
         .visible(false)
-        .effects(WindowEffectsConfig {
-            effects: vec![WindowEffect::Mica],
-            ..Default::default()
-        })
         .build()?;
     let handle = app.handle().clone();
     flyout.on_window_event(move |e| {

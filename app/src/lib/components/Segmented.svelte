@@ -54,7 +54,7 @@
     color: var(--text-primary);
   }
   label.checked {
-    background: var(--surface-fallback);
+    background: var(--surface-ground);
     color: var(--text-primary);
     font-weight: 600;
     box-shadow: 0 0 0 1px var(--stroke-card);

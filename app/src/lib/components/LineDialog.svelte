@@ -113,7 +113,7 @@
     overflow: auto;
     border: 1px solid var(--stroke-card);
     border-radius: var(--radius-card);
-    background: var(--surface-fallback);
+    background: var(--surface-ground);
     color: var(--text-primary);
     box-shadow: 0 32px 64px rgb(0 0 0 / 0.19), 0 2px 21px rgb(0 0 0 / 0.15);
   }

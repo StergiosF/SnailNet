@@ -1,7 +1,7 @@
 // The system look from the Rust side (app/src-tauri/src/window.rs): the
-// Windows accent colour (live) and whether Mica is behind the page. Applied
-// as CSS custom properties and a class on <html>; app.css keeps the Windows
-// default blue as the fallback until (or unless) this arrives.
+// Windows accent colour, live. Applied as CSS custom properties on <html>;
+// app.css keeps the Windows default blue as the fallback until (or unless)
+// this arrives.
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -17,13 +17,7 @@ export type Accent = {
   light3: string;
 };
 
-export type Backdrop = "mica" | "solid";
-
-export type SystemLook = { accent: Accent | null; backdrop: Backdrop };
-
-/** Class on <html> when there is no Mica (Windows 10): the page paints
- *  its own solid layer colour instead of showing the desktop. */
-export const SOLID_CLASS = "solid-backdrop";
+export type SystemLook = { accent: Accent | null };
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -49,11 +43,10 @@ export function applySystem(look: SystemLook, root: HTMLElement = document.docum
     if (v) root.style.setProperty(name, v);
     else root.style.removeProperty(name);
   }
-  root.classList.toggle(SOLID_CLASS, look.backdrop === "solid");
 }
 
 /** Apply the current look and follow changes. Failures leave the CSS
- *  defaults in place (blue accent, transparent page). */
+ *  default (blue accent) in place. */
 export async function startSystem(): Promise<void> {
   try {
     await listen<SystemLook>("system", (e) => applySystem(e.payload));

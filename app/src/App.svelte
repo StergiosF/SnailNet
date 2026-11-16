@@ -132,8 +132,8 @@
   main {
     flex: 1;
     overflow-y: auto;
-    /* The content layer: Mica stays visible under the title bar only, as
-       in Windows Settings. */
+    /* The content layer: the window ground stays visible under the title
+       bar only, as in Windows Settings. */
     background: var(--surface-layer);
     border-top: 1px solid var(--stroke-card);
     border-top-left-radius: var(--radius-card);

@@ -14,13 +14,9 @@
   let { loading }: { loading: boolean } = $props();
 
   const rules = $derived(service.activeProfile?.rules ?? []);
-  const names = $derived({
-    ...Object.fromEntries((service.snapshot?.sites ?? []).map((s) => [s.id, s.name])),
-    ...service.siteNames,
-  });
   const rows = $derived(
     listRows(service.stats?.down, service.stats?.up, rules, (target) =>
-      targetLabel(target, service.snapshot?.apps ?? [], names),
+      targetLabel(target, service.snapshot?.apps ?? [], service.siteNames),
     ),
   );
   const canEdit = $derived(service.link.kind === "connected" && service.snapshot !== null);

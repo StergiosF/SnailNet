@@ -23,7 +23,14 @@ class Service {
   );
 
   /** Display names of sites seen in the stats, kept after they go quiet. */
-  siteNames = $state<Record<string, string>>({});
+  #seenSiteNames = $state<Record<string, string>>({});
+
+  /** Every site's display name: the service's known sites, plus any seen
+   *  in the stats (custom sites included). */
+  siteNames = $derived<Record<string, string>>({
+    ...Object.fromEntries((this.snapshot?.sites ?? []).map((s) => [s.id, s.name])),
+    ...this.#seenSiteNames,
+  });
 
   /** Save the active profile's rules. Resolves to the new revision;
    *  rejects with a SaveError (a stale `rev` is a conflict). */
@@ -63,7 +70,7 @@ class Service {
       listen<StatsTick>("stats", (e) => {
         this.stats = e.payload;
         for (const s of e.payload.down?.sites ?? []) {
-          if (this.siteNames[s.site] !== s.name) this.siteNames[s.site] = s.name;
+          if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
         }
       }),
     ]);

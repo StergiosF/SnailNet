@@ -30,11 +30,8 @@
 
   const rules = $derived(service.activeProfile?.rules ?? []);
   const sites = $derived(service.snapshot?.sites ?? []);
-  const names = $derived({
-    ...Object.fromEntries(sites.map((s) => [s.id, s.name])),
-    ...service.siteNames,
-  });
-  const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], names);
+  const label = (target: Target) =>
+    targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
 
   const panel = $derived(editor.panel);
   const target = $derived(panel?.mode === "edit" ? panel.target : null);
@@ -312,7 +309,7 @@
     width: min(380px, 100vw - 48px);
     border-left: 1px solid var(--stroke-card);
     border-top-left-radius: var(--radius-card);
-    background: var(--surface-fallback);
+    background: var(--surface-ground);
     box-shadow: -8px 0 24px rgb(0 0 0 / 0.14);
     animation: slide-in 200ms var(--ease-out);
   }
