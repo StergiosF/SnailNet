@@ -12,9 +12,11 @@
 //! The webview may load after the first events went out, so [`current`]
 //! returns the latest of each.
 
+pub mod autostart;
 pub mod bridge;
 pub mod line;
 pub mod tray;
+pub mod tray_icon;
 pub mod window;
 
 use std::sync::atomic::AtomicBool;
@@ -66,6 +68,15 @@ impl TauriSink {
         // Only fails when the app is shutting down.
         let _ = self.app.emit(event, payload.clone());
     }
+
+    /// Bring the tray icon in line with the latest link and state.
+    fn refresh_tray(&self) {
+        let (link, state) = {
+            let l = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            (l.link.clone(), l.snapshot.as_ref().map(|s| s.state.clone()))
+        };
+        tray_icon::update(&self.app, &link, state.as_ref());
+    }
 }
 
 impl Sink for TauriSink {
@@ -77,10 +88,12 @@ impl Sink for TauriSink {
             }
         });
         self.emit("link", link);
+        self.refresh_tray();
     }
     fn snapshot(&self, snap: &Snapshot) {
         self.shared.update(|l| l.snapshot = Some(snap.clone()));
         self.emit("snapshot", snap);
+        self.refresh_tray();
     }
     fn state(&self, state: &ServiceState) {
         self.shared.update(|l| {
@@ -89,6 +102,7 @@ impl Sink for TauriSink {
             }
         });
         self.emit("service-state", state);
+        self.refresh_tray();
     }
     fn stats(&self, tick: &StatsTick) {
         self.shared.update(|l| l.stats = Some(tick.clone()));
@@ -157,8 +171,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::open_main(app);
         }))
+        .plugin(autostart::plugin())
         .manage(shared.clone())
         .setup(move |app| {
+            // Before the tray, so its "Start with Windows" check is current.
+            autostart::setup(app);
             window::setup(app);
             tray::setup(app)?;
             let sink = TauriSink {
@@ -184,7 +201,9 @@ pub fn run() {
             current,
             set_rules,
             line::set_line,
-            window::system
+            window::system,
+            autostart::autostart_enabled,
+            autostart::set_autostart
         ])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");

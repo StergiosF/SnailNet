@@ -8,6 +8,8 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::bridge::Link;
+use crate::tray_icon;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::utils::WindowEffect;
@@ -35,6 +37,7 @@ struct Blurred(Mutex<Option<Instant>>);
 
 pub fn setup(app: &mut App) -> tauri::Result<()> {
     app.manage(Blurred::default());
+    app.manage(tray_icon::Shown::default());
 
     let flyout = WebviewWindowBuilder::new(app, FLYOUT, WebviewUrl::App("index.html".into()))
         .title("SnailNet")
@@ -72,14 +75,30 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     }
 
     let open = MenuItem::with_id(app, "open", "Open SnailNet", true, None::<&str>)?;
+    let startup = tauri::menu::CheckMenuItem::with_id(
+        app,
+        "startup",
+        "Start with Windows",
+        true,
+        crate::autostart::enabled(app.handle()),
+        None::<&str>,
+    )?;
+    let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit SnailNet", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &quit])?;
-    let mut tray = TrayIconBuilder::with_id("snailnet")
+    let menu = Menu::with_items(app, &[&open, &startup, &sep, &quit])?;
+    let mut tray = TrayIconBuilder::with_id(tray_icon::TRAY_ID)
         .tooltip("SnailNet")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, e| match e.id().as_ref() {
+        .on_menu_event(move |app, e| match e.id().as_ref() {
             "open" => open_main(app),
+            // The click already flipped the check; follow it, then show
+            // what the registry really says (the write can fail).
+            "startup" => {
+                let want = startup.is_checked().unwrap_or(false);
+                let _ = crate::autostart::set(app, want);
+                let _ = startup.set_checked(crate::autostart::enabled(app));
+            }
             // The service keeps shaping; only the app goes.
             "quit" => app.exit(0),
             _ => {}
@@ -99,6 +118,8 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
+    // Faded until the bridge reaches the service.
+    tray_icon::update(app.handle(), &Link::Connecting, None);
     Ok(())
 }
 

@@ -21,6 +21,8 @@ snailnet-ipc = { path = "../../crates/snailnet-ipc" }
 tauri = { version = "2.12.5", features = ["tray-icon"] }
 # A second launch brings up the running app (it lives in the tray).
 tauri-plugin-single-instance = "=2.5.5"
+# Start with Windows: the per-user HKCU Run value (PLAN.md §4, §15).
+tauri-plugin-autostart = "=2.7.0"
 # Same version Tauri already pulls in; WinRT for the accent colour and OS build.
 windows = { version = "0.62.2", features = ["Foundation", "System_Profile", "UI", "UI_ViewManagement"] }
 

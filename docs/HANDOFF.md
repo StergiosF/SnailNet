@@ -2,7 +2,7 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-16 01:40)
+## Start here (updated 2026-11-16)
 
 - **Where we are:** Phase 1 built except its exit soak. Phase 2 code is
   complete (incl. per-site stats rows, name counts over IPC, fuzz targets,
@@ -35,9 +35,18 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
      `flyout` window placed in the work area by the icon, hides on blur;
      closing the main window hides it; single instance via
      `tauri-plugin-single-instance` =2.5.5; `Flyout.svelte`, picked in
-     `main.ts` by window label). Still to do: tray icon states (paused /
-     safe mode / blocked), start minimised + autostart, then **look at
-     it all in a real window** (nothing has been seen yet).
+     `main.ts` by window label). **Tray icon states** (`tray_icon.rs`:
+     normal; amber dot for safe mode / retrying; faded grey when not
+     connected; tooltip says which. Paused and blocked-apps dot wait for
+     those service features). **Autostart + start minimised**
+     (`autostart.rs`, `tauri-plugin-autostart` =2.7.0, HKCU Run with
+     `--minimized`; main window starts hidden and is shown unless that
+     flag is present; release builds turn it on once on first launch
+     (marker file `autostart-default-applied` in the app config dir);
+     tray menu has a checkable "Start with Windows"; commands
+     `autostart_enabled` / `set_autostart` for a future settings page).
+     Next: **look at it all in a real window** (nothing has been seen
+     yet), then the settings page (§14.5).
   2. **Phase 2 exit check** (needs the user): start the service, play
      YouTube in Brave with secure DNS on and off, watch `snailnet top`
      (`names:`/`sites:` lines) and the log; add missing domains to
