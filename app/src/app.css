@@ -1,7 +1,9 @@
 /* SnailNet tokens: Windows 11 Fluent theme values (PLAN.md §14.1). The
    window itself is Mica, so the page ground stays transparent and content
-   sits on translucent layer cards. Accent defaults to the Windows default
-   blue until the Rust side pushes the user's own (UISettings). */
+   sits on translucent layer cards. Accent follows the user's Windows accent
+   (UISettings, pushed live by src/lib/system.ts as --sys-accent-*), with
+   the Windows default blue as the fallback. Fluent mapping: light theme
+   fills with Dark1 and writes with Dark2, dark theme Light2 and Light3. */
 
 :root {
   color-scheme: light;
@@ -21,10 +23,10 @@
   --fill-subtle-pressed: rgb(0 0 0 / 0.0241);
   --skeleton: rgb(0 0 0 / 0.06);
 
-  --accent: #005fb8;
-  --accent-text: #003e92;
+  --accent: var(--sys-accent-dark1, #005fb8);
+  --accent-text: var(--sys-accent-dark2, #003e92);
   --on-accent: #ffffff;
-  --accent-tint: rgb(0 95 184 / 0.09);
+  --accent-tint: color-mix(in srgb, var(--accent) 9%, transparent);
 
   --caution: #9d5d00;
   --caution-tint: #fff4ce;
@@ -34,7 +36,7 @@
 
   --focus-outer: rgb(0 0 0 / 0.894);
   --focus-inner: #ffffff;
-  --selection: rgb(0 95 184 / 0.25);
+  --selection: color-mix(in srgb, var(--accent) 25%, transparent);
 
   /* Split-bar slices: calm hues, tinted ground + dark ink (≥ 7:1). */
   --slice-1-bg: #cdede6;
@@ -74,10 +76,10 @@
     --fill-subtle-pressed: rgb(255 255 255 / 0.0419);
     --skeleton: rgb(255 255 255 / 0.07);
 
-    --accent: #60cdff;
-    --accent-text: #99ebff;
+    --accent: var(--sys-accent-light2, #60cdff);
+    --accent-text: var(--sys-accent-light3, #99ebff);
     --on-accent: #000000;
-    --accent-tint: rgb(96 205 255 / 0.12);
+    --accent-tint: color-mix(in srgb, var(--accent) 12%, transparent);
 
     --caution: #fce100;
     --caution-tint: #433519;
@@ -101,7 +103,7 @@
 
     --focus-outer: #ffffff;
     --focus-inner: rgb(0 0 0 / 0.7);
-    --selection: rgb(96 205 255 / 0.3);
+    --selection: color-mix(in srgb, var(--accent) 30%, transparent);
   }
 }
 
@@ -132,6 +134,12 @@ body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
+}
+
+/* No Mica (Windows 10, see src-tauri/src/window.rs): paint the layer
+   colour Mica would have given, so the desktop doesn't show through. */
+html.solid-backdrop {
+  background: var(--surface-fallback);
 }
 
 #app {

@@ -1,7 +1,11 @@
 <script lang="ts">
   // Custom title bar (PLAN.md §14.2): app glyph + name in a drag region,
   // Windows 11 caption buttons drawn with Segoe Fluent Icons like the
-  // system's own.
+  // system's own. Snap layouts on hover over Maximize are not available:
+  // with decorations off, WebView2 owns the mouse over the page and only
+  // reports drag / no-drag regions, never a maximize button, and every
+  // workaround is a hack (native overlay window or faked Win+Z). Win+Z
+  // itself still opens them.
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { t } from "../i18n";

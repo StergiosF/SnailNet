@@ -13,6 +13,7 @@
 //! returns the latest of each.
 
 pub mod bridge;
+pub mod window;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -152,6 +153,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(shared.clone())
         .setup(move |app| {
+            window::setup(app);
             let sink = TauriSink {
                 app: app.handle().clone(),
                 shared,
@@ -171,7 +173,7 @@ pub fn run() {
                 })?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![current, set_rules])
+        .invoke_handler(tauri::generate_handler![current, set_rules, window::system])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");
 }

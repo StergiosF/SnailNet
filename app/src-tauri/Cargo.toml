@@ -19,6 +19,8 @@ serde_json = "1"
 snailnet-core = { path = "../../crates/snailnet-core" }
 snailnet-ipc = { path = "../../crates/snailnet-ipc" }
 tauri = { version = "2.12.5", features = [] }
+# Same version Tauri already pulls in; WinRT for the accent colour and OS build.
+windows = { version = "0.62.2", features = ["Foundation", "System_Profile", "UI", "UI_ViewManagement"] }
 
 [lints]
 workspace = true

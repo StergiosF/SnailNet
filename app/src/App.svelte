@@ -10,8 +10,10 @@
   import { stateKind } from "./lib/format";
   import { t } from "./lib/i18n";
   import { service } from "./lib/service.svelte";
+  import { startSystem } from "./lib/system";
 
   onMount(() => {
+    void startSystem();
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
