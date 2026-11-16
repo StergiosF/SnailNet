@@ -5,9 +5,9 @@
   // "Everything else") and opens the rule editor; "Add a slice" opens the
   // picker for anything not listed.
   import { editor } from "../editor.svelte";
-  import { mbps, percent, targetLabel } from "../format";
+  import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
-  import { listRows, sameTarget, shownShare, type Row } from "../rules";
+  import { listRows, ruleChip, sameTarget, type Row } from "../rules";
   import { service } from "../service.svelte";
   import Snail from "./Snail.svelte";
 
@@ -26,16 +26,6 @@
   const canEdit = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const selected = $derived(editor.panel?.mode === "edit" ? editor.panel.target : null);
 
-  function chip(row: Row): string {
-    const rule = rules[row.rule];
-    if (!rule) return t("list.chip.everything");
-    if (!rule.enabled) return t("list.chip.off");
-    const share = shownShare(rules, row.rule);
-    return t("list.chip", {
-      share: share === null ? t("list.chip.free") : percent(share),
-      priority: t(`priority.${rule.priority}`),
-    });
-  }
 </script>
 
 <section aria-labelledby="active-heading">
@@ -99,7 +89,7 @@
   <span class="speed num up" aria-label="{t('list.up')} {mbps(r.up)} Mbps">
     <i class="icon" aria-hidden="true">&#xE898;</i>{r.idle ? "–" : mbps(r.up)}
   </span>
-  <span class="chip num" class:ruled>{r.fixed ? "" : chip(r)}</span>
+  <span class="chip num" class:ruled>{r.fixed ? "" : ruleChip(rules, r.rule)}</span>
   <i class="icon chevron" aria-hidden="true">{r.fixed || !canEdit ? "" : ""}</i>
 {/snippet}
 

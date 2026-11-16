@@ -14,6 +14,7 @@
 
 pub mod bridge;
 pub mod line;
+pub mod tray;
 pub mod window;
 
 use std::sync::atomic::AtomicBool;
@@ -152,9 +153,14 @@ fn current(shared: tauri::State<'_, Arc<Shared>>) -> Latest {
 pub fn run() {
     let shared = Arc::new(Shared::default());
     tauri::Builder::default()
+        // First, so a second copy hands over before doing anything else.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::open_main(app);
+        }))
         .manage(shared.clone())
         .setup(move |app| {
             window::setup(app);
+            tray::setup(app)?;
             let sink = TauriSink {
                 app: app.handle().clone(),
                 shared,

@@ -5,7 +5,8 @@
 // a slice carves it out of Everything else first, taking one away hands it
 // back to the other slices in proportion.
 
-import { appRates } from "./format";
+import { appRates, percent } from "./format";
+import { t } from "./i18n";
 import { MIN_RULE, addSlice, normalize, removeSlice, setShare } from "./split";
 import type { DirStats, Limit, Priority, Rule, SiteInfo, Target } from "./types";
 
@@ -244,4 +245,17 @@ export function pickable(
     .sort((a, b) => a.name.localeCompare(b.name));
   for (const a of appList) push({ kind: "family", id: a.family }, a.name);
   return out;
+}
+
+/** A row's slice chip: "40% · Low", "When free · High", "Rule off", or
+ *  "Everything else" when `i` is -1 (no rule). */
+export function ruleChip(rules: Rule[], i: number): string {
+  const rule = rules[i];
+  if (!rule) return t("list.chip.everything");
+  if (!rule.enabled) return t("list.chip.off");
+  const share = shownShare(rules, i);
+  return t("list.chip", {
+    share: share === null ? t("list.chip.free") : percent(share),
+    priority: t(`priority.${rule.priority}`),
+  });
 }

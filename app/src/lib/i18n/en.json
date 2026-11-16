@@ -108,5 +108,11 @@
   "picker.title": "Add a slice",
   "picker.search": "Search apps and websites",
   "picker.empty": "Nothing matches “{query}”.",
-  "picker.hint": "Everything here already has a slice. Apps show up once they've used the internet."
+  "picker.hint": "Everything here already has a slice. Apps show up once they've used the internet.",
+  "flyout.top": "Busiest now",
+  "flyout.quiet": "Nothing is using the internet right now.",
+  "flyout.open": "Open SnailNet",
+  "flyout.sharing": "Sharing your connection by your rules",
+  "flyout.sharing.lowLatency": "Sharing your connection · Low latency on",
+  "flyout.cantControl": "Can't reach the SnailNet service"
 }

@@ -26,8 +26,18 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
      (`window.rs`), **Windows 10 fallback** (solid layer colour, no
      Acrylic). Open user questions: Acrylic on Win10 after all? Snap
      layouts need a hack (wry hosts WebView2 windowed; see the comment
-     in `TitleBar.svelte`): do it, or wait for upstream? Still to do:
-     tray + flyout, first run, then look at it all in a real window.
+     in `TitleBar.svelte`): do it, or wait for upstream? (Defaults
+     taken meanwhile: solid colour; wait.) Also done: **line speed**
+     (`line.rs` `set_line`, `LineDialog` from the header figures and the
+     Watching-only bar), **first run** (`FirstRun.svelte`: welcome →
+     type speeds or later → done; `localStorage` `snailnet.firstRun.done`),
+     **tray + flyout** (`tray.rs`: menu Open/Quit, left click toggles the
+     `flyout` window placed in the work area by the icon, hides on blur;
+     closing the main window hides it; single instance via
+     `tauri-plugin-single-instance` =2.5.5; `Flyout.svelte`, picked in
+     `main.ts` by window label). Still to do: tray icon states (paused /
+     safe mode / blocked), start minimised + autostart, then **look at
+     it all in a real window** (nothing has been seen yet).
   2. **Phase 2 exit check** (needs the user): start the service, play
      YouTube in Brave with secure DNS on and off, watch `snailnet top`
      (`names:`/`sites:` lines) and the log; add missing domains to
