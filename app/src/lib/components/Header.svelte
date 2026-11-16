@@ -50,7 +50,12 @@
     >
       {#if hasLine}
         <span class="k">{t("header.line")}</span>
-        <span class="v">{fig(line.down_mbps)}<small>↓</small> {fig(line.up_mbps)}<small>↑ Mbps</small></span>
+        <span class="v"
+          >{fig(line.down_mbps)}<i class="icon dir" aria-hidden="true">&#xE896;</i>{fig(line.up_mbps)}<i
+            class="icon dir"
+            aria-hidden="true">&#xE898;</i
+          ><small>Mbps</small></span
+        >
       {:else}
         <span class="v">{t("header.line.set")}</span>
       {/if}
@@ -135,6 +140,11 @@
     font-weight: 400;
     color: var(--text-secondary);
     margin-left: 1px;
+  }
+  .dir {
+    margin: 0 8px 0 3px;
+    font-size: 11px;
+    color: var(--text-secondary);
   }
   .pen {
     font-size: 12px;
