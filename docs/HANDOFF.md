@@ -10,8 +10,11 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   All pushed on `main`. The dev service in `target\debug` was last run
   with the user's real config (it shapes their traffic at 23 Mbps while
   running; stopping needs elevation).
-- **Next:** the user's feedback on the built app; then the Phase 2 exit
-  check, the 24 h soak, and the anti-cheat test below.
+- **The user approved the redesigned app (2026-11-17).** Next: the
+  Phase 2 exit check, the 24 h soak, and the anti-cheat test below; the
+  Phase 3 exit test (the motivating scenario, mouse only, < 15 s, by
+  someone new to the app); then Phase 4 (speed test, low-latency tuning,
+  automatic focus boost).
 
 ## Start here (2026-11-16)
 

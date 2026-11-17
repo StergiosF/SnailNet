@@ -23,7 +23,8 @@ this file is only about the app's look and usability.
   now the design"); disliked the speed dialog's fields and the side
   rail's "25 ↓ – ↑ Mbps" (fixed: the fields' wrapper clashed with the
   global `.field` class; the line block now reads Download / Upload in
-  words). Next: their screenshots of the rest, then fix what they say.
+  words). **The user approved the built app (2026-11-17).** The redesign
+  task below is done; new UI work follows PLAN.md §14 as it stands.
 - `.impeccable/` is untracked impeccable state (config, hook cache,
   old mockups); leave it unless the user asks.
 
