@@ -32,6 +32,12 @@ fn state_text(s: &ServiceState) -> String {
         ServiceState::SafeMode { failures } => format!(
             "Safe mode: {failures} crashes or fail-opens recently; not shaping until the service restarts"
         ),
+        ServiceState::Paused { until: Some(u) } => {
+            format!("paused until {u} (Unix seconds): not shaping or blocking")
+        }
+        ServiceState::Paused { until: None } => {
+            "paused until resumed: not shaping or blocking".into()
+        }
     }
 }
 

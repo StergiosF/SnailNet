@@ -38,6 +38,10 @@ pub fn status(link: &Link, state: Option<&ServiceState>) -> (Status, &'static st
         (Link::Connected { .. }, Some(ServiceState::Retrying { .. })) => {
             (Status::Warning, "SnailNet: shaping stopped, retrying")
         }
+        // PLAN.md §14.4: paused is the amber dot too.
+        (Link::Connected { .. }, Some(ServiceState::Paused { .. })) => {
+            (Status::Warning, "SnailNet: paused")
+        }
         (Link::Connected { .. }, Some(ServiceState::Unshaped)) => {
             (Status::Normal, "SnailNet: watching only")
         }
@@ -151,6 +155,10 @@ mod tests {
             )
             .0,
             Status::Offline
+        );
+        assert_eq!(
+            status(&connected(), Some(&ServiceState::Paused { until: None })),
+            (Status::Warning, "SnailNet: paused")
         );
         assert_eq!(status(&Link::Rejected, None).0, Status::Offline);
         assert_eq!(status(&Link::Connecting, None).0, Status::Offline);

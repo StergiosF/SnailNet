@@ -60,6 +60,14 @@ pub struct Config {
     /// §11.5 "Boost").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boost: Option<Boost>,
+    /// SnailNet steps aside (no shaping, no blocking) until it ends
+    /// (PLAN.md §11.8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pause: Option<Pause>,
+    /// Apps (family ids) with no internet, in every mode (PLAN.md §11.3).
+    /// Their local-network traffic still passes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked: Vec<String>,
     #[serde(default)]
     pub profiles: Vec<Profile>,
     /// The user's own sites (PLAN.md §8.2 "Add a custom site"). One with a
@@ -111,6 +119,20 @@ pub struct Boost {
 }
 
 impl Boost {
+    pub fn is_on(&self, now: u64) -> bool {
+        self.until.is_none_or(|u| now < u)
+    }
+}
+
+/// A pause: until `until` (Unix seconds), or until resumed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pause {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<u64>,
+}
+
+impl Pause {
     pub fn is_on(&self, now: u64) -> bool {
         self.until.is_none_or(|u| now < u)
     }
@@ -308,6 +330,8 @@ impl Default for Config {
             settings: Settings::default(),
             line: Line::default(),
             boost: None,
+            pause: None,
+            blocked: Vec::new(),
             profiles: crate::modes::all(),
             sites: Vec::new(),
         }
@@ -407,6 +431,14 @@ impl Config {
                 }
             }
         }
+        for (i, id) in self.blocked.iter().enumerate() {
+            if id.trim().is_empty() || id.contains(':') {
+                return bad(format!("blocked app {id:?} is not a family id"));
+            }
+            if self.blocked[..i].iter().any(|b| b.eq_ignore_ascii_case(id)) {
+                return bad(format!("{id:?} is blocked twice"));
+            }
+        }
         if let Some(b) = &self.boost {
             if b.target.id.trim().is_empty() {
                 return bad("the boost has an empty target id".into());
@@ -424,6 +456,11 @@ impl Config {
             .iter()
             .find(|p| p.id == self.active_profile)
             .unwrap_or(&self.profiles[0])
+    }
+
+    /// The pause, if it's still on at `now` (Unix seconds).
+    pub fn pause_at(&self, now: u64) -> Option<Pause> {
+        self.pause.filter(|p| p.is_on(now))
     }
 
     /// The boost, if it's still on at `now` (Unix seconds).
@@ -471,8 +508,20 @@ impl Config {
     }
 
     /// What the scheduler should do under the active profile at `now`
-    /// (Unix seconds; it decides whether the boost is still on).
+    /// (Unix seconds; it decides whether the boost and the pause are still
+    /// on). While paused: nothing at all.
     pub fn plan(&self, now: u64) -> Plan {
+        if self.pause_at(now).is_some() {
+            return Plan {
+                down: None,
+                up: None,
+                targets: Vec::new(),
+                prios: Vec::new(),
+                blocked: Vec::new(),
+                shape_lan: !self.settings.lan_exempt,
+                custom_sites: self.sites.clone(),
+            };
+        }
         let all = self.effective_rules(now);
         let rules: Vec<&Rule> = all.iter().filter(|r| r.enabled).collect();
         let bp = shares::normalize(&rules.iter().map(|r| r.share).collect::<Vec<_>>());
@@ -513,6 +562,7 @@ impl Config {
             up: direction(self.line.up_mbps, factor(LOW_LATENCY_FACTOR_UP), false),
             targets: rules.iter().map(|r| r.target.clone()).collect(),
             prios: rules.iter().map(|r| r.priority).collect(),
+            blocked: self.blocked.iter().map(|id| id.to_lowercase()).collect(),
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
         }
@@ -558,6 +608,8 @@ pub struct Plan {
     pub up: Option<SchedulerConfig>,
     pub targets: Vec<Target>,
     pub prios: Vec<Priority>,
+    /// Lowercase family ids whose internet traffic is dropped.
+    pub blocked: Vec<String>,
     pub shape_lan: bool,
     /// For the domain → site matcher, with the shipped packs.
     pub custom_sites: Vec<SiteDef>,
@@ -566,6 +618,16 @@ pub struct Plan {
 impl Plan {
     pub fn shapes_anything(&self) -> bool {
         self.down.is_some() || self.up.is_some()
+    }
+
+    /// Whether packets need diverting at all: shaping or blocking.
+    pub fn needs_engine(&self) -> bool {
+        self.shapes_anything() || !self.blocked.is_empty()
+    }
+
+    /// Is `app` blocked?
+    pub fn blocks(&self, app: &App) -> bool {
+        self.blocked.contains(&app.family)
     }
 
     /// Everything else's class id.
@@ -878,6 +940,33 @@ ceiling = { down = \"10%\" }
                 .to_string()
                 .contains("not a known site")
         );
+    }
+
+    #[test]
+    fn blocked_apps_and_pause() {
+        let mut c = Config::parse(&with_profile(&rule("family", "brave", 3000))).unwrap();
+        c.blocked = vec!["Steam".into()];
+        c.pause = Some(Pause { until: Some(100) });
+        c.validate().unwrap();
+        assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
+
+        // Paused: nothing shaped, nothing blocked.
+        c.line.down_mbps = Some(25.0);
+        let p = c.plan(99);
+        assert!(!p.needs_engine() && p.targets.is_empty());
+        // Over: rules and blocks are back.
+        let p = c.plan(100);
+        assert!(p.shapes_anything());
+        assert!(p.blocks(&app("steam", "steam.exe")));
+        assert!(!p.blocks(&app("brave", "brave.exe")));
+        // Blocking alone needs the engine, with no line speed.
+        c.line.down_mbps = None;
+        assert!(c.plan(100).needs_engine() && !c.plan(100).shapes_anything());
+
+        c.blocked = vec!["steam".into(), "STEAM".into()];
+        assert!(c.validate().unwrap_err().to_string().contains("twice"));
+        c.blocked = vec!["site:youtube".into()];
+        assert!(c.validate().unwrap_err().to_string().contains("family id"));
     }
 
     #[test]

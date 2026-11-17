@@ -107,6 +107,7 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         up,
         rules: Arc::new(AppRules(args.apps.clone())),
         shape_lan: args.shape_lan,
+        blocking: false,
         rx_threads: args.rx_threads.into(),
     })?;
 

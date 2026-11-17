@@ -246,6 +246,14 @@ pub trait Rules: Send + Sync + 'static {
     fn site_class_of(&self, names: &[String]) -> Option<ClassId> {
         self.site_of(names).and_then(|(id, _)| self.site_class(id))
     }
+    /// Whether any app is blocked (PLAN.md §11.3).
+    fn blocks_any(&self) -> bool {
+        false
+    }
+    /// Whether `app` may not use the internet.
+    fn blocks(&self, _app: &App) -> bool {
+        false
+    }
 }
 
 /// A [`Plan`] plus the domain → site matcher for its custom sites.
@@ -290,6 +298,14 @@ impl Rules for PlanRules {
 
     fn site_class(&self, site: &str) -> Option<ClassId> {
         self.plan.site_class(site)
+    }
+
+    fn blocks_any(&self) -> bool {
+        !self.plan.blocked.is_empty()
+    }
+
+    fn blocks(&self, app: &App) -> bool {
+        self.plan.blocks(app)
     }
 }
 
@@ -452,6 +468,8 @@ pub struct AppClassifier {
     /// resolved afresh), so this needs no expiry. One entry per app; cleared
     /// when the rules change.
     app_class: HashMap<AppId, ClassId>,
+    /// Whether each app is blocked; cleared with the rules.
+    app_blocked: HashMap<AppId, bool>,
     pending: Pending,
     sites: Arc<SiteState>,
     /// Site id → stats slot, this thread's copy of [`SiteState::slot`];
@@ -472,6 +490,7 @@ impl Clone for AppClassifier {
             rules: self.rules.clone(),
             seen: self.seen,
             app_class: self.app_class.clone(),
+            app_blocked: self.app_blocked.clone(),
             pending: self.pending.clone(),
             sites: self.sites.clone(),
             site_slots: self.site_slots.clone(),
@@ -488,6 +507,7 @@ impl AppClassifier {
         if g != self.seen {
             self.rules = self.live.load();
             self.app_class.clear();
+            self.app_blocked.clear();
             self.site_slots.clear();
             self.seen = g;
         }
@@ -560,6 +580,25 @@ impl AppClassifier {
 }
 
 impl Classifier for AppClassifier {
+    /// A packet whose flow belongs to a blocked app. Traffic not tied to an
+    /// app yet passes: a blocked app's connection then fails on its next
+    /// packets.
+    fn blocked(&mut self, info: &PacketInfo, outbound: bool) -> bool {
+        self.refresh();
+        if !self.rules.blocks_any() {
+            return false;
+        }
+        let key = FlowKey::from_packet(info, outbound);
+        let Some((owner, _)) = self.attribution.lookup(&key) else {
+            return false;
+        };
+        let (rules, attribution) = (&self.rules, &self.attribution);
+        *self
+            .app_blocked
+            .entry(owner.app)
+            .or_insert_with(|| rules.blocks(&attribution.app(owner.app)))
+    }
+
     /// The tag packs the packet's [`AppId`] and, while flows are named, its
     /// site ([`tags`]), so per-tag byte counts give per-app and per-site
     /// rates.
@@ -617,6 +656,8 @@ pub struct Spec {
     pub up: Option<SchedulerConfig>,
     pub rules: Arc<dyn Rules>,
     pub shape_lan: bool,
+    /// Apps may be blocked: divert both directions, even unshaped ones.
+    pub blocking: bool,
     /// 1 or 2. 2 can reorder packets within a flow.
     pub rx_threads: usize,
 }
@@ -640,9 +681,9 @@ impl Shaper {
         let mut filter = String::from(
             "!loopback and !impostor and (tcp or udp) and remotePort != 53 and localPort != 53",
         );
-        match (spec.down.is_some(), spec.up.is_some()) {
-            (true, false) => filter.push_str(" and inbound"),
-            (false, true) => filter.push_str(" and outbound"),
+        match (spec.down.is_some(), spec.up.is_some(), spec.blocking) {
+            (true, false, false) => filter.push_str(" and inbound"),
+            (false, true, false) => filter.push_str(" and outbound"),
             _ => {}
         }
         let timer = HighResTimer::new().context("creating a high-resolution timer")?;
@@ -669,6 +710,7 @@ impl Shaper {
             live: rules.clone(),
             seen: 0,
             app_class: HashMap::new(),
+            app_blocked: HashMap::new(),
             pending: Pending::default(),
             sites: sites.clone(),
             site_slots: HashMap::new(),
@@ -684,6 +726,7 @@ impl Shaper {
             FastPathConfig {
                 rx_threads: spec.rx_threads,
                 shape_lan: spec.shape_lan,
+                blocking: spec.blocking,
                 ..FastPathConfig::default()
             },
         )
@@ -789,6 +832,7 @@ impl runner::Engine for WinEngine {
             up: plan.up.clone(),
             rules: Arc::new(PlanRules::new(plan.clone())),
             shape_lan: plan.shape_lan,
+            blocking: !plan.blocked.is_empty(),
             rx_threads: self.rx_threads,
         })?;
         let report = Report::new(&shaper);
@@ -796,6 +840,7 @@ impl runner::Engine for WinEngine {
             shaper,
             report,
             shape_lan: plan.shape_lan,
+            blocking: !plan.blocked.is_empty(),
         })
     }
 }
@@ -805,6 +850,8 @@ pub struct Running {
     report: Report,
     /// Fixed for the fast path's lifetime.
     shape_lan: bool,
+    /// Started for blocking: both directions diverted.
+    blocking: bool,
 }
 
 impl runner::Running for Running {
@@ -842,6 +889,9 @@ impl runner::Running for Running {
     fn apply(&mut self, plan: &Plan) -> Result<()> {
         if plan.shape_lan != self.shape_lan {
             anyhow::bail!("LAN shaping changed");
+        }
+        if !plan.blocked.is_empty() && !self.blocking {
+            anyhow::bail!("an app is blocked now");
         }
         self.shaper.reconfigure(
             plan.down.clone(),
@@ -929,11 +979,12 @@ impl Report {
         tracing::info!(
             "packets by flow {flow}, socket {socket}, port {port}, pending {pending}, unknown {unknown}; \
              late flows {late}; tracking {flows} flows, {sockets} sockets, {ports} ports, {} apps \
-             (table full skips {full}); pool free {small}+{large}; passthrough {}, overflow {}, send errors {}",
+             (table full skips {full}); pool free {small}+{large}; passthrough {}, overflow {}, send errors {},              blocked {}",
             s.attribution().app_count(),
             c.bypassed - l.bypassed,
             (c.pool_exhausted - l.pool_exhausted) + (c.channel_full - l.channel_full),
             c.send_errors - l.send_errors,
+            c.blocked - l.blocked,
         );
         let names = who.names();
         let NameTick {

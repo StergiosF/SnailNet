@@ -41,6 +41,16 @@ fn inbound(from: [u8; 4], port: u16, payload: usize, id: u32) -> Vec<u8> {
     p
 }
 
+/// The same packet the other way: `local → to` (outbound).
+fn outbound(to: [u8; 4], port: u16, payload: usize, id: u32) -> Vec<u8> {
+    let mut p = inbound(to, port, payload, id);
+    p[12..16].copy_from_slice(&LOCAL);
+    p[16..20].copy_from_slice(&to);
+    p[20..22].copy_from_slice(&50_000u16.to_be_bytes());
+    p[22..24].copy_from_slice(&port.to_be_bytes());
+    p
+}
+
 fn id_of(p: &[u8]) -> u32 {
     u32::from_be_bytes(p[40..44].try_into().unwrap())
 }
@@ -284,6 +294,75 @@ fn starting_without_a_direction_is_an_error() {
         FastPathConfig::default(),
     );
     assert!(r.is_err());
+}
+
+/// Blocks remote port [`PORT_A`] (as if its app were blocked), shapes like
+/// [`ByPort`].
+#[derive(Clone)]
+struct BlockA;
+
+impl Classifier for BlockA {
+    fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+        ByPort.classify(pkt, info, outbound)
+    }
+    fn blocked(&mut self, info: &PacketInfo, outbound: bool) -> bool {
+        (if outbound {
+            info.dst_port
+        } else {
+            info.src_port
+        }) == PORT_A
+    }
+}
+
+#[test]
+fn a_blocked_app_is_dropped_in_both_directions_but_not_on_the_lan() {
+    let engine = Arc::new(MockEngine::new());
+    // Only download is shaped; blocking still covers upload.
+    let fp = FastPath::start(
+        engine.clone(),
+        Some(config(1_000_000)),
+        None,
+        BlockA,
+        Box::new(SpinNap),
+        FastPathConfig {
+            blocking: true,
+            ..FastPathConfig::default()
+        },
+    )
+    .unwrap();
+    engine.inject(&inbound(REMOTE, PORT_A, 100, 1), false);
+    engine.inject(&outbound(REMOTE, PORT_A, 100, 2), true);
+    engine.inject(&inbound(LAN_PEER, PORT_A, 100, 3), false);
+    engine.inject(&inbound(REMOTE, PORT_B, 100, 4), false);
+    assert!(engine.wait_for_sent(2, Duration::from_secs(2)));
+    assert!(wait(|| fp.counters().blocked == 2, Duration::from_secs(2)));
+    fp.stop();
+    let ids: HashSet<u32> = engine.sent().iter().map(|s| id_of(&s.data)).collect();
+    assert_eq!(ids, HashSet::from([3, 4]), "LAN and other apps pass");
+}
+
+#[test]
+fn blocking_alone_needs_no_direction_to_shape() {
+    let engine = Arc::new(MockEngine::new());
+    let fp = FastPath::start(
+        engine.clone(),
+        None,
+        None,
+        BlockA,
+        Box::new(SpinNap),
+        FastPathConfig {
+            blocking: true,
+            ..FastPathConfig::default()
+        },
+    )
+    .unwrap();
+    engine.inject(&inbound(REMOTE, PORT_A, 100, 1), false);
+    engine.inject(&inbound(REMOTE, PORT_B, 100, 2), false);
+    assert!(engine.wait_for_sent(1, Duration::from_secs(2)));
+    assert!(wait(|| fp.counters().blocked == 1, Duration::from_secs(2)));
+    let c = fp.counters();
+    assert_eq!((c.bypassed, c.queued), (1, 0), "the rest passes unshaped");
+    assert_eq!(fp.stop(), None);
 }
 
 #[test]

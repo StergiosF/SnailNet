@@ -116,9 +116,14 @@ pub enum Request {
         is_game: bool,
         confidence: f32,
     },
+    /// Step aside (no shaping, no blocking) for `minutes`, or until
+    /// [`Request::Resume`] (`None`).
     Pause {
-        /// Unix seconds; `None` resumes.
-        until: Option<u64>,
+        minutes: Option<u32>,
+        rev: u64,
+    },
+    Resume {
+        rev: u64,
     },
     RunSpeedTest,
     AnswerPrompt {
@@ -145,6 +150,7 @@ impl Request {
             Self::SetBlocked { .. } => "SetBlocked",
             Self::FocusChanged { .. } => "FocusChanged",
             Self::Pause { .. } => "Pause",
+            Self::Resume { .. } => "Resume",
             Self::RunSpeedTest => "RunSpeedTest",
             Self::AnswerPrompt { .. } => "AnswerPrompt",
         }
@@ -205,6 +211,11 @@ pub enum ServiceState {
     /// Too many crashes or fail-opens recently: not shaping until restarted.
     SafeMode {
         failures: u32,
+    },
+    /// The user paused SnailNet: nothing shaped or blocked until `until`
+    /// (Unix seconds), or until resumed (`None`).
+    Paused {
+        until: Option<u64>,
     },
 }
 
@@ -465,7 +476,10 @@ mod tests {
                 },
                 rev: 1,
             },
-            Request::Pause { until: None },
+            Request::Pause {
+                minutes: None,
+                rev: 3,
+            },
         ] {
             roundtrip(ClientMsg { id: 3, req });
         }

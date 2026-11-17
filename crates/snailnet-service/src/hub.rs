@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::modes;
-use snailnet_core::rules::{Boost, Config, Line, Plan, Rule, Target};
+use snailnet_core::rules::{Boost, Config, Line, Pause, Plan, Rule, Target};
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
@@ -118,23 +118,44 @@ impl Hub {
         (i.config.plan(now), i.config.active().name.clone())
     }
 
-    /// End a boost whose time is up, so the file and every client see it
-    /// gone. Returns whether one ended.
-    pub fn end_boost_if_over(&self, now: u64) -> bool {
-        let over = {
+    /// The pause, if it's on at `now`.
+    pub fn pause_at(&self, now: u64) -> Option<Pause> {
+        self.lock().config.pause_at(now)
+    }
+
+    /// End a boost or a pause whose time is up, so the file and every
+    /// client see it gone. Returns whether one ended.
+    pub fn end_expired(&self, now: u64) -> bool {
+        let (boost, pause) = {
             let i = self.lock();
-            i.rev != 0 && i.config.boost.as_ref().is_some_and(|b| !b.is_on(now))
+            if i.rev == 0 {
+                return false;
+            }
+            (
+                i.config.boost.as_ref().is_some_and(|b| !b.is_on(now)),
+                i.config.pause.is_some_and(|p| !p.is_on(now)),
+            )
         };
-        if !over {
+        if !boost && !pause {
             return false;
         }
         let rev = self.rev();
         match self.change(rev, |c| {
-            c.boost = None;
+            if boost {
+                c.boost = None;
+            }
+            if pause {
+                c.pause = None;
+            }
             Ok(())
         }) {
             Ok(_) => {
-                tracing::info!("the boost's time is up");
+                if boost {
+                    tracing::info!("the boost's time is up");
+                }
+                if pause {
+                    tracing::info!("the pause is over");
+                }
                 true
             }
             // A client changed something at the same moment: next time.
@@ -296,6 +317,39 @@ impl Hub {
                 target,
                 until: minutes.map(|m| now + u64::from(m) * 60),
             });
+            Ok(())
+        })
+    }
+
+    /// Pause for `minutes` from `now` (Unix seconds), or until resumed.
+    pub fn pause(&self, minutes: Option<u32>, now: u64, rev: u64) -> Result<u64, Refusal> {
+        if minutes == Some(0) {
+            return Err((ErrorCode::Invalid, "a pause needs at least a minute".into()));
+        }
+        self.change(rev, |c| {
+            c.pause = Some(Pause {
+                until: minutes.map(|m| now + u64::from(m) * 60),
+            });
+            Ok(())
+        })
+    }
+
+    pub fn resume(&self, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            c.pause = None;
+            Ok(())
+        })
+    }
+
+    /// Block or unblock an app (a family id) in every mode.
+    pub fn set_blocked(&self, family: &str, blocked: bool, rev: u64) -> Result<u64, Refusal> {
+        let id = family.trim().to_lowercase();
+        self.change(rev, |c| {
+            c.blocked.retain(|b| !b.eq_ignore_ascii_case(&id));
+            if blocked {
+                c.blocked.push(id);
+                c.blocked.sort();
+            }
             Ok(())
         })
     }

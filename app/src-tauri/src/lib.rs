@@ -170,6 +170,9 @@ pub fn run() {
             changes::reset_all,
             changes::boost,
             changes::stop_boost,
+            changes::pause,
+            changes::resume,
+            changes::set_blocked,
             autostart::autostart_enabled,
             autostart::set_autostart
         ])

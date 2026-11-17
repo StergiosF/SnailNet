@@ -358,9 +358,14 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             rev,
         } => ack(hub.boost(target, minutes, unix_now(), rev)),
         Request::StopBoost { rev } => ack(hub.stop_boost(rev)),
-        other @ (Request::SetBlocked { .. }
-        | Request::FocusChanged { .. }
-        | Request::Pause { .. }
+        Request::Pause { minutes, rev } => ack(hub.pause(minutes, unix_now(), rev)),
+        Request::Resume { rev } => ack(hub.resume(rev)),
+        Request::SetBlocked {
+            family_id,
+            blocked,
+            rev,
+        } => ack(hub.set_blocked(&family_id, blocked, rev)),
+        other @ (Request::FocusChanged { .. }
         | Request::RunSpeedTest
         | Request::AnswerPrompt { .. }) => err(
             ErrorCode::Unsupported,
@@ -506,8 +511,8 @@ mod tests {
         assert_eq!(b.target, Target::family("steam"));
         let until = b.until.unwrap();
         assert!(until > unix_now() + 3500, "an hour from now");
-        assert!(!hub.end_boost_if_over(until - 1));
-        assert!(hub.end_boost_if_over(until), "time's up");
+        assert!(!hub.end_expired(until - 1));
+        assert!(hub.end_expired(until), "time's up");
         assert_eq!(snapshot(&mut c).config.boost, None);
 
         // Until stopped.
@@ -516,7 +521,7 @@ mod tests {
             minutes: None,
             rev: rev + 1,
         }));
-        assert!(!hub.end_boost_if_over(u64::MAX));
+        assert!(!hub.end_expired(u64::MAX));
         let rev = ack(c.call(Request::StopBoost { rev }));
         assert_eq!(snapshot(&mut c).config.boost, None);
 
@@ -549,6 +554,43 @@ mod tests {
         let rev = snapshot(&mut c).rev;
         ack(c.call(Request::ResetAll { rev }));
         assert_eq!(snapshot(&mut c).config, Config::default());
+        server.stop();
+    }
+
+    #[test]
+    fn pause_resume_and_block() {
+        let (_t, _hub, server, pipe) = setup("pause");
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        let ack = |r: Result<Reply, ClientError>| match r {
+            Ok(Reply::Ack { rev }) => rev,
+            r => panic!("{r:?}"),
+        };
+        let rev = ack(c.call(Request::Pause {
+            minutes: Some(15),
+            rev: 1,
+        }));
+        let until = snapshot(&mut c).config.pause.unwrap().until.unwrap();
+        assert!(until >= unix_now() + 14 * 60);
+        let rev = ack(c.call(Request::Resume { rev }));
+        assert_eq!(snapshot(&mut c).config.pause, None);
+
+        let rev = ack(c.call(Request::SetBlocked {
+            family_id: "Steam".into(),
+            blocked: true,
+            rev,
+        }));
+        let rev = ack(c.call(Request::SetBlocked {
+            family_id: "discord".into(),
+            blocked: true,
+            rev,
+        }));
+        assert_eq!(snapshot(&mut c).config.blocked, ["discord", "steam"]);
+        ack(c.call(Request::SetBlocked {
+            family_id: "steam".into(),
+            blocked: false,
+            rev,
+        }));
+        assert_eq!(snapshot(&mut c).config.blocked, ["discord"]);
         server.stop();
     }
 

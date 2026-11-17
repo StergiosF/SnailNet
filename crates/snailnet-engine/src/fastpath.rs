@@ -55,6 +55,13 @@ pub trait Classifier: Clone + Send + 'static {
     /// `pkt` is the whole IP packet `info` was parsed from (site sniffing
     /// reads the first payloads of a flow).
     fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag);
+
+    /// Drop this packet: its app may not use the internet (PLAN.md §11.3).
+    /// Asked for every parsed internet packet in either direction, shaped
+    /// or not, before [`Classifier::classify`]; never for LAN traffic.
+    fn blocked(&mut self, _info: &PacketInfo, _outbound: bool) -> bool {
+        false
+    }
 }
 
 /// How the scheduler thread waits for its next release time.
@@ -86,6 +93,9 @@ pub struct FastPathConfig {
     pub stall_limit: Duration,
     /// Shape LAN traffic too (printers, NAS, casting). Off by default.
     pub shape_lan: bool,
+    /// The classifier may block apps: start even with no direction to
+    /// shape, and divert both directions for that.
+    pub blocking: bool,
 }
 
 impl Default for FastPathConfig {
@@ -98,6 +108,7 @@ impl Default for FastPathConfig {
             channel_depth: 16_384,
             stall_limit: Duration::from_millis(500),
             shape_lan: false,
+            blocking: false,
         }
     }
 }
@@ -158,6 +169,8 @@ pub struct Counters {
     pub channel_full: u64,
     /// Sends the engine refused (the packets in that batch are lost).
     pub send_errors: u64,
+    /// Dropped on purpose: their app is blocked.
+    pub blocked: u64,
 }
 
 #[derive(Default)]
@@ -167,6 +180,7 @@ struct AtomicCounters {
     pool_exhausted: AtomicU64,
     channel_full: AtomicU64,
     send_errors: AtomicU64,
+    blocked: AtomicU64,
 }
 
 impl AtomicCounters {
@@ -176,6 +190,7 @@ impl AtomicCounters {
             bypassed: self.bypassed.load(Relaxed),
             pool_exhausted: self.pool_exhausted.load(Relaxed),
             channel_full: self.channel_full.load(Relaxed),
+            blocked: self.blocked.load(Relaxed),
             send_errors: self.send_errors.load(Relaxed),
         }
     }
@@ -255,7 +270,7 @@ impl<E: PacketEngine + 'static> FastPath<E> {
         nap: Box<dyn Nap>,
         config: FastPathConfig,
     ) -> Result<Self, StartError> {
-        if down.is_none() && up.is_none() {
+        if down.is_none() && up.is_none() && !config.blocking {
             return Err(StartError::NothingToShape);
         }
         let clock = MonotonicClock::new();
@@ -437,15 +452,23 @@ fn rx_loop<C: Classifier>(
         let passthrough = shared.failing_open.load(Relaxed);
         for (data, addr) in batch.iter() {
             let up = addr.outbound();
-            let meta = if passthrough {
-                None
-            } else {
-                admit(data, up, shaped).map(|info| {
-                    let (meta, tag) = classifier.classify(data, &info, up);
-                    let control = info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
-                    (PacketMeta { control, ..meta }, tag)
-                })
-            };
+            let info = if passthrough { None } else { ip::parse(data) };
+            let internet = info.as_ref().is_some_and(|i| {
+                let remote = if up { i.dst } else { i.src };
+                !is_local_network(remote)
+            });
+            if let Some(i) = &info
+                && internet
+                && classifier.blocked(i, up)
+            {
+                c.blocked.fetch_add(1, Relaxed);
+                continue;
+            }
+            let meta = info.filter(|_| admitted(up, internet, shaped)).map(|info| {
+                let (meta, tag) = classifier.classify(data, &info, up);
+                let control = info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
+                (PacketMeta { control, ..meta }, tag)
+            });
             let Some((meta, tag)) = meta else {
                 c.bypassed.fetch_add(1, Relaxed);
                 push(engine, shared, &mut bypass, data, addr);
@@ -480,17 +503,10 @@ fn rx_loop<C: Classifier>(
     shared.send(engine, &mut bypass);
 }
 
-/// Parse a packet and decide whether it is shaped at all.
-fn admit(data: &[u8], up: bool, shaped: Shaped) -> Option<PacketInfo> {
-    if !(if up { shaped.up } else { shaped.down }) {
-        return None;
-    }
-    let info = ip::parse(data)?;
-    let remote = if up { info.dst } else { info.src };
-    if !shaped.lan && is_local_network(remote) {
-        return None;
-    }
-    Some(info)
+/// Whether a parsed packet is shaped at all: its direction is, and it goes
+/// to the internet (or LAN shaping is on).
+fn admitted(up: bool, internet: bool, shaped: Shaped) -> bool {
+    (if up { shaped.up } else { shaped.down }) && (internet || shaped.lan)
 }
 
 fn push(

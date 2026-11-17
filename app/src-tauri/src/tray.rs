@@ -20,9 +20,9 @@ use tauri::{
 /// Window label of the flyout.
 pub const FLYOUT: &str = "flyout";
 const MAIN: &str = "main";
-/// Logical size of the flyout (PLAN.md §14.4: 360 × ~420).
-const FLYOUT_W: f64 = 360.0;
-const FLYOUT_H: f64 = 420.0;
+/// Logical size of the flyout (PLAN.md §14.4: 380 × 500).
+const FLYOUT_W: f64 = 380.0;
+const FLYOUT_H: f64 = 500.0;
 /// Logical gap between the flyout and the work area's edge.
 const GAP: f64 = 12.0;
 /// A tray click this soon after the flyout hid on blur is the click that

@@ -1,7 +1,8 @@
 //! Changes the app asks the service for (PLAN.md §12.2): rules, modes,
-//! boost, resets and the line speed. Each uses its own short connection
-//! (the bridge's one is busy reading the stats stream) and returns the new
-//! config revision; the new snapshot arrives through the bridge.
+//! boost, pause, blocking, resets and the line speed. Each uses its own
+//! short connection (the bridge's one is busy reading the stats stream)
+//! and returns the new config revision; the new snapshot arrives through
+//! the bridge.
 
 use snailnet_core::rules::{Line, Rule, Target};
 use snailnet_ipc::{Client, ClientError, ErrorCode, PIPE_NAME, Reply, Request};
@@ -88,6 +89,28 @@ pub async fn boost(target: Target, minutes: Option<u32>, rev: u64) -> Result<u64
 #[tauri::command]
 pub async fn stop_boost(rev: u64) -> Result<u64, SaveError> {
     send(Request::StopBoost { rev }).await
+}
+
+/// Step aside for `minutes` (`None`: until resumed).
+#[tauri::command]
+pub async fn pause(minutes: Option<u32>, rev: u64) -> Result<u64, SaveError> {
+    send(Request::Pause { minutes, rev }).await
+}
+
+#[tauri::command]
+pub async fn resume(rev: u64) -> Result<u64, SaveError> {
+    send(Request::Resume { rev }).await
+}
+
+/// Block or unblock an app's internet (a family id).
+#[tauri::command]
+pub async fn set_blocked(family_id: String, blocked: bool, rev: u64) -> Result<u64, SaveError> {
+    send(Request::SetBlocked {
+        family_id,
+        blocked,
+        rev,
+    })
+    .await
 }
 
 #[cfg(test)]

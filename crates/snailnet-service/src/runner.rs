@@ -257,19 +257,37 @@ fn supervise<E: Engine>(
             while stop.wait_any(Duration::from_secs(3600)) != Wake::Stop {}
             break Ended::StoppedInSafeMode;
         }
-        hub.end_boost_if_over(now());
+        hub.end_expired(now());
         let (plan, profile) = hub.plan(now());
-        if !plan.shapes_anything() {
-            hub.set_state(ServiceState::Unshaped);
-            info!("no line speed set ([line] down_mbps / up_mbps in config.toml); not shaping");
-            match wait_for_change(stop) {
+        if !plan.needs_engine() {
+            let wake = if let Some(pause) = hub.pause_at(now()) {
+                hub.set_state(ServiceState::Paused { until: pause.until });
+                info!("paused: not shaping or blocking");
+                match pause.until {
+                    // Wake when it ends (at most hourly, to re-check).
+                    Some(u) => {
+                        stop.wait_any(Duration::from_secs(u.saturating_sub(now()).clamp(1, 3600)))
+                    }
+                    None => wait_for_change(stop),
+                }
+            } else {
+                hub.set_state(ServiceState::Unshaped);
+                info!("no line speed set ([line] down_mbps / up_mbps in config.toml); not shaping");
+                wait_for_change(stop)
+            };
+            match wake {
                 Wake::Stop => break Ended::StoppedUnshaped,
                 _ => continue,
             }
         }
         let reason = match engine.start(&plan) {
             Ok(mut running) => {
-                hub.set_state(ServiceState::Shaping);
+                // Blocking alone, without a line speed, still says so.
+                hub.set_state(if plan.shapes_anything() {
+                    ServiceState::Shaping
+                } else {
+                    ServiceState::Unshaped
+                });
                 log_plan(&plan, &profile);
                 let mut since_report = Duration::ZERO;
                 let outcome = loop {
@@ -277,7 +295,7 @@ fn supervise<E: Engine>(
                         Wake::Stop => break Outcome::Stop,
                         Wake::Reload => {
                             let (plan, profile) = hub.plan(now());
-                            if !plan.shapes_anything() {
+                            if !plan.needs_engine() {
                                 break Outcome::Reload;
                             }
                             match running.apply(&plan) {
@@ -293,7 +311,7 @@ fn supervise<E: Engine>(
                         }
                         // Ending a boost asks for a reload, applied next turn.
                         Wake::Timeout => {
-                            hub.end_boost_if_over(now());
+                            hub.end_expired(now());
                         }
                     }
                     if let Some(f) = running.failure() {
@@ -381,7 +399,8 @@ fn log_plan(plan: &Plan, profile: &str) {
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
     use snailnet_core::rules::{Config, Line};
 
@@ -511,12 +530,22 @@ mod tests {
         now: u64,
         during: impl FnOnce(&Hub),
     ) -> (Result<Ended>, Fake) {
+        run_with_clock(d, engine, move || now, during)
+    }
+
+    /// [`run_with`] on a clock the test moves.
+    fn run_with_clock(
+        d: &DataDir,
+        engine: Fake,
+        now: impl Fn() -> u64 + Send + 'static,
+        during: impl FnOnce(&Hub),
+    ) -> (Result<Ended>, Fake) {
         let hub = Hub::new(d.clone(), StopSignal::new());
         let h = {
             let hub = hub.clone();
             std::thread::spawn(move || {
                 let mut engine = engine;
-                let r = run(&hub, &mut engine, fast(), &move || now);
+                let r = run(&hub, &mut engine, fast(), &now);
                 (r, engine)
             })
         };
@@ -571,6 +600,67 @@ mod tests {
         assert_eq!(r.unwrap(), Ended::Stopped);
         assert_eq!(f.starts.load(Ordering::SeqCst), 1);
         assert_eq!(f.live.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_pause_stops_shaping_until_resumed() {
+        let (_t, d) = setup(true);
+        let (r, f) = run_with(&d, fake(&[]), 1_000, |hub| {
+            eventually(|| hub.state() == ServiceState::Shaping);
+            hub.pause(None, 1_000, hub.rev()).unwrap();
+            eventually(|| hub.state() == ServiceState::Paused { until: None });
+            hub.resume(hub.rev()).unwrap();
+            eventually(|| hub.state() == ServiceState::Shaping && hub.rev() == 3);
+        });
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(
+            f.starts.load(Ordering::SeqCst),
+            2,
+            "stopped, then started again"
+        );
+        assert_eq!(f.live.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_timed_pause_ends_by_itself() {
+        let (_t, d) = setup(true);
+        let clock = Arc::new(AtomicU64::new(1_000));
+        let c2 = clock.clone();
+        let engine = fake(&[]);
+        let (r, f) = run_with_clock(
+            &d,
+            engine,
+            move || c2.load(Ordering::SeqCst),
+            |hub| {
+                eventually(|| hub.state() == ServiceState::Shaping);
+                hub.pause(Some(1), 1_000, hub.rev()).unwrap();
+                eventually(|| hub.state() == ServiceState::Paused { until: Some(1_060) });
+                // The runner sleeps until the pause ends; time jumps there, and
+                // any wake-up (here a reload) finds it over.
+                clock.store(1_060, Ordering::SeqCst);
+                hub.signal().request_reload();
+                eventually(|| hub.state() == ServiceState::Shaping);
+                assert_eq!(hub.snapshot().config.pause, None, "cleared in the file too");
+            },
+        );
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(f.starts.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn blocking_runs_the_engine_without_a_line_speed() {
+        let (_t, d) = setup(false);
+        let (r, f) = run_with(&d, fake(&[]), 1_000, |hub| {
+            eventually(|| hub.state() == ServiceState::Unshaped);
+            hub.set_blocked("Steam", true, hub.rev()).unwrap();
+            eventually(|| hub.snapshot().config.blocked == ["steam"]);
+            std::thread::sleep(Duration::from_millis(30));
+        });
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        let plans = f.plans.lock().unwrap();
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].blocked, ["steam"]);
+        assert!(!plans[0].shapes_anything());
     }
 
     fn rate(p: &Plan) -> u64 {
