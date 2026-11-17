@@ -264,6 +264,76 @@ select {
   color: var(--text-secondary);
 }
 
+/* A small menu that opens from a button (Boost, Pause): a native popover,
+   placed by lib/popover.ts. */
+.popmenu {
+  position: fixed;
+  inset: auto;
+  width: 260px;
+  margin: 0;
+  padding: 12px 6px 6px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px var(--stroke-card),
+    0 16px 40px rgb(0 0 0 / 0.45);
+}
+.popmenu:popover-open {
+  animation: menu-rise 140ms var(--ease-out);
+}
+@keyframes menu-rise {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.popmenu .title {
+  margin: 0 10px;
+  font-weight: 700;
+}
+.popmenu .body {
+  margin: 4px 10px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.popmenu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+}
+.popmenu button:hover,
+.popmenu button:focus-visible {
+  background: var(--surface-3);
+  outline-offset: -2px;
+}
+.popmenu .icon {
+  font-size: 14px;
+}
+.popmenu hr {
+  margin: 6px 4px;
+  border: 0;
+  border-top: 1px solid var(--stroke-card);
+}
+.popmenu .danger {
+  color: var(--critical);
+}
+@media (forced-colors: active) {
+  .popmenu {
+    border: 1px solid CanvasText;
+  }
+}
+
 /* The dialogs (connection speed, add a slice, confirm): a raised surface with
    a thin ring, rising into place over a dimmed window. */
 dialog {

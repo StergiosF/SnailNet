@@ -19,6 +19,7 @@
   import { glance, ledger } from "./lib/ledger";
   import { needsFirstRun } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
+  import { resume } from "./lib/actions";
   import { noticeOf } from "./lib/notice";
   import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
@@ -59,7 +60,9 @@
   const sentence = $derived(
     downBook && service.stats ? glance(downBook, downLine === undefined ? null : downLine * 1e6) : null,
   );
-  const notice = $derived(noticeOf(service.link, service.state, () => lineDialog.show()));
+  const notice = $derived(
+    noticeOf(service.link, service.state, { setSpeed: () => lineDialog.show(), resume: () => void resume() }, ui.now),
+  );
 </script>
 
 <div class="window">

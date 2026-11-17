@@ -7,7 +7,9 @@ export type ServiceState =
   | "Shaping"
   | "Unshaped"
   | { Retrying: { reason: string } }
-  | { SafeMode: { failures: number } };
+  | { SafeMode: { failures: number } }
+  /** Paused by the user until `until` (Unix seconds), or until resumed. */
+  | { Paused: { until: number | null } };
 
 export type Link =
   | { kind: "connecting" }
@@ -68,6 +70,10 @@ export interface Config {
   settings: { low_latency: boolean; lan_exempt: boolean };
   line: Line;
   boost?: Boost;
+  /** Paused until `until` (Unix seconds), or until resumed. */
+  pause?: { until?: number };
+  /** Apps (family ids) with no internet, in every mode. */
+  blocked?: string[];
   profiles: Profile[];
 }
 

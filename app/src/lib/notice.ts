@@ -4,10 +4,22 @@
 
 import { stateKind } from "./format";
 import { t } from "./i18n";
+import { timeLeft } from "./modes";
 import type { Link, ServiceState } from "./types";
 import type { Notice } from "./ui.svelte";
 
-export function noticeOf(link: Link, s: ServiceState | null, setSpeed: () => void): Notice | null {
+/** What a notice's button does. */
+export interface NoticeActions {
+  setSpeed: () => void;
+  resume: () => void;
+}
+
+export function noticeOf(
+  link: Link,
+  s: ServiceState | null,
+  actions: NoticeActions,
+  now: number,
+): Notice | null {
   switch (link.kind) {
     case "connecting":
     case "connected":
@@ -32,8 +44,17 @@ export function noticeOf(link: Link, s: ServiceState | null, setSpeed: () => voi
         severity: "info",
         title: t("state.unshaped.title"),
         message: t("state.unshaped.body"),
-        action: { label: t("state.unshaped.action"), onclick: setSpeed },
+        action: { label: t("state.unshaped.action"), onclick: actions.setSpeed },
       };
+    case "paused": {
+      const until = typeof s === "object" && "Paused" in s ? s.Paused.until : null;
+      return {
+        severity: "info",
+        title: t("state.paused.title"),
+        message: t("state.paused.body", { left: timeLeft(until ?? undefined, now) }),
+        action: { label: t("pause.resume"), onclick: actions.resume },
+      };
+    }
     case "retrying":
       return {
         severity: "caution",

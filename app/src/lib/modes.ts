@@ -44,8 +44,14 @@ export function liveBoost(boost: Boost | undefined, now: number): Boost | null {
 
 /** "52 min left", "1 h 5 min left", "until you stop it". */
 export function boostLeft(boost: Boost, now: number): string {
-  if (boost.until === undefined) return t("boost.untilStopped");
-  const min = Math.max(1, Math.ceil((boost.until - now) / 60));
+  return timeLeft(boost.until, now);
+}
+
+/** Time left until `until` (Unix seconds) in words; no end = "until you
+ *  stop it". */
+export function timeLeft(until: number | undefined, now: number): string {
+  if (until === undefined) return t("boost.untilStopped");
+  const min = Math.max(1, Math.ceil((until - now) / 60));
   if (min < 60) return t("boost.left.min", { min });
   const h = Math.floor(min / 60);
   const m = min % 60;

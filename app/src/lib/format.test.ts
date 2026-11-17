@@ -38,5 +38,6 @@ describe("stateKind", () => {
     expect(stateKind("Shaping")).toBe("shaping");
     expect(stateKind({ Retrying: { reason: "x" } })).toBe("retrying");
     expect(stateKind({ SafeMode: { failures: 3 } })).toBe("safe_mode");
+    expect(stateKind({ Paused: { until: null } })).toBe("paused");
   });
 });

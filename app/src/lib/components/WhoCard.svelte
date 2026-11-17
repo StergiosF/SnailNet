@@ -5,6 +5,7 @@
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import type { Ledger } from "../ledger";
+  import { unblock } from "../actions";
   import { boostLeft, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -18,6 +19,12 @@
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
   const list = $derived(ledger ? users(ledger, live, label) : []);
+  const blocked = $derived(
+    (service.snapshot?.config.blocked ?? []).map((id) => {
+      const target: Target = { kind: "family", id };
+      return { id, target, name: label(target) };
+    }),
+  );
 </script>
 
 <section class="card who" aria-labelledby="who-title">
@@ -47,6 +54,23 @@
         </li>
       {/each}
     </ul>
+  {/if}
+  {#if blocked.length > 0}
+    <div class="blocked" role="group" aria-labelledby="who-blocked">
+      <span class="k" id="who-blocked"><i class="icon" aria-hidden="true">&#xE8F8;</i>{t("block.title")}</span>
+      {#each blocked as b (b.id)}
+        <span class="chip">
+          <AppIcon target={b.target} name={b.name} size={16} />
+          {b.name}
+          <button
+            type="button"
+            disabled={!canEdit}
+            aria-label={t("block.unblock.label", { name: b.name })}
+            onclick={() => void unblock(b.id)}>{t("block.unblock")}</button
+          >
+        </span>
+      {/each}
+    </div>
   {/if}
 </section>
 
@@ -113,6 +137,51 @@
     font-size: 12px;
     font-weight: 400;
     color: var(--text-secondary);
+  }
+  .blocked {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 6px 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--stroke-card);
+  }
+  .k {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--critical);
+  }
+  .k .icon {
+    font-size: 12px;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 4px 0 8px;
+    border-radius: 9px;
+    background: var(--surface-2);
+    font-size: 14px;
+  }
+  .chip button {
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--surface-3);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .chip button:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--on-accent);
   }
   .empty {
     display: flex;

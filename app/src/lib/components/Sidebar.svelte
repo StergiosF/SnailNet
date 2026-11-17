@@ -1,11 +1,13 @@
 <script lang="ts">
   // The side rail (PLAN.md §14.2): the snail and the name, the pages (Now,
-  // Split, Settings), and at the bottom the line as the user set it, which
-  // opens the speed dialog. Its top is part of the window's drag region.
+  // Split, Settings), and at the bottom Pause and the line as the user set
+  // it, which opens the speed dialog. Its top is part of the window's drag
+  // region.
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { service } from "../service.svelte";
   import { ui, type Page } from "../ui.svelte";
+  import PauseControl from "./PauseControl.svelte";
   import Snail from "./Snail.svelte";
 
   const pages: { id: Page; label: string; glyph: string }[] = [
@@ -40,6 +42,9 @@
   </nav>
 
   {#if canSet}
+    <div class="foot">
+      <PauseControl disabled={!canSet} />
+    </div>
     <button
       type="button"
       class="line"
@@ -121,13 +126,16 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    margin-top: auto;
+    margin-top: 6px;
     padding: 10px 12px;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
     text-align: left;
     transition: background-color 120ms linear;
+  }
+  .foot {
+    margin-top: auto;
   }
   .line:hover {
     background: var(--fill-subtle-hover);

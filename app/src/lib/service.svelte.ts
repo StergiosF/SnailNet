@@ -79,6 +79,20 @@ class Service {
     return this.#change("stop_boost", {});
   }
 
+  /** Step aside for `minutes` (null: until resumed). */
+  async pause(minutes: number | null): Promise<number> {
+    return this.#change("pause", { minutes });
+  }
+
+  async resume(): Promise<number> {
+    return this.#change("resume", {});
+  }
+
+  /** Block or unblock an app's internet. */
+  async setBlocked(familyId: string, blocked: boolean): Promise<number> {
+    return this.#change("set_blocked", { familyId, blocked });
+  }
+
   /** Save new slice sizes (the bar's full list; Everything else is
    *  dropped) onto the active profile's slices, in order. */
   async saveShares(shares: number[]): Promise<number> {

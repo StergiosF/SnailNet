@@ -41,6 +41,43 @@ export async function stopBoost(): Promise<void> {
   }
 }
 
+export async function pause(minutes: number | null): Promise<void> {
+  try {
+    await service.pause(minutes);
+  } catch (e) {
+    failed("pause.failed", e);
+  }
+}
+
+export async function resume(): Promise<void> {
+  try {
+    await service.resume();
+  } catch (e) {
+    failed("pause.failed", e);
+  }
+}
+
+/** Block an app's internet; the toast can undo it. */
+export async function block(familyId: string, name: string): Promise<void> {
+  try {
+    await service.setBlocked(familyId, true);
+    ui.say({
+      message: t("block.done", { name }),
+      action: { label: t("undo"), run: () => void unblock(familyId) },
+    });
+  } catch (e) {
+    failed("block.failed", e);
+  }
+}
+
+export async function unblock(familyId: string): Promise<void> {
+  try {
+    await service.setBlocked(familyId, false);
+  } catch (e) {
+    failed("block.failed", e);
+  }
+}
+
 /** Put the active mode's split back to where it started; Undo puts the
  *  rules it had back. */
 export async function resetSplit(): Promise<void> {

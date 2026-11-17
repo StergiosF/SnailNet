@@ -1,9 +1,11 @@
 <script lang="ts">
   // The slices (PLAN.md §14.2): the active profile's rules in order, then
-  // Everything else with its apps, then "Add a slice". While the service
-  // is still answering, three quiet placeholder rows.
+  // Everything else with its apps, then "Add a slice". Rules that take only
+  // what's free and are quiet right now fold into one row that opens (the
+  // modes have many: every launcher and updater). While the service is
+  // still answering, three quiet placeholder rows.
   import { t } from "../i18n";
-  import type { Ledger } from "../ledger";
+  import { QUIET_BPS, type Ledger, type Slice } from "../ledger";
   import { ui } from "../ui.svelte";
   import SliceRow from "./SliceRow.svelte";
   import Snail from "./Snail.svelte";
@@ -11,6 +13,12 @@
   let { ledger, loading, canEdit }: { ledger: Ledger | null; loading: boolean; canEdit: boolean } = $props();
 
   const other = $derived(ledger?.slices.at(-1) ?? null);
+  /** Quiet "only when free" rules (unless one's settings are open). */
+  const folded = (s: Slice) =>
+    s.rule >= 0 && s.enabled && s.share === null && s.bps < QUIET_BPS && ui.open !== s.key;
+  const shown = $derived(ledger?.slices.filter((s) => !folded(s)) ?? []);
+  const rest = $derived(ledger?.slices.filter(folded) ?? []);
+  let unfold = $state(false);
   const empty = $derived(
     ledger !== null && ledger.slices.length === 1 && (other?.members.length ?? 0) === 0 && ledger.total < 50_000,
   );
@@ -31,7 +39,29 @@
       </div>
     {/if}
     <ul>
-      {#each ledger.slices as s (s.key)}
+      {#each shown.slice(0, -1) as s (s.key)}
+        <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
+      {/each}
+      {#if rest.length > 0}
+        <li class="fold">
+          <button type="button" aria-expanded={unfold} onclick={() => (unfold = !unfold)}>
+            <span class="stack" aria-hidden="true">
+              {#each rest.slice(0, 3) as s (s.key)}<span class="dot"></span>{/each}
+            </span>
+            <span class="words">
+              <b>{t(rest.length === 1 ? "fold.title.one" : "fold.title", { count: rest.length })}</b>
+              <small>{rest.map((s) => s.name).slice(0, 4).join(", ")}{rest.length > 4 ? "…" : ""}</small>
+            </span>
+            <i class="icon chev" class:open={unfold} aria-hidden="true">&#xE70D;</i>
+          </button>
+        </li>
+        {#if unfold}
+          {#each rest as s (s.key)}
+            <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
+          {/each}
+        {/if}
+      {/if}
+      {#each shown.slice(-1) as s (s.key)}
         <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
       {/each}
     </ul>
@@ -58,6 +88,62 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+  .fold button {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 12px;
+    border: 0;
+    border-radius: var(--radius-card);
+    background: transparent;
+    text-align: left;
+    transition: background-color 120ms linear;
+  }
+  .fold button:hover {
+    background: var(--surface-1);
+  }
+  .stack {
+    display: grid;
+    place-items: center;
+    grid-template-columns: repeat(3, 8px);
+    gap: 4px;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-control);
+    background: var(--surface-1);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+  }
+  .words {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  .words b {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .words small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .chev {
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: transform 200ms var(--ease-out);
+  }
+  .chev.open {
+    transform: rotate(180deg);
   }
   .skeleton {
     display: flex;

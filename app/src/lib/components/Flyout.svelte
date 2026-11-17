@@ -1,15 +1,19 @@
 <script lang="ts">
   // The tray flyout (PLAN.md §14.4): the quickest way to see who is using
-  // the line and to give something more. The main window's sentence (or
-  // the state that needs attention), a small live strip, every slice with
-  // − % +, and the way to the main window. It hides on Escape and when it
-  // loses focus (tray.rs).
+  // the line and to change it. The snail, Pause / Resume; the main window's
+  // sentence (or the state that needs attention); the modes; a small live
+  // strip; the slices with − % + (quiet "only when free" ones left out);
+  // and the way to the main window. It hides on Escape and when it loses
+  // focus (tray.rs).
   import { getCurrentWindow, Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { glance, ledger, parts, statusText } from "../ledger";
+  import { pause, resume, switchMode } from "../actions";
+  import { availableModes } from "../modes";
   import { noticeOf } from "../notice";
+  import { QUIET_BPS } from "../ledger";
   import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -22,7 +26,9 @@
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
+    return ui.tick();
   });
+
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
@@ -30,9 +36,20 @@
   const lineMbps = $derived(service.snapshot?.config.line.down_mbps);
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
   const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
-  const notice = $derived(noticeOf(service.link, service.state, () => void openMain()));
+  const notice = $derived(
+    noticeOf(service.link, service.state, { setSpeed: () => void openMain(), resume: () => void resume() }, ui.now),
+  );
   const strip = $derived(book ? parts(book) : []);
   const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));
+  const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
+  const active = $derived(service.snapshot?.config.active_profile ?? "");
+  const paused = $derived.by(() => {
+    const p = service.snapshot?.config.pause;
+    return p !== undefined && (p.until === undefined || ui.now < p.until);
+  });
+  const rows = $derived(
+    book?.slices.filter((s) => !(s.rule >= 0 && s.enabled && s.share === null && s.bps < QUIET_BPS)) ?? [],
+  );
 
   async function openMain() {
     const main = await Window.getByLabel("main");
@@ -53,7 +70,19 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="flyout">
-  <p class="app">{t("app.name")}</p>
+  <div class="top">
+    <Snail size={20} light />
+    <span class="app">{t("app.name")}</span>
+    {#if connected}
+      <button
+        type="button"
+        class="pause"
+        class:paused
+        onclick={() => void (paused ? resume() : pause(60))}
+        >{paused ? t("pause.resume") : t("pause.1h")}</button
+      >
+    {/if}
+  </div>
   {#if notice}
     <h1>{notice.title}</h1>
     <p class="detail" role={notice.severity === "info" ? "status" : "alert"}>{notice.message}</p>
@@ -62,6 +91,20 @@
     <p class="detail">{sentence.detail}</p>
   {:else}
     <h1 class="wait">{t("link.connecting")}</h1>
+  {/if}
+
+  {#if connected && modes.length > 0}
+    <div class="modes" role="radiogroup" aria-label={t("mode.label")}>
+      {#each modes as m (m.id)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={m.id === active}
+          class:on={m.id === active}
+          onclick={() => void switchMode(m.id)}>{t(m.name)}</button
+        >
+      {/each}
+    </div>
   {/if}
 
   {#if book && service.stats}
@@ -74,7 +117,7 @@
 
   {#if book}
     <ul aria-label={t("split.label")}>
-      {#each book.slices as s (s.key)}
+      {#each rows as s (s.key)}
         <li>
           <AppIcon target={s.target} name={s.name} size={20} />
           <span class="who">
@@ -101,7 +144,7 @@
       {/each}
     </ul>
   {:else}
-    <div class="quiet"><Snail size={32} /></div>
+    <div class="quiet"><Snail size={32} light /></div>
   {/if}
   {#if ui.error}
     <p class="error" role="alert">{ui.error}</p>
@@ -120,10 +163,69 @@
     padding: 16px;
     overflow: hidden;
   }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
   .app {
-    margin: 0 0 8px;
-    font-size: 12px;
+    flex: 1;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text-secondary);
+  }
+  .pause {
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pause:hover {
+    background: var(--surface-2);
+  }
+  .pause.paused {
+    background: var(--caution);
+    color: #2a1d05;
+  }
+  .modes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .modes button {
+    height: 34px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    transition: background-color 140ms linear, color 140ms linear;
+  }
+  .modes button:hover:not(.on) {
+    background: var(--surface-2);
+    color: var(--text-primary);
+  }
+  .modes button.on {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  @media (forced-colors: active) {
+    .modes button,
+    .pause {
+      border: 1px solid ButtonText;
+    }
+    .modes button.on {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
   }
   h1 {
     margin: 0;
