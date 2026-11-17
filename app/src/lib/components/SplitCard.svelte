@@ -19,7 +19,7 @@
 </script>
 
 <section class="card split" aria-labelledby="split-title">
-  <h2 class="eyebrow" id="split-title">{t("card.split")}</h2>
+  <h2 class="card-title" id="split-title">{t("card.split")}</h2>
   {#if s}
     <div class="bar" aria-hidden="true">
       {#each s.slices as x (x.key)}
@@ -82,7 +82,8 @@
     color: #0f2420;
     overflow: hidden;
     white-space: nowrap;
-    transition: width 400ms var(--ease-out);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+    transition: width 700ms var(--ease-out);
   }
   ul {
     display: flex;

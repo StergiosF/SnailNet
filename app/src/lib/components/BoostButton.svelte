@@ -80,7 +80,12 @@
     font-size: 13px;
     font-weight: 700;
     white-space: nowrap;
-    transition: background-color 120ms linear;
+    transition:
+      background-color 120ms linear,
+      transform 120ms var(--ease-out);
+  }
+  .b:active:not(:disabled) {
+    transform: scale(0.96);
   }
   .b:hover:not(:disabled) {
     background: var(--surface-3);

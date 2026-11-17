@@ -82,21 +82,25 @@
         {#if notice}
           <div class="notice"><NoticeBar {notice} /></div>
         {/if}
-        {#if ui.page === "now"}
-          <NowPage ledger={loading ? null : downBook} glance={sentence} canEdit={connected} />
-        {:else if ui.page === "split"}
-          {#if service.link.kind === "connecting" || connected}
-            <SplitPage
-              ledger={book}
-              {lineBps}
-              {loading}
-              canEdit={connected}
-              showStrip={book !== null && service.stats !== null}
-            />
-          {/if}
-        {:else}
-          <SettingsPage canEdit={connected} />
-        {/if}
+        {#key ui.page}
+          <div class="page">
+            {#if ui.page === "now"}
+              <NowPage ledger={loading ? null : downBook} glance={sentence} canEdit={connected} />
+            {:else if ui.page === "split"}
+              {#if service.link.kind === "connecting" || connected}
+                <SplitPage
+                  ledger={book}
+                  {lineBps}
+                  {loading}
+                  canEdit={connected}
+                  showStrip={book !== null && service.stats !== null}
+                />
+              {/if}
+            {:else}
+              <SettingsPage canEdit={connected} />
+            {/if}
+          </div>
+        {/key}
       </main>
     </div>
     <Toast />
@@ -129,5 +133,9 @@
   }
   .notice {
     margin-bottom: 16px;
+    animation: page-in 320ms var(--ease-out) backwards;
+  }
+  .page {
+    animation: page-in 380ms var(--ease-out) backwards;
   }
 </style>

@@ -57,7 +57,7 @@
 <h1>{t("settings.title")}</h1>
 
 <section aria-labelledby="set-conn">
-  <h2 class="eyebrow" id="set-conn">{t("settings.connection")}</h2>
+  <h2 class="group-title" id="set-conn">{t("settings.connection")}</h2>
   <div class="card group">
     <div class="item">
       <div class="words">
@@ -76,7 +76,7 @@
 </section>
 
 <section aria-labelledby="set-win">
-  <h2 class="eyebrow" id="set-win">{t("settings.windows")}</h2>
+  <h2 class="group-title" id="set-win">{t("settings.windows")}</h2>
   <div class="card group">
     <label class="item">
       <div class="words">
@@ -96,7 +96,7 @@
 </section>
 
 <section aria-labelledby="set-reset">
-  <h2 class="eyebrow" id="set-reset">{t("settings.reset")}</h2>
+  <h2 class="group-title" id="set-reset">{t("settings.reset")}</h2>
   <div class="card group">
     <div class="item">
       <div class="words">
@@ -120,7 +120,7 @@
 </section>
 
 <section aria-labelledby="set-about">
-  <h2 class="eyebrow" id="set-about">{t("settings.about")}</h2>
+  <h2 class="group-title" id="set-about">{t("settings.about")}</h2>
   <div class="card group">
     <div class="item">
       <div class="words">
@@ -152,8 +152,12 @@
   section {
     margin-top: 20px;
   }
-  .eyebrow {
-    margin-bottom: 8px;
+  .group-title {
+    margin: 0 0 10px 4px;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 700;
+    color: var(--text-secondary);
   }
   .group {
     display: flex;

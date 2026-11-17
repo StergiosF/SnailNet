@@ -28,7 +28,8 @@
     <span data-tauri-drag-region>{t("app.name")}</span>
   </div>
 
-  <nav aria-label={t("nav.label")}>
+  <nav aria-label={t("nav.label")} style:--at={pages.findIndex((p) => p.id === ui.page)}>
+    <span class="mark" aria-hidden="true"></span>
     {#each pages as p (p.id)}
       <button
         type="button"
@@ -87,11 +88,25 @@
     letter-spacing: -0.01em;
   }
   nav {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
+  /* The open page's highlight, one shape that slides between items. */
+  .mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 42px;
+    border-radius: var(--radius-control);
+    background: var(--shell-soft);
+    transform: translateY(calc(var(--at) * 44px));
+    transition: transform 360ms var(--ease-out);
+  }
   nav button {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -110,13 +125,16 @@
     color: var(--text-primary);
   }
   nav button.on {
-    background: var(--shell-soft);
     color: var(--text-primary);
     font-weight: 700;
+  }
+  nav button.on:hover {
+    background: transparent;
   }
   nav .icon {
     width: 18px;
     font-size: 16px;
+    transition: color 200ms linear;
   }
   nav button.on .icon {
     color: var(--shell);
@@ -172,6 +190,9 @@
   @media (forced-colors: active) {
     .side {
       border-right: 1px solid CanvasText;
+    }
+    .mark {
+      display: none;
     }
     nav button.on {
       outline: 2px solid Highlight;

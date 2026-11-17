@@ -1,11 +1,16 @@
 <script lang="ts">
   // "Using your internet" (PLAN.md §14.2): who is moving data right now,
   // busiest first, each with what's happening to it and a Boost. The
-  // boosted one says how long it has left.
+  // boosted one says how long it has left, lit by the shell's green. When
+  // the order changes the rows glide to their new places, so the eye can
+  // follow who overtook whom.
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import type { Ledger } from "../ledger";
+  import { flip } from "svelte/animate";
+  import { fade } from "svelte/transition";
   import { unblock } from "../actions";
+  import { glide, ms } from "../motion";
   import { boostLeft, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -28,7 +33,7 @@
 </script>
 
 <section class="card who" aria-labelledby="who-title">
-  <h2 class="eyebrow" id="who-title">{t("who.title")}</h2>
+  <h2 class="card-title" id="who-title">{t("who.title")}</h2>
   {#if !ledger}
     <ul aria-hidden="true">
       {#each [0.5, 0.4, 0.55] as w, i (i)}
@@ -43,7 +48,7 @@
   {:else}
     <ul>
       {#each list as u (u.key)}
-        <li class:boosted={u.boosted}>
+        <li class:boosted={u.boosted} animate:flip={glide()} in:fade={{ duration: ms(240) }}>
           <AppIcon target={u.target} name={u.name} size={22} boxed />
           <span class="nm">
             <b>{u.name}</b>
@@ -102,8 +107,16 @@
     padding: 6px 6px;
     border-radius: 12px;
   }
+  li {
+    background: linear-gradient(90deg, var(--shell-soft), transparent 80%) no-repeat;
+    background-size: 0% 100%;
+    transition: background-size 600ms var(--ease-out);
+  }
+  li:hover {
+    background-color: rgb(255 255 255 / 0.025);
+  }
   li.boosted {
-    background: linear-gradient(90deg, var(--shell-soft), transparent 80%);
+    background-size: 100% 100%;
   }
   .nm {
     display: flex;

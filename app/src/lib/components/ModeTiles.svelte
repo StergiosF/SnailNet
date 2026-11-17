@@ -2,7 +2,8 @@
   // The four modes (PLAN.md §11.2) as big tiles: one click switches the
   // whole split. Native radio buttons underneath, so the arrow keys and
   // screen readers work as with any choice of one. The mode that's on is
-  // cream, with its glyph on the shell's green.
+  // cream, with its glyph on the shell's green; picking one spreads the
+  // cream out from its glyph. The tiles arrive one after another.
   import { switchMode } from "../actions";
   import { t } from "../i18n";
   import { availableModes, type ModeId } from "../modes";
@@ -40,8 +41,8 @@
 {/snippet}
 
 <div class="tiles" role="radiogroup" aria-label={t("mode.label")}>
-  {#each modes as m (m.id)}
-    <label class="tile" class:on={m.id === active} class:disabled>
+  {#each modes as m, i (m.id)}
+    <label class="tile" class:on={m.id === active} class:disabled style:--d="{60 + i * 50}ms">
       <input
         type="radio"
         name="{uid}-mode"
@@ -50,6 +51,7 @@
         {disabled}
         onchange={() => void switchMode(m.id)}
       />
+      <span class="fill" aria-hidden="true"></span>
       <span class="gl">{@render glyph(m.id)}</span>
       <b>{t(m.name)}</b>
       <span class="body">{t(m.body)}</span>
@@ -66,23 +68,42 @@
   }
   .tile {
     position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    min-height: 124px;
-    padding: 14px 16px 16px;
+    min-height: 132px;
+    padding: 16px 16px 18px;
     border-radius: var(--radius-card);
-    background: var(--surface-1);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 70%), var(--surface-1);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
     transition:
       background-color 160ms linear,
-      color 160ms linear,
-      transform 160ms var(--ease-out);
+      color 320ms linear,
+      transform 260ms var(--ease-out),
+      box-shadow 260ms var(--ease-out);
+    animation: rise-in 520ms var(--d, 0ms) var(--ease-out) backwards;
   }
   .tile:hover:not(.on, .disabled) {
-    background: var(--surface-2);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 70%), var(--surface-2);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
   }
   .tile:active:not(.on, .disabled) {
-    transform: translateY(1px);
+    transform: translateY(0) scale(0.985);
+  }
+  /* The cream of the mode that's on, spreading from its glyph. */
+  .fill {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(160deg, #f6f0df, var(--accent) 60%, #e6dcc4);
+    clip-path: circle(0 at 34px 34px);
+    transition: clip-path 560ms var(--ease-out);
+  }
+  .tile.on .fill {
+    clip-path: circle(160% at 34px 34px);
   }
   .tile.disabled {
     opacity: 0.55;
@@ -107,6 +128,17 @@
     border-radius: var(--radius-control);
     background: var(--surface-2);
     color: var(--text-primary);
+    transition:
+      background-color 240ms linear,
+      color 240ms linear;
+  }
+  .tile.on .gl {
+    animation: pop 480ms var(--ease-out);
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.82) rotate(-8deg);
+    }
   }
   b {
     font-size: 16px;
@@ -118,8 +150,8 @@
     color: var(--text-secondary);
   }
   .tile.on {
-    background: var(--accent);
     color: var(--on-accent);
+    box-shadow: var(--shadow-raised);
   }
   .tile.on .body {
     color: #2f4a43;
@@ -150,6 +182,9 @@
   @media (forced-colors: active) {
     .tile {
       border: 1px solid CanvasText;
+    }
+    .fill {
+      display: none;
     }
     .tile.on {
       forced-color-adjust: none;
