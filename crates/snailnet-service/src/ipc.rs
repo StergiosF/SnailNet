@@ -32,6 +32,7 @@ use tokio::time::{Interval, MissedTickBehavior};
 use tracing::{debug, info, warn};
 
 use crate::hub::Hub;
+use crate::runner::unix_now;
 
 /// More simultaneous clients than this are turned away.
 const MAX_CLIENTS: usize = 16;
@@ -330,7 +331,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
                 state: hub.state(),
             }
         }
-        Request::GetSnapshot => Reply::Snapshot(hub.snapshot()),
+        Request::GetSnapshot => Reply::Snapshot(Box::new(hub.snapshot())),
         Request::Subscribe { stats_hz } => {
             let every = Duration::from_millis(1000 / u64::from(stats_hz.clamp(1, 10)));
             let mut i = tokio::time::interval(every);
@@ -349,6 +350,14 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
         } => ack(hub.set_rules(&profile_id, rules, rev)),
         Request::SwitchProfile { id, rev } => ack(hub.switch_profile(&id, rev)),
         Request::SetLine { line, rev } => ack(hub.set_line(line, rev)),
+        Request::ResetProfile { id, rev } => ack(hub.reset_profile(&id, rev)),
+        Request::ResetAll { rev } => ack(hub.reset_all(rev)),
+        Request::Boost {
+            target,
+            minutes,
+            rev,
+        } => ack(hub.boost(target, minutes, unix_now(), rev)),
+        Request::StopBoost { rev } => ack(hub.stop_boost(rev)),
         other @ (Request::SetBlocked { .. }
         | Request::FocusChanged { .. }
         | Request::Pause { .. }
@@ -386,7 +395,7 @@ mod tests {
 
     fn snapshot(c: &mut Client) -> snailnet_ipc::Snapshot {
         match c.call(Request::GetSnapshot).unwrap() {
-            Reply::Snapshot(s) => s,
+            Reply::Snapshot(s) => *s,
             r => panic!("{r:?}"),
         }
     }
@@ -477,6 +486,69 @@ mod tests {
         }
         // Still usable afterwards.
         assert_eq!(snapshot(&mut c).rev, 1);
+        server.stop();
+    }
+
+    #[test]
+    fn boost_and_resets() {
+        let (_t, hub, server, pipe) = setup("boost");
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        let ack = |r: Result<Reply, ClientError>| match r {
+            Ok(Reply::Ack { rev }) => rev,
+            r => panic!("{r:?}"),
+        };
+        let rev = ack(c.call(Request::Boost {
+            target: Target::family("steam"),
+            minutes: Some(60),
+            rev: 1,
+        }));
+        let b = snapshot(&mut c).config.boost.unwrap();
+        assert_eq!(b.target, Target::family("steam"));
+        let until = b.until.unwrap();
+        assert!(until > unix_now() + 3500, "an hour from now");
+        assert!(!hub.end_boost_if_over(until - 1));
+        assert!(hub.end_boost_if_over(until), "time's up");
+        assert_eq!(snapshot(&mut c).config.boost, None);
+
+        // Until stopped.
+        let rev = ack(c.call(Request::Boost {
+            target: Target::site("youtube"),
+            minutes: None,
+            rev: rev + 1,
+        }));
+        assert!(!hub.end_boost_if_over(u64::MAX));
+        let rev = ack(c.call(Request::StopBoost { rev }));
+        assert_eq!(snapshot(&mut c).config.boost, None);
+
+        // Reset a mode to its template, then everything.
+        let gaming = snailnet_core::modes::template("gaming").unwrap();
+        let rev = ack(c.call(Request::SetRules {
+            profile_id: "gaming".into(),
+            rules: Vec::new(),
+            rev,
+        }));
+        let rev = ack(c.call(Request::ResetProfile {
+            id: "gaming".into(),
+            rev,
+        }));
+        let snap = snapshot(&mut c);
+        let p = snap
+            .config
+            .profiles
+            .iter()
+            .find(|p| p.id == "gaming")
+            .unwrap();
+        assert_eq!(p.rules, gaming);
+        ack(c.call(Request::SetLine {
+            line: Line {
+                down_mbps: Some(25.0),
+                ..Line::default()
+            },
+            rev,
+        }));
+        let rev = snapshot(&mut c).rev;
+        ack(c.call(Request::ResetAll { rev }));
+        assert_eq!(snapshot(&mut c).config, Config::default());
         server.stop();
     }
 

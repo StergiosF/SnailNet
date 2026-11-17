@@ -5,6 +5,7 @@
 
 pub mod classify;
 pub mod clock;
+pub mod modes;
 pub mod parse;
 pub mod rules;
 pub mod scheduler;

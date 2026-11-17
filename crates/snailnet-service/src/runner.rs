@@ -205,7 +205,14 @@ pub fn run<E: Engine>(
         Source::Backup => warn!("config: using the backup"),
         Source::Default => info!("config: using defaults"),
     }
-    hub.set_loaded(loaded.config);
+    let mut config = loaded.config;
+    if config.add_missing_modes() {
+        info!("config: added the built-in modes");
+        if let Err(e) = store::save(dir, &config) {
+            warn!("config: could not save the added modes: {e}");
+        }
+    }
+    hub.set_loaded(config);
     let (guard, crashed) = CrashGuard::start(dir, now()).context("reading the crash log")?;
     if crashed {
         warn!("the previous run ended without a clean stop (crash, kill or power loss)");
@@ -250,7 +257,8 @@ fn supervise<E: Engine>(
             while stop.wait_any(Duration::from_secs(3600)) != Wake::Stop {}
             break Ended::StoppedInSafeMode;
         }
-        let (plan, profile) = hub.plan();
+        hub.end_boost_if_over(now());
+        let (plan, profile) = hub.plan(now());
         if !plan.shapes_anything() {
             hub.set_state(ServiceState::Unshaped);
             info!("no line speed set ([line] down_mbps / up_mbps in config.toml); not shaping");
@@ -268,7 +276,7 @@ fn supervise<E: Engine>(
                     match stop.wait_any(timing.poll) {
                         Wake::Stop => break Outcome::Stop,
                         Wake::Reload => {
-                            let (plan, profile) = hub.plan();
+                            let (plan, profile) = hub.plan(now());
                             if !plan.shapes_anything() {
                                 break Outcome::Reload;
                             }
@@ -283,7 +291,10 @@ fn supervise<E: Engine>(
                                 }
                             }
                         }
-                        Wake::Timeout => {}
+                        // Ending a boost asks for a reload, applied next turn.
+                        Wake::Timeout => {
+                            hub.end_boost_if_over(now());
+                        }
                     }
                     if let Some(f) = running.failure() {
                         break Outcome::Failed(f);

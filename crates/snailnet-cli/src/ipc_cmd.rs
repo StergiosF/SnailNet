@@ -16,7 +16,7 @@ fn connect(pipe: &str) -> Result<Client> {
 
 fn snapshot(c: &mut Client) -> Result<Snapshot> {
     match c.call(Request::GetSnapshot)? {
-        Reply::Snapshot(s) => Ok(s),
+        Reply::Snapshot(s) => Ok(*s),
         r => bail!("unexpected reply: {r:?}"),
     }
 }

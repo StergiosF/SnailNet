@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
-use snailnet_core::rules::{Config, Line, Plan, Rule};
+use snailnet_core::modes;
+use snailnet_core::rules::{Boost, Config, Line, Plan, Rule, Target};
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
@@ -111,10 +112,34 @@ impl Hub {
         let _ = self.events.send(Event::ConfigChanged { rev });
     }
 
-    /// The active plan and the active profile's name.
-    pub fn plan(&self) -> (Plan, String) {
+    /// The plan at `now` (Unix seconds) and the active profile's name.
+    pub fn plan(&self, now: u64) -> (Plan, String) {
         let i = self.lock();
-        (i.config.plan(), i.config.active().name.clone())
+        (i.config.plan(now), i.config.active().name.clone())
+    }
+
+    /// End a boost whose time is up, so the file and every client see it
+    /// gone. Returns whether one ended.
+    pub fn end_boost_if_over(&self, now: u64) -> bool {
+        let over = {
+            let i = self.lock();
+            i.rev != 0 && i.config.boost.as_ref().is_some_and(|b| !b.is_on(now))
+        };
+        if !over {
+            return false;
+        }
+        let rev = self.rev();
+        match self.change(rev, |c| {
+            c.boost = None;
+            Ok(())
+        }) {
+            Ok(_) => {
+                tracing::info!("the boost's time is up");
+                true
+            }
+            // A client changed something at the same moment: next time.
+            Err(_) => false,
+        }
     }
 
     pub fn rev(&self) -> u64 {
@@ -232,6 +257,52 @@ impl Hub {
                 return Err(format!("there is no profile {id:?}"));
             }
             c.active_profile = id.into();
+            Ok(())
+        })
+    }
+
+    pub fn reset_profile(&self, id: &str, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            let p = c
+                .profiles
+                .iter_mut()
+                .find(|p| p.id == id)
+                .ok_or_else(|| format!("there is no profile {id:?}"))?;
+            p.rules = modes::template(id).unwrap_or_default();
+            Ok(())
+        })
+    }
+
+    pub fn reset_all(&self, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            *c = Config::default();
+            Ok(())
+        })
+    }
+
+    /// Boost `target` for `minutes` from `now` (Unix seconds).
+    pub fn boost(
+        &self,
+        target: Target,
+        minutes: Option<u32>,
+        now: u64,
+        rev: u64,
+    ) -> Result<u64, Refusal> {
+        if minutes == Some(0) {
+            return Err((ErrorCode::Invalid, "a boost needs at least a minute".into()));
+        }
+        self.change(rev, |c| {
+            c.boost = Some(Boost {
+                target,
+                until: minutes.map(|m| now + u64::from(m) * 60),
+            });
+            Ok(())
+        })
+    }
+
+    pub fn stop_boost(&self, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            c.boost = None;
             Ok(())
         })
     }

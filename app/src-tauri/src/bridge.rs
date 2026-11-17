@@ -246,9 +246,9 @@ mod tests {
     fn session_forwards_snapshot_stats_and_refetches_on_config_change() {
         let mut conn = Fake {
             replies: VecDeque::from([
-                Reply::Snapshot(snapshot(3)),
+                Reply::Snapshot(Box::new(snapshot(3))),
                 Reply::Ack { rev: 3 },
-                Reply::Snapshot(snapshot(4)),
+                Reply::Snapshot(Box::new(snapshot(4))),
             ]),
             msgs: VecDeque::from([
                 ServerMsg::Stats(tick(250)),
@@ -303,7 +303,7 @@ mod tests {
                     1..=3 => Err(ClientError::NotRunning("p".into())),
                     _ => Ok(Fake {
                         replies: VecDeque::from([
-                            Reply::Snapshot(snapshot(1)),
+                            Reply::Snapshot(Box::new(snapshot(1))),
                             Reply::Ack { rev: 1 },
                         ]),
                         msgs: VecDeque::new(),

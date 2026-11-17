@@ -56,6 +56,10 @@ pub struct Config {
     pub settings: Settings,
     #[serde(default)]
     pub line: Line,
+    /// One app or site going first for a while, in every mode (PLAN.md
+    /// §11.5 "Boost").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boost: Option<Boost>,
     #[serde(default)]
     pub profiles: Vec<Profile>,
     /// The user's own sites (PLAN.md §8.2 "Add a custom site"). One with a
@@ -94,6 +98,26 @@ pub struct Line {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub factor: Option<f64>,
 }
+
+/// A boost: `target` goes first (High) with at least
+/// [`BOOST_SHARE_BP`] and no ceiling, until `until` (Unix seconds) or until
+/// it's stopped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Boost {
+    pub target: Target,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<u64>,
+}
+
+impl Boost {
+    pub fn is_on(&self, now: u64) -> bool {
+        self.until.is_none_or(|u| now < u)
+    }
+}
+
+/// What a boosted target is guaranteed at least: half the line.
+pub const BOOST_SHARE_BP: u32 = 5000;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -274,19 +298,17 @@ pub enum RulesError {
 }
 
 impl Default for Config {
-    /// One "Balanced" profile with no rules: everything shares the line
-    /// fairly, and nothing is shaped until a line speed is set.
+    /// The four modes ([`crate::modes`]) with Balanced active: everything
+    /// shares the line fairly, and nothing is shaped until a line speed is
+    /// set.
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
             active_profile: "balanced".into(),
             settings: Settings::default(),
             line: Line::default(),
-            profiles: vec![Profile {
-                id: "balanced".into(),
-                name: "Balanced".into(),
-                rules: Vec::new(),
-            }],
+            boost: None,
+            profiles: crate::modes::all(),
             sites: Vec::new(),
         }
     }
@@ -385,6 +407,14 @@ impl Config {
                 }
             }
         }
+        if let Some(b) = &self.boost {
+            if b.target.id.trim().is_empty() {
+                return bad("the boost has an empty target id".into());
+            }
+            if b.target.kind == TargetKind::Site && !known(&b.target.id.to_lowercase()) {
+                return bad(format!("boost: {} is not a known site", b.target));
+            }
+        }
         Ok(())
     }
 
@@ -396,10 +426,55 @@ impl Config {
             .unwrap_or(&self.profiles[0])
     }
 
-    /// What the scheduler should do under the active profile.
-    pub fn plan(&self) -> Plan {
-        let profile = self.active();
-        let rules: Vec<&Rule> = profile.rules.iter().filter(|r| r.enabled).collect();
+    /// The boost, if it's still on at `now` (Unix seconds).
+    pub fn boost_at(&self, now: u64) -> Option<&Boost> {
+        self.boost.as_ref().filter(|b| b.is_on(now))
+    }
+
+    /// The active profile's rules with the boost (if on at `now`) applied:
+    /// the boosted target first, High, at least [`BOOST_SHARE_BP`], no
+    /// ceiling; the other enabled rules shrink in proportion when they no
+    /// longer fit above Everything else's 5%.
+    pub fn effective_rules(&self, now: u64) -> Vec<Rule> {
+        let mut rules = self.active().rules.clone();
+        let Some(b) = self.boost_at(now) else {
+            return rules;
+        };
+        let key = b.target.to_string();
+        let mut boosted = match rules.iter().position(|r| r.target.to_string() == key) {
+            Some(i) => rules.remove(i),
+            None => Rule {
+                target: b.target.clone(),
+                share: 0,
+                priority: Priority::Normal,
+                ceiling: None,
+                enabled: true,
+            },
+        };
+        boosted.enabled = true;
+        boosted.priority = Priority::High;
+        boosted.ceiling = None;
+        boosted.share = boosted.share.max(BOOST_SHARE_BP);
+        let room = u64::from(MAX_RULE_SHARE_BP - boosted.share);
+        let others: u64 = rules
+            .iter()
+            .filter(|r| r.enabled)
+            .map(|r| u64::from(r.share))
+            .sum();
+        if others > room {
+            for r in rules.iter_mut().filter(|r| r.enabled) {
+                r.share = (u64::from(r.share) * room / others) as u32;
+            }
+        }
+        rules.insert(0, boosted);
+        rules
+    }
+
+    /// What the scheduler should do under the active profile at `now`
+    /// (Unix seconds; it decides whether the boost is still on).
+    pub fn plan(&self, now: u64) -> Plan {
+        let all = self.effective_rules(now);
+        let rules: Vec<&Rule> = all.iter().filter(|r| r.enabled).collect();
         let bp = shares::normalize(&rules.iter().map(|r| r.share).collect::<Vec<_>>());
         let factor = |default: f64| {
             self.line.factor.unwrap_or(if self.settings.low_latency {
@@ -597,7 +672,7 @@ name = "Gaming"
         let c = Config::default();
         c.validate().unwrap();
         assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
-        let p = c.plan();
+        let p = c.plan(0);
         assert!(!p.shapes_anything(), "no line speed, nothing shaped");
     }
 
@@ -616,7 +691,7 @@ name = "Gaming"
 
     #[test]
     fn plan_from_sample() {
-        let p = Config::parse(SAMPLE).unwrap().plan();
+        let p = Config::parse(SAMPLE).unwrap().plan(0);
         // The disabled rule takes no class.
         assert_eq!(
             p.targets.iter().map(|t| t.to_string()).collect::<Vec<_>>(),
@@ -647,11 +722,11 @@ name = "Gaming"
         let mut c = Config::parse(SAMPLE).unwrap();
         c.settings.low_latency = false;
         assert_eq!(
-            c.plan().down.unwrap().rate_bytes_per_sec,
+            c.plan(0).down.unwrap().rate_bytes_per_sec,
             (25e6 / 8.0) as u64
         );
         c.line.factor = Some(0.85);
-        let p = c.plan();
+        let p = c.plan(0);
         assert_eq!(
             p.down.unwrap().rate_bytes_per_sec,
             (25e6 * 0.85 / 8.0) as u64
@@ -665,7 +740,7 @@ name = "Gaming"
         let mut c = Config::parse(&text).unwrap();
         c.line.down_mbps = Some(25.0);
         let bp: Vec<_> = c
-            .plan()
+            .plan(0)
             .down
             .unwrap()
             .classes
@@ -679,7 +754,7 @@ name = "Gaming"
     fn zero_share_is_allowed() {
         let mut c = Config::parse(&with_profile(&rule("family", "windows-update", 0))).unwrap();
         c.line.down_mbps = Some(25.0);
-        c.plan().down.unwrap().validate().unwrap();
+        c.plan(0).down.unwrap().validate().unwrap();
     }
 
     #[test]
@@ -690,7 +765,7 @@ name = "Gaming"
                 + &rule("site", "youtube", 100)),
         ))
         .unwrap()
-        .plan();
+        .plan(0);
         assert_eq!(p.class_of(&app("steam", "steamwebhelper.exe")), 0);
         assert_eq!(p.class_of(&app("c:\\games\\game.exe", "game.exe")), 1);
         assert_eq!(p.class_of(&app("brave", "brave.exe")), p.other_class());
@@ -748,6 +823,64 @@ name = "Gaming"
     }
 
     #[test]
+    fn a_boost_goes_first_with_half_the_line_until_it_ends() {
+        let mut c = Config::parse(&with_profile(
+            &(rule("site", "youtube", 4500) + &rule("family", "brave", 3000)),
+        ))
+        .unwrap();
+        c.line.down_mbps = Some(25.0);
+        c.boost = Some(Boost {
+            target: Target::family("steam"),
+            until: Some(100),
+        });
+        c.validate().unwrap();
+        assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
+
+        let p = c.plan(99);
+        assert_eq!(
+            p.targets[0],
+            Target::family("steam"),
+            "the boost comes first"
+        );
+        let down = p.down.unwrap();
+        assert_eq!(down.classes[0].prio, Priority::High);
+        let bp: Vec<_> = down.classes.iter().map(|c| c.share_bp).collect();
+        // 4500 + 3000 shrink into the 4500 left above Everything else's 5%.
+        assert_eq!(bp, [5000, 2700, 1800, 500]);
+
+        // Over at `until`: the profile as it is.
+        let after = c.plan(100);
+        assert_eq!(after.targets.len(), 2);
+        assert_eq!(c.boost_at(100), None);
+    }
+
+    #[test]
+    fn boosting_a_rule_lifts_it_and_drops_its_ceiling() {
+        let mut c = Config::parse(&with_profile(
+            &(rule("family", "steam", 7000)
+                + "priority = \"low\"
+ceiling = { down = \"10%\" }
+"),
+        ))
+        .unwrap();
+        c.boost = Some(Boost {
+            target: Target::family("Steam"),
+            until: None,
+        });
+        let r = c.effective_rules(u64::MAX);
+        assert_eq!(r.len(), 1);
+        assert_eq!((r[0].share, r[0].priority), (7000, Priority::High));
+        assert_eq!(r[0].ceiling, None);
+        c.boost.as_mut().unwrap().target = Target::site("nope");
+        assert!(
+            c.validate()
+                .unwrap_err()
+                .to_string()
+                .contains("not a known site")
+        );
+    }
+
+    #[test]
     fn limits_parse_and_print() {
         let l = |s: &str| Limit::try_from(s.to_string());
         assert_eq!(l(" 20 % "), Ok(Limit::Percent(20)));
@@ -763,7 +896,7 @@ name = "Gaming"
     #[test]
     fn site_rules_take_their_own_class() {
         let text = with_profile(&(rule("family", "brave", 3000) + &rule("site", "YouTube", 4000)));
-        let p = Config::parse(&text).unwrap().plan();
+        let p = Config::parse(&text).unwrap().plan(0);
         assert!(p.has_site_rules());
         assert_eq!(p.site_class("youtube"), Some(1));
         assert_eq!(p.site_class("twitch"), None);
@@ -778,7 +911,7 @@ name = "Gaming"
         );
         let no_sites = Config::parse(&with_profile(&rule("family", "brave", 3000)))
             .unwrap()
-            .plan();
+            .plan(0);
         assert!(!no_sites.has_site_rules());
     }
 
@@ -789,7 +922,7 @@ name = "Gaming"
         let text = with_profile(&rule("site", "myintranet", 1000))
             + "[[sites]]\nid = \"myintranet\"\nname = \"Intranet\"\ndomains = [\"*.corp.example\"]\n";
         let c = Config::parse(&text).unwrap();
-        assert_eq!(c.plan().custom_sites[0].id, "myintranet");
+        assert_eq!(c.plan(0).custom_sites[0].id, "myintranet");
         assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
         let twice = text.clone()
             + "[[sites]]\nid = \"myintranet\"\nname = \"Again\"\ndomains = [\"a.example\"]\n";

@@ -971,7 +971,7 @@ mod tests {
              [[profiles.rules]]\ntarget = {{ kind = \"site\", id = \"youtube\" }}\nshare = 4000\n{extra}"
         ))
         .unwrap()
-        .plan()
+        .plan(0)
     }
 
     #[test]

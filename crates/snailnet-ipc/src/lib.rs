@@ -18,7 +18,7 @@
 use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use snailnet_core::rules::{Config, Line, Rule};
+use snailnet_core::rules::{Config, Line, Rule, Target};
 
 #[cfg(windows)]
 mod client;
@@ -83,6 +83,27 @@ pub enum Request {
         line: Line,
         rev: u64,
     },
+    /// Put a profile's rules back to where they started: a mode's template
+    /// ([`snailnet_core::modes`]), or none for any other profile.
+    ResetProfile {
+        id: String,
+        rev: u64,
+    },
+    /// Forget everything (rules, line speed, settings, boost): the default
+    /// config, as on a fresh install.
+    ResetAll {
+        rev: u64,
+    },
+    /// `target` goes first for `minutes` (`None`: until stopped). Replaces
+    /// any boost already on.
+    Boost {
+        target: Target,
+        minutes: Option<u32>,
+        rev: u64,
+    },
+    StopBoost {
+        rev: u64,
+    },
     // Defined so the protocol is stable; the service answers Unsupported
     // until the features exist (§11).
     SetBlocked {
@@ -117,6 +138,10 @@ impl Request {
             Self::SetRules { .. } => "SetRules",
             Self::SwitchProfile { .. } => "SwitchProfile",
             Self::SetLine { .. } => "SetLine",
+            Self::ResetProfile { .. } => "ResetProfile",
+            Self::ResetAll { .. } => "ResetAll",
+            Self::Boost { .. } => "Boost",
+            Self::StopBoost { .. } => "StopBoost",
             Self::SetBlocked { .. } => "SetBlocked",
             Self::FocusChanged { .. } => "FocusChanged",
             Self::Pause { .. } => "Pause",
@@ -140,7 +165,7 @@ pub enum Reply {
         protocol: u32,
         state: ServiceState,
     },
-    Snapshot(Snapshot),
+    Snapshot(Box<Snapshot>),
     /// Done; the config is now at `rev`.
     Ack {
         rev: u64,
@@ -454,7 +479,7 @@ mod tests {
         for msg in [
             ServerMsg::Reply {
                 id: 1,
-                reply: Reply::Snapshot(Snapshot {
+                reply: Reply::Snapshot(Box::new(Snapshot {
                     rev: 4,
                     state: ServiceState::SafeMode { failures: 3 },
                     config,
@@ -467,7 +492,7 @@ mod tests {
                         id: "youtube".into(),
                         name: "YouTube".into(),
                     }],
-                }),
+                })),
             },
             ServerMsg::Reply {
                 id: 2,
