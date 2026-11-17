@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dismissFirstRun,
   firstRunDismissed,
+  forgetFirstRun,
   needsFirstRun,
   noSpeed,
   parseSpeed,
@@ -97,5 +98,23 @@ describe("first run", () => {
     };
     expect(firstRunDismissed(broken)).toBe(false);
     expect(() => dismissFirstRun(broken)).not.toThrow();
+    expect(() =>
+      forgetFirstRun({
+        removeItem: () => {
+          throw new Error("denied");
+        },
+      }),
+    ).not.toThrow();
+  });
+  it("forgets the dismissal after a reset", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    };
+    dismissFirstRun(storage);
+    forgetFirstRun(storage);
+    expect(firstRunDismissed(storage)).toBe(false);
   });
 });

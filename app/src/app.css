@@ -1,8 +1,10 @@
-/* SnailNet's look (PLAN.md §14.1, the Ledger): its own dark ground, not
-   Windows' light/dark or accent. Warm near-black, soft rounded surfaces
-   one step lighter, warm off-white type in one hyperlegible family, and
-   colour only where it carries meaning: each slice's ink. Windows high
-   contrast mode replaces all of it with system colours. */
+/* SnailNet's look (PLAN.md §14.1, the Garden): the snail icon's own
+   colours, not Windows' light/dark or accent. The deep green of its shell's
+   spiral is the ground, its body's darker green the side rail, the shell's
+   bright green marks what's boosted, and cream marks the choice that's on.
+   Soft rounded surfaces a step lighter, warm off-white type in one
+   hyperlegible family, and slice inks only where they carry meaning.
+   Windows high contrast mode replaces all of it with system colours. */
 
 @import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
 
@@ -12,67 +14,80 @@
   --font-display: var(--font-text);
   --font-icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
 
-  /* Ground and the surfaces on it, each a step lighter. */
-  --surface-ground: #121211;
-  --surface-1: #1b1a19;
-  --surface-2: #232220;
-  --surface-3: #2d2b29;
+  /* Ground and the surfaces on it, each a step lighter; the side rail a
+     step darker. */
+  --surface-side: #0a211d;
+  --surface-ground: #0e2b26;
+  --surface-1: #143831;
+  --surface-2: #1b443c;
+  --surface-3: #24524a;
   /* The thin ring round dialogs and the segmented track; the caption
      buttons' hover and press; loading placeholders. */
-  --stroke-card: rgb(255 255 255 / 0.07);
-  --fill-subtle-hover: rgb(255 255 255 / 0.05);
+  --stroke-card: rgb(255 255 255 / 0.08);
+  --fill-subtle-hover: rgb(255 255 255 / 0.06);
   --fill-subtle-pressed: rgb(255 255 255 / 0.03);
-  --skeleton: rgb(255 255 255 / 0.06);
+  --skeleton: rgb(255 255 255 / 0.07);
 
-  /* Type on the ground: 16:1, 7.5:1 and 4.8:1. Tertiary is for rings
-     and disabled text only; it falls under 4.5:1 on the surfaces. */
-  --text-primary: #f1ede6;
-  --text-secondary: #a8a399;
-  --text-tertiary: #858076;
+  /* Type: primary 13:1 and secondary 8.9:1 on the ground (6.4:1 on
+     surface 2). Tertiary (6:1 on the ground) is for rings and disabled
+     text only; it falls under 4.5:1 on surface 2. */
+  --text-primary: #f3eee2;
+  --text-secondary: #b8cbc4;
+  --text-tertiary: #8fa9a1;
 
-  /* The one strong action per view is light on dark, not a hue. */
-  --accent: #f1ede6;
-  --accent-hover: #ffffff;
-  --accent-pressed: #d9d4cc;
-  --on-accent: #121211;
+  /* The one strong action per view, and the mode that's on: cream. */
+  --accent: #efe8d6;
+  --accent-hover: #fbf6ea;
+  --accent-pressed: #ddd5c1;
+  --on-accent: #0a211d;
+  /* The shell: what's boosted, and the brand. */
+  --shell: #2fa88e;
+  --shell-hover: #3bbb9f;
+  --on-shell: #062520;
+  --shell-soft: rgb(47 168 142 / 0.16);
 
-  --caution: #e8b04a;
+  --caution: #eab04e;
   --critical: #f2907e;
   --close-hover: #c42b1c;
 
-  --focus-outer: #f1ede6;
-  --selection: rgb(241 237 230 / 0.25);
+  --focus-outer: #efe8d6;
+  --selection: rgb(239 232 214 / 0.25);
 
-  /* Slice inks, in rule order; Everything else is stone. All ≥ 6:1 on
-     the ground, and every slice is also named in words. */
-  --ink-0: #e07c62;
-  --ink-1: #dcae55;
-  --ink-2: #8fb89a;
-  --ink-3: #8aa9cc;
-  --ink-4: #c79abd;
-  --ink-5: #b8b56c;
-  --stone-0: #b3ad9f;
-  --stone-1: #99948a;
-  --stone-2: #847f76;
-  --stone-3: #716d65;
-  --stone-4: #5f5c56;
-  --free-hatch: repeating-linear-gradient(135deg, #3a3835 0 2px, transparent 2px 6px);
+  /* Slice inks, in rule order (all ≥ 5.7:1 on the ground); Everything
+     else is stone, lighter to darker for its apps in the live strip. Every
+     part is also named in words. */
+  --ink-0: #e8836a;
+  --ink-1: #eab04e;
+  --ink-2: #9cc7e8;
+  --ink-3: #d3a0d8;
+  --ink-4: #c9c46e;
+  --ink-5: #f0a3a3;
+  --stone-0: #a6b5ad;
+  --stone-1: #8fa39a;
+  --stone-2: #7b8f87;
+  --stone-3: #687c74;
+  --stone-4: #566a63;
+  --free-hatch: repeating-linear-gradient(135deg, #2d5a52 0 2px, transparent 2px 6px);
 
   --radius-control: 10px;
-  --radius-card: 12px;
+  --radius-card: 16px;
   --titlebar-h: 32px;
-  --gutter: 40px;
+  --side-w: 208px;
+  --gutter: 32px;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (forced-colors: active) {
   :root {
+    --surface-side: Canvas;
     --surface-1: Canvas;
     --surface-2: Canvas;
     --surface-3: Canvas;
     --stroke-card: CanvasText;
     --accent: Highlight;
     --on-accent: HighlightText;
+    --shell: Highlight;
+    --on-shell: HighlightText;
   }
 }
 
@@ -227,7 +242,29 @@ select {
   color: var(--critical);
 }
 
-/* The two dialogs (connection speed, add a slice): a raised surface with
+/* A soft card on the ground: the Now page's boxes, Settings' groups. */
+.card {
+  border-radius: var(--radius-card);
+  background: var(--surface-1);
+}
+@media (forced-colors: active) {
+  .card {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* A small heading over a group, in capitals. */
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* The dialogs (connection speed, add a slice, confirm): a raised surface with
    a thin ring, rising into place over a dimmed window. */
 dialog {
   width: min(440px, calc(100vw - 48px));

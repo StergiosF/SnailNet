@@ -14,8 +14,8 @@
 
 pub mod autostart;
 pub mod bridge;
+pub mod changes;
 pub mod icon;
-pub mod line;
 pub mod tray;
 pub mod tray_icon;
 
@@ -23,10 +23,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Serialize;
-use snailnet_core::rules::Rule;
-use snailnet_ipc::{
-    Client, ClientError, ErrorCode, PIPE_NAME, Reply, Request, ServiceState, Snapshot, StatsTick,
-};
+use snailnet_ipc::{Client, PIPE_NAME, ServiceState, Snapshot, StatsTick};
 use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::{Link, Sink};
@@ -121,40 +118,6 @@ pub enum SaveError {
     Failed { message: String },
 }
 
-/// Replace one profile's rules (PLAN.md §12.2 `SetRules`); returns the new
-/// revision. Uses its own short connection: the bridge's one is busy
-/// reading the stats stream.
-#[tauri::command]
-async fn set_rules(profile_id: String, rules: Vec<Rule>, rev: u64) -> Result<u64, SaveError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut c = Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION"))?;
-        c.call(Request::SetRules {
-            profile_id,
-            rules,
-            rev,
-        })
-    })
-    .await
-    .map_err(|e| SaveError::Failed {
-        message: e.to_string(),
-    })?
-    .map_err(|e| match e {
-        ClientError::Refused {
-            code: ErrorCode::Conflict,
-            ..
-        } => SaveError::Conflict,
-        other => SaveError::Failed {
-            message: other.to_string(),
-        },
-    })
-    .and_then(|reply| match reply {
-        Reply::Ack { rev } => Ok(rev),
-        other => Err(SaveError::Failed {
-            message: format!("unexpected reply: {other:?}"),
-        }),
-    })
-}
-
 #[tauri::command]
 fn current(shared: tauri::State<'_, Arc<Shared>>) -> Latest {
     shared
@@ -200,8 +163,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             current,
             icon::app_icon,
-            set_rules,
-            line::set_line,
+            changes::set_rules,
+            changes::set_line,
+            changes::switch_profile,
+            changes::reset_profile,
+            changes::reset_all,
+            changes::boost,
+            changes::stop_boost,
             autostart::autostart_enabled,
             autostart::set_autostart
         ])

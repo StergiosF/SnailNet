@@ -64,3 +64,12 @@ export function dismissFirstRun(storage?: Pick<Storage, "setItem">): void {
     // Not remembered; first run may show again next time.
   }
 }
+
+/** After "Reset SnailNet": show first run again. */
+export function forgetFirstRun(storage?: Pick<Storage, "removeItem">): void {
+  try {
+    (storage ?? globalThis.localStorage)?.removeItem(DISMISSED_KEY);
+  } catch {
+    // Nothing remembered to forget.
+  }
+}

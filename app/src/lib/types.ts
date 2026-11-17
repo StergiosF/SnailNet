@@ -55,11 +55,19 @@ export interface Line {
   factor?: number;
 }
 
+/** One app or site going first for a while (snailnet-core `Boost`). */
+export interface Boost {
+  target: Target;
+  /** Unix seconds; absent = until stopped. */
+  until?: number;
+}
+
 export interface Config {
   version: number;
   active_profile: string;
   settings: { low_latency: boolean; lan_exempt: boolean };
   line: Line;
+  boost?: Boost;
   profiles: Profile[];
 }
 
@@ -122,7 +130,7 @@ export interface StatsTick {
   names: NameTick | null;
 }
 
-/** Why `set_rules` or `set_line` failed (app/src-tauri/src/lib.rs). */
+/** Why a change failed (app/src-tauri/src/changes.rs). */
 export type SaveError = { kind: "conflict" } | { kind: "failed"; message: string };
 
 export interface Latest {

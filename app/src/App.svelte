@@ -1,22 +1,26 @@
 <script lang="ts">
-  // Main window (PLAN.md §14.2, the Ledger): title bar; a sentence on who
-  // is using the line (or the state that needs attention); the live strip;
-  // the slices, each with − % + and its settings in place; dialogs.
+  // Main window (PLAN.md §14.2, the Garden): the green side rail with the
+  // pages (Now, Split, Settings) and the line; beside it the title bar's
+  // caption buttons, a state that needs attention if there is one, and
+  // the open page. First run takes the whole window until it's done.
   import { onMount } from "svelte";
   import AddSlice from "./lib/components/AddSlice.svelte";
   import FirstRun from "./lib/components/FirstRun.svelte";
-  import Header from "./lib/components/Header.svelte";
   import LineDialog from "./lib/components/LineDialog.svelte";
-  import SliceList from "./lib/components/SliceList.svelte";
+  import NoticeBar from "./lib/components/NoticeBar.svelte";
+  import NowPage from "./lib/components/NowPage.svelte";
+  import SettingsPage from "./lib/components/SettingsPage.svelte";
+  import Sidebar from "./lib/components/Sidebar.svelte";
+  import SplitPage from "./lib/components/SplitPage.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
-  import UsageStrip from "./lib/components/UsageStrip.svelte";
+  import Toast from "./lib/components/Toast.svelte";
   import { targetLabel } from "./lib/format";
   import { t } from "./lib/i18n";
   import { glance, ledger } from "./lib/ledger";
-  import { dismissFirstRun, firstRunDismissed, needsFirstRun } from "./lib/line";
+  import { needsFirstRun } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
-  import { service } from "./lib/service.svelte";
   import { noticeOf } from "./lib/notice";
+  import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
   import type { Target } from "./lib/types";
 
@@ -24,18 +28,17 @@
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
+    return ui.tick();
   });
 
   // First run (§14.5): once the service answers with no speed set; it
   // then stays until finished, even after a speed is saved.
-  let firstRunDone = $state(firstRunDismissed());
   let firstRun = $state(false);
   $effect(() => {
-    if (needsFirstRun(service.link, service.snapshot, firstRunDone)) firstRun = true;
+    if (needsFirstRun(service.link, service.snapshot, ui.firstRunDone)) firstRun = true;
   });
   function finishFirstRun() {
-    dismissFirstRun();
-    firstRunDone = true;
+    ui.finishFirstRun();
     firstRun = false;
   }
 
@@ -43,35 +46,57 @@
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const dirStats = $derived(ui.dir === "down" ? service.stats?.down : service.stats?.up);
   const book = $derived(connected ? ledger(ui.rules, dirStats, label) : null);
+  // The Now page always speaks of downloads: that's where the sharing is felt.
+  const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
   const lineMbps = $derived(
     ui.dir === "down" ? service.snapshot?.config.line.down_mbps : service.snapshot?.config.line.up_mbps,
   );
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
+  const downLine = $derived(service.snapshot?.config.line.down_mbps);
   const loading = $derived(
     service.link.kind === "connecting" || (service.link.kind === "connected" && service.stats === null),
   );
-  const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
-
+  const sentence = $derived(
+    downBook && service.stats ? glance(downBook, downLine === undefined ? null : downLine * 1e6) : null,
+  );
   const notice = $derived(noticeOf(service.link, service.state, () => lineDialog.show()));
 </script>
 
 <div class="window">
-  <TitleBar />
   {#if firstRun}
-    <FirstRun onfinish={finishFirstRun} />
+    <div class="first">
+      <TitleBar brand />
+      <FirstRun onfinish={finishFirstRun} />
+    </div>
   {:else}
-    <main>
-      <Header glance={sentence} {notice} />
-      {#if service.link.kind === "connecting"}
-        <p class="visually-hidden" role="status">{t("link.connecting")}</p>
-      {/if}
-      {#if book && service.stats}
-        <UsageStrip ledger={book} {lineBps} />
-      {/if}
-      {#if service.link.kind === "connecting" || connected}
-        <SliceList ledger={book} {loading} canEdit={connected} />
-      {/if}
-    </main>
+    <Sidebar />
+    <div class="col">
+      <TitleBar />
+      <main>
+        {#if service.link.kind === "connecting"}
+          <p class="visually-hidden" role="status">{t("link.connecting")}</p>
+        {/if}
+        {#if notice}
+          <div class="notice"><NoticeBar {notice} /></div>
+        {/if}
+        {#if ui.page === "now"}
+          <NowPage ledger={loading ? null : downBook} glance={sentence} canEdit={connected} />
+        {:else if ui.page === "split"}
+          {#if service.link.kind === "connecting" || connected}
+            <SplitPage
+              ledger={book}
+              {lineBps}
+              {loading}
+              canEdit={connected}
+              showStrip={book !== null && service.stats !== null}
+            />
+          {/if}
+        {:else}
+          <SettingsPage canEdit={connected} />
+        {/if}
+      </main>
+    </div>
+    <Toast />
   {/if}
   <AddSlice />
   <LineDialog />
@@ -80,11 +105,26 @@
 <style>
   .window {
     display: flex;
-    flex-direction: column;
     height: 100%;
+  }
+  .first {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
   }
   main {
     flex: 1;
     overflow-y: auto;
+    padding: 0 var(--gutter) 28px;
+  }
+  .notice {
+    margin-bottom: 16px;
   }
 </style>

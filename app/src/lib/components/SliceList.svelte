@@ -48,7 +48,7 @@
 
 <style>
   .list {
-    margin: 24px calc(var(--gutter) - 12px) 0;
+    margin: 16px -12px 0;
     padding-bottom: 24px;
   }
   ul {

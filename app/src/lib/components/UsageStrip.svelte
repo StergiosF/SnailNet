@@ -72,7 +72,7 @@
 
 <style>
   .strip {
-    margin: 24px var(--gutter) 0;
+    margin: 20px 0 0;
   }
   .bar {
     display: flex;

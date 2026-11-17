@@ -1,0 +1,119 @@
+// The Now page's model (PLAN.md §14.2): the four modes, who is using the
+// internet right now (with a Boost for each), what a boost has left, and
+// the split in short. Pure, so it's tested.
+
+import { sameTarget } from "./rules";
+import { statusText, QUIET_BPS, type Ledger, type Slice } from "./ledger";
+import { t, type Key } from "./i18n";
+import type { Boost, Profile, Target } from "./types";
+
+export type ModeId = "balanced" | "streaming" | "gaming" | "quiet-downloads";
+
+export interface Mode {
+  id: ModeId;
+  name: Key;
+  body: Key;
+}
+
+/** The built-in modes (snailnet-core `modes::MODES`), in order. */
+export const MODES: Mode[] = [
+  { id: "balanced", name: "mode.balanced", body: "mode.balanced.body" },
+  { id: "streaming", name: "mode.streaming", body: "mode.streaming.body" },
+  { id: "gaming", name: "mode.gaming", body: "mode.gaming.body" },
+  { id: "quiet-downloads", name: "mode.quiet", body: "mode.quiet.body" },
+];
+
+/** The modes this config has (an old service may lack some). */
+export function availableModes(profiles: Profile[]): Mode[] {
+  return MODES.filter((m) => profiles.some((p) => p.id === m.id));
+}
+
+/** A profile's name as the app writes it: a mode's own words, else the
+ *  name the config gives it. */
+export function modeName(profile: Profile | null): string {
+  if (!profile) return "";
+  const m = MODES.find((x) => x.id === profile.id);
+  return m ? t(m.name) : profile.name;
+}
+
+/** The boost, if it's still on at `now` (Unix seconds). */
+export function liveBoost(boost: Boost | undefined, now: number): Boost | null {
+  if (!boost) return null;
+  return boost.until === undefined || now < boost.until ? boost : null;
+}
+
+/** "52 min left", "1 h 5 min left", "until you stop it". */
+export function boostLeft(boost: Boost, now: number): string {
+  if (boost.until === undefined) return t("boost.untilStopped");
+  const min = Math.max(1, Math.ceil((boost.until - now) / 60));
+  if (min < 60) return t("boost.left.min", { min });
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? t("boost.left.h", { h }) : t("boost.left.hmin", { h, min: m });
+}
+
+/** Someone using the internet, for the Now page. */
+export interface User {
+  key: string;
+  target: Target;
+  name: string;
+  bps: number;
+  /** What's happening to it, in words. */
+  status: string;
+  boosted: boolean;
+}
+
+const keyOf = (t: Target) => `${t.kind}:${t.id.toLowerCase()}`;
+
+/** Who is using the internet, busiest first: apps and sites with their own
+ *  slice, and the apps inside Everything else. The boosted one is always
+ *  listed (so it can be stopped), even when quiet. At most `max`. */
+export function users(
+  l: Ledger,
+  boost: Boost | null,
+  label: (t: Target) => string,
+  max = 5,
+): User[] {
+  const out: User[] = [];
+  for (const s of l.slices) {
+    if (s.target !== null) {
+      if (s.bps >= QUIET_BPS) {
+        out.push({ key: s.key, target: s.target, name: s.name, bps: s.bps, status: statusText(s.status), boosted: false });
+      }
+      continue;
+    }
+    for (const m of s.members) {
+      if (m.fixed) continue;
+      out.push({ key: m.key, target: m.target, name: m.name, bps: m.bps, status: t("who.inOther"), boosted: false });
+    }
+  }
+  out.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
+  const shown = out.slice(0, max);
+  if (boost) {
+    const hit = out.find((u) => sameTarget(u.target, boost.target));
+    if (hit) {
+      hit.boosted = true;
+      if (!shown.includes(hit)) shown.splice(max - 1, 1, hit);
+    } else {
+      shown.unshift({
+        key: keyOf(boost.target),
+        target: boost.target,
+        name: label(boost.target),
+        bps: 0,
+        status: t("status.quiet"),
+        boosted: true,
+      });
+      if (shown.length > max) shown.pop();
+    }
+  }
+  return shown;
+}
+
+/** The split in short: the slices with a share (Everything else last), and
+ *  how many take only what's free. */
+export function summary(l: Ledger): { slices: Slice[]; free: number } {
+  return {
+    slices: l.slices.filter((s) => s.share !== null && s.enabled),
+    free: l.slices.filter((s) => s.enabled && s.share === null).length,
+  };
+}

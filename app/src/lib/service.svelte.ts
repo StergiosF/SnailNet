@@ -5,7 +5,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { withSpeeds } from "./line";
 import { withBar } from "./rules";
-import type { Latest, Link, Rule, SaveError, ServiceState, Snapshot, StatsTick } from "./types";
+import type { Latest, Link, Rule, SaveError, ServiceState, Snapshot, StatsTick, Target } from "./types";
+
+const notConnected: SaveError = { kind: "failed", message: "not connected" };
 
 class Service {
   link = $state<Link>({ kind: "connecting" });
@@ -32,13 +34,49 @@ class Service {
     ...this.#seenSiteNames,
   });
 
-  /** Save the active profile's rules. Resolves to the new revision;
-   *  rejects with a SaveError (a stale `rev` is a conflict). */
-  async saveRules(rules: Rule[]): Promise<number> {
+  /** Ask the service for a change (app/src-tauri/src/changes.rs) at the
+   *  revision we hold. Resolves to the new revision; rejects with a
+   *  SaveError (a stale `rev` is a conflict). */
+  async #change(command: string, args: Record<string, unknown>): Promise<number> {
     const snap = this.snapshot;
+    if (!snap || this.link.kind !== "connected") throw notConnected;
+    return invoke<number>(command, { ...args, rev: snap.rev });
+  }
+
+  /** Save the active profile's rules. */
+  async saveRules(rules: Rule[]): Promise<number> {
     const profile = this.activeProfile;
-    if (!snap || !profile) throw { kind: "failed", message: "not connected" } satisfies SaveError;
-    return invoke<number>("set_rules", { profileId: profile.id, rules, rev: snap.rev });
+    if (!profile) throw notConnected;
+    return this.saveRulesOf(profile.id, rules);
+  }
+
+  /** Save one profile's rules (Undo after a reset). */
+  async saveRulesOf(profileId: string, rules: Rule[]): Promise<number> {
+    return this.#change("set_rules", { profileId, rules });
+  }
+
+  /** Switch mode. */
+  async switchMode(id: string): Promise<number> {
+    return this.#change("switch_profile", { id });
+  }
+
+  /** Put a mode's split back to where it started. */
+  async resetMode(id: string): Promise<number> {
+    return this.#change("reset_profile", { id });
+  }
+
+  /** Forget everything: rules, line speed, settings, boost. */
+  async resetAll(): Promise<number> {
+    return this.#change("reset_all", {});
+  }
+
+  /** Let `target` go first for `minutes` (null: until stopped). */
+  async boost(target: Target, minutes: number | null): Promise<number> {
+    return this.#change("boost", { target, minutes });
+  }
+
+  async stopBoost(): Promise<number> {
+    return this.#change("stop_boost", {});
   }
 
   /** Save new slice sizes (the bar's full list; Everything else is
@@ -51,9 +89,9 @@ class Service {
    *  that direction. Keeps the factor. Resolves to the new revision;
    *  rejects with a SaveError. */
   async saveLine(down: number | null, up: number | null): Promise<number> {
-    const snap = this.snapshot;
-    if (!snap) throw { kind: "failed", message: "not connected" } satisfies SaveError;
-    return invoke<number>("set_line", { line: withSpeeds(snap.config.line, down, up), rev: snap.rev });
+    const line = this.snapshot?.config.line;
+    if (!line) throw notConnected;
+    return this.#change("set_line", { line: withSpeeds(line, down, up) });
   }
 
   async start(): Promise<void> {
