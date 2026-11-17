@@ -2,7 +2,18 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-16)
+## Start here (updated 2026-11-17)
+
+- **Latest:** the app was redesigned ("the Garden", `docs/HANDOFF-ui.md`)
+  and the service gained **modes** (four built-in profiles), **boost**,
+  **pause** and **blocking an app** (PLAN.md §11.2, 11.3, 11.5, 11.8).
+  All pushed on `main`. The dev service in `target\debug` was last run
+  with the user's real config (it shapes their traffic at 23 Mbps while
+  running; stopping needs elevation).
+- **Next:** the user's feedback on the built app; then the Phase 2 exit
+  check, the 24 h soak, and the anti-cheat test below.
+
+## Start here (2026-11-16)
 
 - **Where we are:** Phase 1 built except its exit soak. Phase 2 code is
   complete (incl. per-site stats rows, name counts over IPC, fuzz targets,

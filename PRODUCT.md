@@ -52,10 +52,11 @@ priorities and absolute limits and make the user do the arithmetic.
   site rule applies in every app and beats the app's rule.
 - Everything else keeps a 5% floor. Priorities: High · Normal · Low.
 - Line speed is set by hand today; the speed test and estimator are
-  Phase 4. Profiles, block, notifications are Phase 5 (protocol answers
-  Unsupported until then).
+  Phase 4. Modes (four built-in profiles), Boost, Pause and blocking an
+  app are built; notifications, hotkeys and the speed test are not.
+  `RunSpeedTest`, `FocusChanged`, `AnswerPrompt` answer Unsupported.
 - Service states the UI must show: Starting, Shaping, Unshaped (no line
-  speed), Retrying (failed open), Safe mode, not running.
+  speed), Retrying (failed open), Safe mode, Paused, not running.
 - Some HTTPS traffic can't be named (ECH, no SNI): "unidentified", shown
   honestly, never hidden.
 - Vocabulary: "slice", "goes first", "only when the line is free",
@@ -64,12 +65,14 @@ priorities and absolute limits and make the user do the arithmetic.
 ## Brand Commitments
 
 - Name: **SnailNet**. Tagline: "Put the bandwidth hogs in the slow lane."
-- A tiny snail glyph in the tray and on empty states only; never in the
-  way.
-- Its own calm dark look, "the Ledger" (PLAN.md §14.1, D11–D13): a
-  sentence on who is using the line, then the slices in large,
-  hyperlegible type. Chosen by the user from real-size mockups over
-  Windows 11 native ("looks like a Windows application").
+- The snail is the brand: in the side rail, the tray, the flyout, empty
+  states, and its shell spiral drawn faint behind the Now page. Never in
+  the way of a control.
+- Its own dark look from the snail icon, "the Garden" (PLAN.md §14.1,
+  D11–D13): shell greens, cream for what's on, soft light and depth,
+  hyperlegible type, motion that explains. Chosen by the user from
+  real-size mockups (2026-11-17) after Windows 11 native ("looks like a
+  Windows application") and the plainer Ledger.
 
 ## Evidence on Hand
 

@@ -4,20 +4,28 @@ Start a fresh session with: **"read docs/HANDOFF-ui.md and continue"**.
 Written 2026-11-16. The general project handoff is `docs/HANDOFF.md`;
 this file is only about the app's look and usability.
 
-## Status (2026-11-16, later)
+## Status (2026-11-17)
 
-- **Direction chosen:** "B · Ledger" from three real-size mockups
-  (Console, Ledger, Pipe), then "a bit more modern and simple" (round 2,
-  approved). Built in commit b982e7a; PLAN.md §14.1–14.4, §14.9,
-  D11–D13 and PRODUCT.md now describe it.
-- **Done in code, gates green:** main window (sentence, live strip,
-  slice rows with − % +, settings in place, Everything else's apps, Add a
-  slice dialog), real exe icons (`src-tauri/src/icon.rs`), tray flyout,
-  line dialog, first run, every §14.8 state as the headline. Model and
-  wording in `app/src/lib/ledger.ts` (tested).
-- **Not yet:** the user hasn't seen the built app. Next: run it with
-  the service, get the user's screenshots, fix what they say; then
-  update `docs/HANDOFF.md` and delete `.impeccable/` scratch.
+- **Direction now:** "C · The Garden with B's side rail", picked from
+  three real-size mockups after the user asked for a revamp that "matches
+  the app theme, the snail icon" (the Ledger read as plain and hard to
+  use). Then a premium pass ("more cinematic and premium", animations,
+  pointer cursors, a bigger window). PLAN.md §14.1–14.6, D12–D13 and
+  PRODUCT.md describe it.
+- **Built, gates green, pushed:** side rail (Now · Split · Settings,
+  Pause, the line); Now page (mode tiles, "Using your internet" with
+  Boost / Block, the split in short, the sentence); Split page (the
+  Ledger rows, quiet "only when free" rules folded); Settings (speed,
+  autostart, both resets, versions); flyout with modes and Pause; the
+  service's modes, boost, pause and blocking. Commits 3ebca19 … ee86a4e
+  and the speed-dialog fix after them.
+- **User feedback so far on the build:** liked the direction ("I like
+  now the design"); disliked the speed dialog's fields and the side
+  rail's "25 ↓ – ↑ Mbps" (fixed: the fields' wrapper clashed with the
+  global `.field` class; the line block now reads Download / Upload in
+  words). Next: their screenshots of the rest, then fix what they say.
+- `.impeccable/` is untracked impeccable state (config, hook cache,
+  old mockups); leave it unless the user asks.
 
 ## The task
 

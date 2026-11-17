@@ -79,8 +79,8 @@ Settled during the planning interview. Change these only deliberately, and note 
 | D9 | v1 extras | Smart (Focus boost, Low-latency mode) + Control (profiles, block, new-app prompt, app families) | Differentiators plus essentials |
 | D10 | Unlisted apps | One **"Everything else"** slice | New apps can never starve your rules |
 | D11 | % input | **− % + per slice** (5% steps, always 100%: the other slices make room); the split bar with draggable dividers was built, then replaced (2026-11-16) | Readable at a glance, one click to give something more, the same in the flyout |
-| D12 | Main screen | **The Ledger**: a sentence on who is using the line, a live strip, then the slices as rows with their settings in place; **tray flyout** with the same rows for quick changes | One screen does everything |
-| D13 | Style | **SnailNet's own dark look** (§14.1), chosen by the user over Windows 11 native (2026-11-16: "looks like a Windows application") | Distinctive, calm and premium |
+| D12 | Main screen | **The Garden** (2026-11-17): a side rail (Now · Split · Settings); **Now** = four mode tiles, who is using the internet with a Boost each, the split in short; **Split** = the slices as rows with their settings in place (the former Ledger); **tray flyout** with modes, Pause and the slices | Most visits are "pick a mode, boost one thing"; the exact split is one step back |
+| D13 | Style | **SnailNet's own dark look, from the snail icon** (§14.1): its greens, its shell. Chosen by the user from three real-size mockups ("C with B's side rail", 2026-11-17) after the Ledger read as too plain | Distinctive, calm and premium, and recognisably SnailNet |
 | D14 | Platform | Windows 10/11 x64 | WinDivert has no official ARM64 build |
 | D15 | UI stack | **Tauri 2 + Svelte 5 + TypeScript** | Premium UI with a small installer; Rust core |
 | D16 | Runtime | **Windows service** (LocalSystem) + per-user tray app | No admin prompt on launch, shaping from boot |
@@ -495,12 +495,16 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 
 ### 11.2 Profiles (Control)
 
+- **Built as modes (2026-11-17):** four built-in profiles, `snailnet-core::modes`: **Balanced** (no rules), **Streaming** (Discord/Zoom High, YouTube/Twitch/Netflix slices, launchers and updaters only when free), **Gaming** (Discord High, video Low, downloads only when free; games stay in Everything else), **Quiet downloads** (launchers and updaters only when free). Older configs get the missing ones on load; the user's own Balanced is kept. One click on the Now page or the flyout switches (`SwitchProfile`); "Reset split" puts a mode back to its template (`ResetProfile`, with Undo); Settings → "Reset SnailNet" restores the defaults and shows first run again (`ResetAll`). Not yet: hotkey, duplicate & edit.
+
 - A profile = a complete rule set + Low-latency setting.
 - Shipped presets: **Balanced** (no rules, Low-latency on), **Gaming** (games High, launchers/updaters Low, Windows Update ceiling 20%), **Streaming** (site packs for video Normal, downloads Low), **Downloads** (everything to downloaders, Low-latency off).
 - Switch via the tray flyout, the main window header, or a global hotkey (default `Ctrl+Alt+S` cycles; configurable).
 - "Duplicate & edit" to make your own. Profiles are stored in config; switching is instant and atomic.
 
 ### 11.3 Block per app (Control)
+
+- **Built (2026-11-17), first cut:** `Config.blocked` (family ids, every mode); the fast path drops a blocked app's internet packets in both directions (`Classifier::blocked`), LAN traffic passes, and blocking alone runs the engine without a line speed. In the app: "Block its internet" in an app's Boost menu (with Undo), blocked apps listed under "Using your internet" with Unblock. Not yet: the SOCKET-layer `connect` refusal below and the tray counter.
 
 - A toggle on each app row ("Online / Blocked").
 - Implementation: SOCKET layer blocks `connect`/`bind`/`listen` for that family (clean, the app gets a normal network error) **and** NETWORK layer drops packets of already-open flows.
@@ -515,6 +519,8 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 - Windows' own components (signed by Microsoft, in System32) never prompt.
 
 ### 11.5 Focus boost (Smart)
+
+- **Boost by hand, built (2026-11-17):** one app or site at a time goes first (High, at least 50% of the line, no ceiling; the other rules shrink to fit) for 1 h, 4 h or until stopped, in every mode (`Config.boost`, IPC `Boost` / `StopBoost`; the runner ends it on time). In the app: a Boost button on each row of "Using your internet". Automatic focus boost below is still Phase 4.
 
 - **What:** the app in the foreground gets **High priority** temporarily (never a bigger share). Games (detected) get High for their whole session, even when alt-tabbed.
 - **Foreground tracking (UI process):** `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` → PID → family → IPC `focus_changed`. Debounced 300 ms so alt-tabbing doesn't churn.
@@ -537,7 +543,8 @@ As specified in §7.2. In the UI, an expandable row shows member processes; "Spl
 
 ### 11.8 Pause
 
-- Tray flyout and main header: **Pause for 15 min / 1 h / until I resume**. Shaping off, monitoring on. Pause state is obvious (amber tray glyph).
+- Side rail and tray flyout: **Pause for 15 min / 1 h / until I resume**. Pause state is obvious (amber tray glyph, a notice with Resume).
+- **Built (2026-11-17):** `Config.pause`; while paused the plan is empty, so the engine steps aside entirely (no shaping, no blocking, no live stats) and the service reports `ServiceState::Paused { until }`. The runner ends a timed pause by itself. IPC `Pause { minutes }` / `Resume`.
 
 ---
 
@@ -628,50 +635,44 @@ everything_else_share = 1500          # basis points
 
 ## 14. UI / UX specification
 
-> The direction was picked by the user from real-size mockups (2026-11-16, `docs/HANDOFF-ui.md`): "B · Ledger", then "a bit more modern and simple". D11–D13 and this section are the brief.
+> The direction was picked by the user from real-size mockups: "B · Ledger" (2026-11-16), then "C · The Garden with B's side rail" (2026-11-17, after "match the app theme, the snail icon"), then a premium pass ("more cinematic and premium", animations, pointer cursors). D11–D13 and this section are the brief; `docs/HANDOFF-ui.md` has the history.
 
-### 14.1 Visual language: the Ledger
+### 14.1 Visual language: the Garden
 
-- **Ground:** SnailNet's own dark look, the same whatever Windows' theme or accent: a warm near-black ground (`#121211`) painted by the page, with soft surfaces one step lighter for rows, controls and dialogs (no strokes, no cards, 10–16 px radius). No Mica (it can't show through WebView2 here).
-- **Type:** one family, Atkinson Hyperlegible Next (bundled, OFL), chosen for the job: digits that can't be misread. A sentence-sized headline (28 px bold), 15–17 px body, tabular numerals for every speed and percentage.
-- **Colour:** warm off-white type in three steps (primary, secondary, tertiary, all ≥ 4.5:1). Colour only where it carries meaning: each slice's ink (six muted inks in rule order; Everything else is stone). The one main action per view is light on dark, not a hue. Spare room is hatched, never shown by colour alone.
-- **Icons:** each app's own icon from its .exe (Rust `app_icon`, cached), a letter tile in the site's colour for websites, four squares for Everything else; Segoe Fluent Icons for the few UI glyphs.
-- **Motion:** 120–400 ms ease-out (bars ease to new widths, dialogs rise 8 px). Respect `prefers-reduced-motion`. Nothing loops or pulses.
+- **From the snail icon:** the deep green of the shell's spiral is the ground (`#0e2b26`), the body's darker green the side rail (`#0a211d`), the shell's bright green (`#2fa88e`) marks what's boosted and the brand, cream (`#efe8d6`) marks the choice that's on (the mode tile, the main action). Same whatever Windows' theme or accent. No Mica (it can't show through WebView2 here).
+- **Light and depth:** a soft shell-green light falls from above the content and a deeper green pools low (`--ground-light`). Cards are a step lighter, catch that light on their top edge and sit on real offset shadows (`--shadow-card`, `--shadow-raised`); one elevation per element, no borders. 12–18 px radii.
+- **Type:** one family, Atkinson Hyperlegible Next (bundled, OFL), chosen for digits that can't be misread. Page questions 32 px extra-bold with tight tracking, card headings 16 px bold in plain words (no small-capital labels), 15–17 px body, tabular numerals for every speed and percentage.
+- **Colour:** warm off-white type in three steps (13:1, 8.9:1, 6:1 on the ground). Slice inks only where they carry meaning (six, ≥ 5.7:1); Everything else is a green-grey stone. Spare room is hatched, never shown by colour alone.
+- **The shell:** the icon's spiral is the brand motif: the snail in the side rail, the flyout and empty states, and drawn large and faint behind the Now page's question.
+- **Icons:** each app's own icon from its .exe (Rust `app_icon`, cached), a letter tile in the site's colour for websites, four squares for Everything else; Segoe Fluent Icons for UI glyphs; the mode glyphs are drawn SVG.
+- **Motion** (one authored moment, the rest explains state): the shell spiral draws itself once when the Now page opens; tiles and cards then arrive in reading order. Pages rise in out of a slight blur; the side rail's highlight slides to the open page; a chosen mode's cream spreads from its glyph; rows of "Using your internet" glide when the order changes; a boost sweeps in its green; menus, dialogs and toasts rise into place; buttons press slightly. Exponential ease-out, 120–560 ms (the spiral 1.8 s). `prefers-reduced-motion` keeps colour and opacity changes and drops travel and blur. Nothing loops.
+- **Pointer:** everything clickable shows the pointer cursor; disabled controls show not-allowed.
 - **High contrast:** Windows high-contrast mode replaces the palette with system colours.
-- **Mascot:** a tiny snail glyph in the tray and on empty states only. Never in the way.
 
 ### 14.2 Window structure
 
-Main window, default 960 × 640, min 720 × 480, custom title bar (Tauri `decorations: false`, Windows caption buttons drawn in the page).
+Main window, default 1120 × 740, min 840 × 560, custom title bar (Tauri `decorations: false`, Windows caption buttons drawn in the page).
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ SnailNet                                                   –  □  ✕  │
-│ Steam is using the most of your line.           [ Line 25↓ 40↑ ✎ ]  │
-│ It runs on room Brave isn't using. YouTube and Discord still get all │
-│ they ask for.                                                        │
-│ ████████████▌█▐██████████████▌███▌▏                         ░░░      │
-│ ▶ YouTube 9.8  ◼ Steam 10.3  ◼ Discord 2.4    23.0 of 25.0 Mbps ·   │
-│                                2.0 kept free for low ping [Down|Up] │
-│ [▶]  YouTube   9.8 Mbps · gets all it asks for        [−] 45% [+]   │
-│      ▬▬▬▬▬▬▬▬▬▬▬▬▬▬                                                  │
-│ [ic] Brave     0.4 Mbps · lending 6.5 it isn't using  [−] 30% [+]   │
-│      Goes first [High|Normal|Low]  ☐ Only when the line is free      │
-│      [Add a speed limit]                                   Remove   │
-│ [▦]  Everything else  12.8 Mbps · 7.0 of it is spare room [−] 25% [+]│
-│      (Steam 10.3) (Discord 2.4) (Claude Code 0.1) [+ Give Steam a slice]│
-│ [+]  Add a slice for an app or website                               │
-└──────────────────────────────────────────────────────────────────────┘
+┌───────────────┬──────────────────────────────────────────────────────┐
+│ 🐌 SnailNet    │                                           –  □  ✕   │
+│               │ What matters right now?                (shell spiral)│
+│ ◉ Now         │ [Balanced] [Streaming ✓] [Gaming] [Quiet downloads]  │
+│ ≡ Split       │ ┌ Using your internet ──────────┐ ┌ The split ──────┐│
+│ ⚙ Settings    │ │ Steam   in Everything else 10.3 [Boost] │ ████▌██▌██ ││
+│               │ │ YouTube gets all it asks for 9.8 [Stop] │ YouTube 45%││
+│               │ │ Discord …                    2.4 [Boost]│ Brave 30%  ││
+│ [❚❚ Pause]    │ │ Blocked: (Epic Unblock)       │ │ [Fine-tune] [Reset]││
+│ Your line ✎   │ └───────────────────────────────┘ └─────────────────┘│
+│ 25↓ – ↑ Mbps  │ Steam is using the most of your line. YouTube still… │
+└───────────────┴──────────────────────────────────────────────────────┘
 ```
 
-- **Headline:** one sentence on who is using the most, then whether that's a problem for anyone: whose unused room it runs on, who still gets all they ask for, who wants more room (`ledger.ts` `glance`, from per-class rates and queues). When something needs attention (§14.8) its message takes this place, with its action.
-- **Line:** the line as the user set it; opens the speed dialog. What low-latency mode keeps free shows only as the hatched end of the strip ("2.0 kept free for low ping"), so the header carries one number per direction.
-- **Live strip:** as long as the line; a part per slice in its ink (Everything else split per app in stone), the free part hatched; the three biggest users named under it; Download / Upload switch.
-- **Slices:** the active profile's rules in order, then Everything else. Row: icon · name · Mbps and its status in words ("gets all it asks for", "lending 6.5 it isn't using", "7.0 of it is spare room", "using its whole slice, wants more", "quiet right now") · a thin bar (the slice, and live use on the same scale; use beyond the slice hatched) · − % +.
-- **Settings in place:** clicking a rule's row opens them under it: Goes first (High · Normal · Low), Only when the line is free, Add a speed limit (Download / Upload, Mbps or %), Remove. A site's row says it works in every browser and comes before the browser's own slice.
-- **Everything else:** its apps as small buttons with their speed (four, then "N more"); pick one, then "Give it a slice" (20%, from Everything else first). Traffic SnailNet can't tie to an app shows as "Unrecognised" and can't get a slice.
-- **Add a slice:** a dialog with search, listing known websites and seen apps without a rule.
-- **Not built yet, so not shown:** profiles, pause, block, speed test, ping.
+- **Side rail:** the snail and the name; Now · Split · Settings; Pause (Resume with the time left while paused); the line as the user set it (opens the speed dialog). A state that needs attention (§14.8) shows as a notice at the top of whichever page is open, with its action.
+- **Now:** "What matters right now?"; four mode tiles (radios); "Using your internet": who moves data, busiest first, each with its status in words and a Boost menu (1 h · 4 h · until I stop it · Block its internet for apps); blocked apps with Unblock; "The split": the mode's shares as one bar and a line each, how many take only what's free, Fine-tune (→ Split) and Reset split (with Undo); at the bottom the sentence on who uses the most and whether anyone is waiting (`ledger.ts` `glance`).
+- **Split:** "{Mode} split" with Reset split; the live strip; the slices (the former Ledger rows: icon · name · Mbps and status in words · a thin bar · − % +; settings in place: Goes first, Only when the line is free, a speed limit, Remove; Everything else with its apps and "Give it a slice"); quiet "only when free" rules fold into one row that opens; Add a slice.
+- **Settings:** §14.6.
+- **Not built yet, so not shown:** speed test, ping, notifications, hotkeys.
 
 ### 14.3 Changing a share
 
@@ -682,9 +683,9 @@ Main window, default 960 × 640, min 720 × 480, custom title bar (Tauri `decora
 
 ### 14.4 Tray flyout
 
-A quick panel (360 × 420), anchored above the tray icon, closes on blur and Escape: the main window's headline (or the state that needs attention), a small live strip, every slice with its status and − % + (the quickest way to give the game or YouTube more), and "Open SnailNet". Profiles and Pause come with Phase 5.
+A quick panel (380 × 500), anchored above the tray icon, closes on blur and Escape: the snail and Pause (1 h) / Resume; the main window's sentence (or the state that needs attention); the four modes; a small live strip; the slices with − % + (quiet "only when free" ones left out); "Open SnailNet".
 
-Tray icon states: normal (snail), paused (amber), blocked apps present (small dot), safe mode (warning).
+Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), not connected (faded). Blocked-apps counter: not yet.
 
 ### 14.5 First-run experience (≤ 60 seconds)
 
@@ -694,6 +695,8 @@ Tray icon states: normal (snail), paused (amber), blocked apps present (small do
 4. **Done.** The main window opens with the live list already filling in. A one-time coach mark on the split bar: "Drag to share. Unused share is never wasted."
 
 ### 14.6 Settings (single scrolling page, Windows Settings style)
+
+- **Built (2026-11-17):** Connection speed (Change → the speed dialog); Start with Windows; Reset the {mode} split; Reset SnailNet (confirm; defaults, then first run again); versions of the app and the service. The rest below arrives with its feature.
 
 - **Connection:** measured speeds per network, Re-measure, manual override, Low-latency mode + strength (Auto / Gentle / Strong).
 - **Behaviour:** Focus boost, New-app notifications (Notify / Strict / Off), LAN exempt, start with Windows (tray app; service always runs).
