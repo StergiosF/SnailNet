@@ -56,12 +56,16 @@
     >
       <span class="k">{t("sidebar.line")}<i class="icon pen" aria-hidden="true">&#xE70F;</i></span>
       {#if hasLine}
-        <span class="v"
-          >{fig(line.down_mbps)}<i class="icon dir" aria-hidden="true">&#xE896;</i>{fig(line.up_mbps)}<i
-            class="icon dir"
-            aria-hidden="true">&#xE898;</i
-          ><small>{t("line.unit")}</small></span
-        >
+        {#each [{ label: t("sidebar.down"), v: line.down_mbps }, { label: t("sidebar.up"), v: line.up_mbps }] as row (row.label)}
+          <span class="row">
+            <span class="dirname">{row.label}</span>
+            {#if row.v === undefined}
+              <span class="none">{t("line.notSet")}</span>
+            {:else}
+              <span class="v num">{fig(row.v)}<small>{t("line.unit")}</small></span>
+            {/if}
+          </span>
+        {/each}
       {:else}
         <span class="v unset">{t("sidebar.line.none")}</span>
       {/if}
@@ -142,10 +146,10 @@
   .line {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    margin-top: 6px;
-    padding: 10px 12px;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 10px 12px 12px;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
@@ -161,7 +165,20 @@
   .k {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
     gap: 8px;
+  }
+  .dirname,
+  .none {
     font-size: 13px;
     color: var(--text-secondary);
   }
@@ -179,13 +196,14 @@
     font-weight: 400;
     color: var(--text-secondary);
   }
-  .dir {
-    margin: 0 8px 0 3px;
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
   .pen {
     font-size: 11px;
+    opacity: 0;
+    transition: opacity 160ms linear;
+  }
+  .line:hover .pen,
+  .line:focus-visible .pen {
+    opacity: 1;
   }
   @media (forced-colors: active) {
     .side {

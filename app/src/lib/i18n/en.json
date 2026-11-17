@@ -210,5 +210,8 @@
   "block.unblock": "Unblock",
   "block.unblock.label": "Let {name} use the internet again",
   "fold.title": "{count} apps only when the line is free",
-  "fold.title.one": "1 app only when the line is free"
+  "fold.title.one": "1 app only when the line is free",
+  "line.notSet": "Not set",
+  "sidebar.down": "Download",
+  "sidebar.up": "Upload"
 }

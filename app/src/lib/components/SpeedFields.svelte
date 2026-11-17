@@ -39,7 +39,7 @@
 
 <div class="fields">
   {#each dirs as d (d.dir)}
-    <div class="field">
+    <div class="speed">
       <label for="{uid}-{d.dir}">
         <i class="icon" aria-hidden="true">{d.glyph}</i>{d.label}
       </label>
@@ -52,6 +52,7 @@
           autocomplete="off"
           spellcheck="false"
           class="num"
+          placeholder={t("line.notSet")}
           {disabled}
           value={d.dir === "down" ? down : up}
           oninput={(e) => {
@@ -79,50 +80,72 @@
     flex-wrap: wrap;
     gap: 12px 16px;
   }
-  .field {
+  /* One speed: its name, then one box with the number and its unit. */
+  .speed {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     flex: 1 1 160px;
     min-width: 0;
   }
   label {
     display: flex;
     align-items: center;
-    gap: 6px;
-  }
-  label .icon {
-    font-size: 12px;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text-secondary);
   }
-  /* A text box with the unit inside. */
+  label .icon {
+    font-size: 13px;
+    color: var(--shell);
+  }
   .box {
     display: flex;
     align-items: center;
-    height: 40px;
-    border-radius: var(--radius-control);
-    background: var(--surface-2);
+    height: 52px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: var(--surface-ground);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.08),
+      inset 0 2px 6px rgb(0 0 0 / 0.25);
+    transition: box-shadow 160ms linear;
   }
   .box:hover {
-    background: var(--surface-3);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.16),
+      inset 0 2px 6px rgb(0 0 0 / 0.25);
   }
   .box:focus-within {
-    outline: 2px solid var(--focus-outer);
+    box-shadow:
+      inset 0 0 0 2px var(--shell),
+      inset 0 2px 6px rgb(0 0 0 / 0.25);
   }
   .box.invalid {
-    box-shadow: inset 0 0 0 1.5px var(--critical);
+    box-shadow:
+      inset 0 0 0 2px var(--critical),
+      inset 0 2px 6px rgb(0 0 0 / 0.25);
   }
   input {
     flex: 1;
     min-width: 0;
     height: 100%;
-    padding: 0 10px;
+    padding: 0;
     border: 0;
     background: transparent;
     color: var(--text-primary);
     font: inherit;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     user-select: text;
     cursor: text;
+  }
+  input::placeholder {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-secondary);
   }
   input:focus-visible {
     outline: none;
@@ -132,11 +155,12 @@
     color: var(--text-tertiary);
   }
   .unit {
-    padding: 0 10px 0 4px;
+    padding-left: 6px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
   .hint {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     font-size: 13px;
     line-height: 18px;
     color: var(--text-secondary);
