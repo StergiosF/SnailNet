@@ -1,6 +1,6 @@
 <script lang="ts">
   // The SnailNet glyph (same drawing as src-tauri/icons/snail.svg). Brand
-  // rule: title bar, tray and empty states only.
+  // rule (PRODUCT.md): the tray and empty states only, never the title bar.
   let { size = 16 }: { size?: number } = $props();
 </script>
 

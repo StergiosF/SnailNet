@@ -122,7 +122,10 @@
   }
   .error {
     margin: 12px 12px 0;
-    color: var(--critical);
-    font-size: 14px;
+  }
+  @media (forced-colors: active) {
+    .plus {
+      border: 1.5px solid ButtonText;
+    }
   }
 </style>

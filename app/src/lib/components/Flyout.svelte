@@ -16,6 +16,7 @@
   import { ui } from "../ui.svelte";
   import AppIcon from "./AppIcon.svelte";
   import Snail from "./Snail.svelte";
+  import Stepper from "./Stepper.svelte";
 
   onMount(() => {
     service.start().catch((e: unknown) => {
@@ -74,33 +75,27 @@
   {#if book}
     <ul aria-label={t("split.label")}>
       {#each book.slices as s (s.key)}
-        {@const pct = s.share === null ? null : Math.round(s.share / 100)}
         <li>
           <AppIcon target={s.target} name={s.name} size={20} />
           <span class="who">
             <b>{s.name}</b>
-            <span>{s.bps >= 50_000 ? `${mbps(s.bps)} Mbps · ` : ""}{statusText(s.status)}</span>
+            <span
+              >{s.bps >= 50_000
+                ? t("row.moving", { mbps: mbps(s.bps), status: statusText(s.status) })
+                : statusText(s.status)}</span
+            >
           </span>
           {#if s.enabled}
-            <button
-              type="button"
-              class="step"
-              disabled={!canStep(ui.rules, s.rule, -1)}
-              aria-label={t("row.less", { name: s.name })}
-              onclick={() => ui.change(stepShare(ui.rules, s.rule, -1))}>−</button
-            >
-            <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name: s.name, pct })}>
-              {#if pct === null}<small>{t("row.free")}</small>{:else}{pct}<small>%</small>{/if}
-            </output>
-            <button
-              type="button"
-              class="step"
-              disabled={!canStep(ui.rules, s.rule, 1)}
-              aria-label={t("row.more", { name: s.name })}
-              onclick={() => ui.change(stepShare(ui.rules, s.rule, 1))}>+</button
-            >
+            <Stepper
+              name={s.name}
+              pct={s.share === null ? null : Math.round(s.share / 100)}
+              canLess={canStep(ui.rules, s.rule, -1)}
+              canMore={canStep(ui.rules, s.rule, 1)}
+              onstep={(dir) => ui.change(stepShare(ui.rules, s.rule, dir))}
+              compact
+            />
           {:else}
-            <span class="n off">{t("row.off")}</span>
+            <span class="off">{t("row.off")}</span>
           {/if}
         </li>
       {/each}
@@ -201,38 +196,8 @@
     font-size: 12px;
     color: var(--text-secondary);
   }
-  .step {
+  .off {
     flex: none;
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--text-secondary);
-    font-size: 16px;
-    line-height: 1;
-  }
-  .step:hover:not(:disabled) {
-    background: var(--surface-3);
-    color: var(--text-primary);
-  }
-  .step:disabled {
-    opacity: 0.35;
-  }
-  .n {
-    flex: none;
-    width: 50px;
-    text-align: center;
-    font-size: 18px;
-    font-weight: 700;
-  }
-  .n small {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-  .n.off {
-    width: auto;
     font-size: 13px;
     color: var(--text-secondary);
   }
@@ -243,8 +208,6 @@
   }
   .error {
     margin: 8px 0 0;
-    font-size: 13px;
-    color: var(--critical);
   }
   .open {
     flex: none;

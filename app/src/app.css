@@ -17,34 +17,30 @@
   --surface-1: #1b1a19;
   --surface-2: #232220;
   --surface-3: #2d2b29;
-  /* Older names the dialogs and controls read. */
-  --surface-layer: transparent;
-  --surface-card: var(--surface-1);
+  /* The thin ring round dialogs and the segmented track; the caption
+     buttons' hover and press; loading placeholders. */
   --stroke-card: rgb(255 255 255 / 0.07);
-  --stroke-divider: rgb(255 255 255 / 0.06);
   --fill-subtle-hover: rgb(255 255 255 / 0.05);
   --fill-subtle-pressed: rgb(255 255 255 / 0.03);
   --skeleton: rgb(255 255 255 / 0.06);
 
-  /* Type: 15.4:1, 7.5:1 and 4.6:1 on the ground. */
+  /* Type on the ground: 16:1, 7.5:1 and 4.8:1. Tertiary is for rings
+     and disabled text only; it falls under 4.5:1 on the surfaces. */
   --text-primary: #f1ede6;
   --text-secondary: #a8a399;
   --text-tertiary: #858076;
 
   /* The one strong action per view is light on dark, not a hue. */
   --accent: #f1ede6;
-  --accent-text: #f1ede6;
+  --accent-hover: #ffffff;
+  --accent-pressed: #d9d4cc;
   --on-accent: #121211;
-  --accent-tint: rgb(255 255 255 / 0.06);
 
   --caution: #e8b04a;
-  --caution-tint: #2a2316;
   --critical: #f2907e;
-  --critical-tint: #2e1b17;
   --close-hover: #c42b1c;
 
   --focus-outer: #f1ede6;
-  --focus-inner: #121211;
   --selection: rgb(241 237 230 / 0.25);
 
   /* Slice inks, in rule order; Everything else is stone. All ≥ 6:1 on
@@ -74,7 +70,6 @@
     --surface-1: Canvas;
     --surface-2: Canvas;
     --surface-3: Canvas;
-    --surface-card: Canvas;
     --stroke-card: CanvasText;
     --accent: Highlight;
     --on-accent: HighlightText;
@@ -177,10 +172,10 @@ select {
   font-weight: 600;
 }
 .btn-accent:hover:not(:disabled) {
-  background: #ffffff;
+  background: var(--accent-hover);
 }
 .btn-accent:active:not(:disabled) {
-  background: #d9d4cc;
+  background: var(--accent-pressed);
 }
 .btn:disabled {
   opacity: 0.5;
@@ -216,11 +211,50 @@ select {
   outline-offset: 0;
 }
 .field::placeholder {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 @media (forced-colors: active) {
   .field {
     border-color: CanvasText;
+  }
+}
+
+/* What went wrong, under the thing it went wrong with. */
+.error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--critical);
+}
+
+/* The two dialogs (connection speed, add a slice): a raised surface with
+   a thin ring, rising into place over a dimmed window. */
+dialog {
+  width: min(440px, calc(100vw - 48px));
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px var(--stroke-card),
+    0 24px 64px rgb(0 0 0 / 0.5);
+}
+dialog[open] {
+  animation: dialog-rise 180ms var(--ease-out);
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (forced-colors: active) {
+  dialog {
+    border: 1px solid CanvasText;
   }
 }
 

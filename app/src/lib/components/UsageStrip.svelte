@@ -26,11 +26,14 @@
       ? t("strip.used", { used: mbps(ledger.total), line: mbps(lineBps) })
       : t("strip.usedOnly", { used: mbps(ledger.total) }),
   );
+  const kept = $derived(headroom > 0 ? t("strip.free", { mbps: mbps(headroom) }) : null);
+  // The strip's description carries the "kept free" part too: narrow
+  // windows drop it from the labels below.
   const summary = $derived(
     t("strip.summary", {
       dir: t(ui.dir === "down" ? "dir.down" : "dir.up"),
       parts: list.map((p) => t("strip.part", { name: p.name, mbps: mbps(p.bps) })).join(", ") || "–",
-      used,
+      used: kept ? t("strip.usedKept", { used, kept }) : used,
     }),
   );
   const dirs: { value: Dir; label: string }[] = [
@@ -54,14 +57,14 @@
   <div class="labels">
     {#each top as p (p.key)}
       <span class="who">
-        <AppIcon target={p.target} name={p.name} size={16} />{p.name}<b>{mbps(p.bps)}</b>
+        <AppIcon target={p.target} name={p.name} size={16} /><span class="nm">{p.name}</span><b>{mbps(p.bps)}</b>
       </span>
     {/each}
     {#if top.length > 0 && rest >= 50_000}
-      <span class="who">{t("strip.others")}<b>{mbps(rest)}</b></span>
+      <span class="who"><span class="nm">{t("strip.others")}</span><b>{mbps(rest)}</b></span>
     {/if}
     <span class="sum">
-      <b>{used}</b>{#if headroom > 0}<span class="dot" aria-hidden="true">·</span>{t("strip.free", { mbps: mbps(headroom) })}{/if}
+      <b>{used}</b>{#if kept}<span class="kept"><span class="dot" aria-hidden="true">·</span>{kept}</span>{/if}
     </span>
     <Segmented name="dir" label={t("dir.label")} options={dirs} value={ui.dir} onchange={(d) => (ui.dir = d)} small />
   </div>
@@ -100,17 +103,26 @@
     color: var(--text-secondary);
     white-space: nowrap;
   }
+  /* The names give way first: they shrink and end in "…", while the
+     figures, the total and the switch keep their size. */
   .who {
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
   }
+  .nm {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   b {
+    flex: none;
     color: var(--text-primary);
     font-weight: 600;
   }
   .sum {
+    flex: none;
     margin-left: auto;
   }
   .dot {
@@ -118,7 +130,8 @@
   }
   @media (max-width: 860px) {
     .who:nth-child(3),
-    .who:nth-child(4) {
+    .who:nth-child(4),
+    .kept {
       display: none;
     }
   }

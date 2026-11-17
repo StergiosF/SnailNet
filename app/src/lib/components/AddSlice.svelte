@@ -83,32 +83,15 @@
 </dialog>
 
 <style>
+  /* The frame is app.css's dialog. */
   dialog {
-    width: min(440px, calc(100vw - 48px));
     max-height: min(520px, calc(100vh - 64px));
     padding: 20px;
     overflow: hidden;
-    border: 0;
-    border-radius: 16px;
-    background: var(--surface-1);
-    color: var(--text-primary);
-    box-shadow:
-      0 0 0 1px var(--stroke-card),
-      0 24px 64px rgb(0 0 0 / 0.5);
   }
   dialog[open] {
     display: flex;
     flex-direction: column;
-    animation: rise 180ms var(--ease-out);
-  }
-  dialog::backdrop {
-    background: rgb(0 0 0 / 0.5);
-  }
-  @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
   }
   .top {
     display: flex;
@@ -176,10 +159,5 @@
   .hint {
     margin: 14px 0 0;
     color: var(--text-secondary);
-  }
-  @media (forced-colors: active) {
-    dialog {
-      border: 1px solid CanvasText;
-    }
   }
 </style>

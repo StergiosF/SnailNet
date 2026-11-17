@@ -54,7 +54,7 @@
           >{fig(line.down_mbps)}<i class="icon dir" aria-hidden="true">&#xE896;</i>{fig(line.up_mbps)}<i
             class="icon dir"
             aria-hidden="true">&#xE898;</i
-          ><small>Mbps</small></span
+          ><small>{t("line.unit")}</small></span
         >
       {:else}
         <span class="v">{t("header.line.set")}</span>

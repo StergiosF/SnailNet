@@ -25,6 +25,7 @@
   import type { Limit, Priority } from "../types";
   import AppIcon from "./AppIcon.svelte";
   import Segmented from "./Segmented.svelte";
+  import Stepper from "./Stepper.svelte";
 
   let { slice, shaped, canEdit }: { slice: Slice; shaped: number | null; canEdit: boolean } = $props();
 
@@ -43,7 +44,7 @@
   const words = $derived(
     slice.status.kind === "quiet" || slice.status.kind === "off" || slice.bps < 50_000
       ? statusText(slice.status)
-      : `${mbps(slice.bps)} Mbps · ${statusText(slice.status)}`,
+      : t("row.moving", { mbps: mbps(slice.bps), status: statusText(slice.status) }),
   );
 
   // The bar: the slice, and its use on the same scale (both as % of what
@@ -118,23 +119,13 @@
           {t("row.turnOn")}
         </button>
       {:else}
-        <button
-          type="button"
-          class="step"
-          disabled={!canLess}
-          aria-label={t("row.less", { name: slice.name })}
-          onclick={() => ui.change(stepShare(rules, slice.rule, -1))}>−</button
-        >
-        <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name: slice.name, pct })}>
-          {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{pct}<small>%</small>{/if}
-        </output>
-        <button
-          type="button"
-          class="step"
-          disabled={!canMore}
-          aria-label={t("row.more", { name: slice.name })}
-          onclick={() => ui.change(stepShare(rules, slice.rule, 1))}>+</button
-        >
+        <Stepper
+          name={slice.name}
+          {pct}
+          {canLess}
+          {canMore}
+          onstep={(dir) => ui.change(stepShare(rules, slice.rule, dir))}
+        />
       {/if}
     </div>
   </div>
@@ -353,44 +344,6 @@
     gap: 6px;
     min-width: 168px;
   }
-  .step {
-    width: 34px;
-    height: 34px;
-    border: 0;
-    border-radius: var(--radius-control);
-    background: var(--surface-2);
-    color: var(--text-secondary);
-    font-size: 18px;
-    line-height: 1;
-    transition: background-color 120ms linear;
-  }
-  .step:hover:not(:disabled) {
-    background: var(--surface-3);
-    color: var(--text-primary);
-  }
-  .step:disabled {
-    opacity: 0.35;
-  }
-  .n {
-    width: 72px;
-    text-align: center;
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  .n small {
-    margin-left: 1px;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-  .n .free {
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0;
-    color: var(--text-secondary);
-  }
-
   .members {
     display: flex;
     flex-wrap: wrap;
@@ -529,12 +482,29 @@
     width: 72px;
     text-align: right;
   }
+  /* High contrast drops box-shadows, so the rings drawn with them come
+     back as outlines and borders in system colours. */
   @media (forced-colors: active) {
     .trk i,
-    .member,
-    .step {
+    .member {
       forced-color-adjust: none;
       border: 1px solid ButtonText;
+    }
+    .member.picked {
+      outline: 2px solid Highlight;
+      outline-offset: 1px;
+    }
+    .box {
+      outline: 1.5px solid CanvasText;
+      outline-offset: -1.5px;
+    }
+    .check input:checked + .box {
+      forced-color-adjust: none;
+      background: Highlight;
+      outline-color: Highlight;
+    }
+    .check input:checked + .box::after {
+      border-color: HighlightText;
     }
   }
 </style>

@@ -135,12 +135,6 @@
     padding: 0 10px 0 4px;
     color: var(--text-secondary);
   }
-  .error {
-    margin: 0;
-    font-size: 13px;
-    line-height: 18px;
-    color: var(--critical);
-  }
   .hint {
     margin: 8px 0 0;
     font-size: 13px;
@@ -150,6 +144,10 @@
   @media (forced-colors: active) {
     .box {
       border: 1px solid CanvasText;
+    }
+    /* The red ring is a box-shadow, which high contrast drops. */
+    .box.invalid {
+      border: 2px dashed CanvasText;
     }
   }
 </style>

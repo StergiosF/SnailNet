@@ -166,12 +166,6 @@
   .privacy .icon {
     margin-top: 2px;
   }
-  .error {
-    margin: 0;
-    font-size: 13px;
-    line-height: 18px;
-    color: var(--critical);
-  }
   .actions {
     display: flex;
     flex-wrap: wrap;
