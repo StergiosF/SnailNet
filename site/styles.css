@@ -1090,7 +1090,7 @@ main > section {
 /* ---------- The app window and the live split ---------- */
 
 .win {
-  width: min(100%, 1140px);
+  width: min(100%, 1200px);
   margin-inline: auto;
   border-radius: 14px;
   background: var(--surface-ground);
@@ -1320,7 +1320,7 @@ main > section {
 .drows {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 48px;
+  gap: 16px 32px;
 }
 .drow {
   display: grid;
