@@ -15,6 +15,7 @@
 pub mod autostart;
 pub mod bridge;
 pub mod changes;
+pub mod focus;
 pub mod icon;
 pub mod service_start;
 pub mod tray;
@@ -148,6 +149,7 @@ pub fn run() {
             };
             let stop = Arc::new(AtomicBool::new(false));
             app.manage(stop.clone());
+            focus::spawn(stop.clone())?;
             std::thread::Builder::new()
                 .name("service-link".into())
                 .spawn(move || {
@@ -175,6 +177,7 @@ pub fn run() {
             changes::pause,
             changes::resume,
             changes::set_blocked,
+            changes::set_settings,
             autostart::autostart_enabled,
             autostart::set_autostart,
             service_start::start_service

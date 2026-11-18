@@ -63,18 +63,20 @@ the decision in PLAN.md, commit and push each verified step.
    are adopted for this network); Settings → Connection shows "On …".
    Joining a phone hotspot should log `new here` and show the New
    network notice; coming back restores the home speed.
-4. Click Measure; then start a big download and watch the log for
+4. Focus boost: with a download running, bring a game (Steam library,
+   or exclusive fullscreen) to the front; it should feel snappier, and
+   it stays first when alt-tabbed until it exits. Settings → Connection
+   → "Put what you're using first" turns it off.
+5. Click Measure; then start a big download and watch the log for
    `line speed:` steps and the ping staying low. Tune the estimator's
    constants if it oscillates.
 
 ### Next work, in order (no user needed)
 
 1. ~~Speeds per network~~ (built; see above). Left: the metered flag.
-2. **Focus boost (PLAN.md §11, Phase 4):** foreground hook in the app
-   (`SetWinEventHook` EVENT_SYSTEM_FOREGROUND) → `FocusChanged` (already
-   in the IPC, answered Unsupported); game detection (fullscreen,
-   known launchers' folders, GPU use); auto-boost the game while in
-   front; overrides in Settings.
+2. ~~Focus boost~~ (built 2026-11-18, PLAN.md §11.5). Left: per-app
+   overrides ("This is a game", "Never boost"), the Gaming-profile
+   automation.
 3. Phase 4 exit check with the user: ping under load within +10 ms on
    their line; games boosted automatically.
 4. Then Phase 5 (profiles/hotkey, new-app notifications), Phase 6

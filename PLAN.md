@@ -541,6 +541,12 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
   3. The user marked it "This is a game".
 - **Overrides:** per app "Never boost" / "Always High".
 - **Optional automation:** "Switch to Gaming profile while a game runs" (off by default, one checkbox).
+- **Built (2026-11-18), decisions taken:**
+  - **App:** `app/src-tauri/src/focus.rs` polls `GetForegroundWindow` every 300 ms instead of a WinEvent hook (as cheap, and it debounces by itself: a program must be in front two polls running) and sends `FocusChanged` on a change, again every 60 s (a restarted service starts empty). SnailNet's own window is skipped.
+  - **Game = exclusive fullscreen D3D** (`SHQueryUserNotificationState`) **or an exe in a launcher library** (`snailnet-core::games`). Borderless fullscreen alone is *not* a game: a browser playing fullscreen video would pass, and the D3D-DLL test doesn't help since browsers load D3D too. Such a window still goes first while in front.
+  - **Service** (`snailnet-service::focus`, runtime only): the PID in front and the games (PID + creation time, dropped once exited, checked each second) go into `Plan.focus`; each rx thread resolves them to families when the rules change, and packets of those families get High *flow* priority in their own class (weight 4 in its fair queue, small packets via the express lane). No class and no share changes, so "never a bigger share" holds by construction.
+  - `Settings.focus_boost` (on by default) with IPC `SetSettings` and a switch in Settings → Connection ("Put what you're using first").
+  - **Not yet:** "This is a game" / "Never boost" / "Always High" overrides, the confidence shown in the UI, the Gaming-profile automation.
 
 ### 11.6 App families (Control)
 

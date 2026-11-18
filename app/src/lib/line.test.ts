@@ -148,7 +148,7 @@ describe("split hint", () => {
 });
 
 describe("newNetworkName", () => {
-  const base = { version: 1, active_profile: "balanced", settings: { low_latency: true, lan_exempt: true }, profiles: [] };
+  const base = { version: 1, active_profile: "balanced", settings: { low_latency: true, lan_exempt: true, focus_boost: true }, profiles: [] };
   const home = { id: "gw-a", name: "Home", left: 1, line: { down_mbps: 25 } };
   const phone = { id: "gw-b", name: "Phone" };
 

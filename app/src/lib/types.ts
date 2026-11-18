@@ -96,10 +96,18 @@ export interface Boost {
   until?: number;
 }
 
+/** General settings (snailnet-core `Settings`). */
+export interface Settings {
+  low_latency: boolean;
+  lan_exempt: boolean;
+  /** The app in front, and games while they run, go first. */
+  focus_boost: boolean;
+}
+
 export interface Config {
   version: number;
   active_profile: string;
-  settings: { low_latency: boolean; lan_exempt: boolean };
+  settings: Settings;
   line: Line;
   /** The network `line` belongs to (PLAN.md §10.3). */
   network?: Network;

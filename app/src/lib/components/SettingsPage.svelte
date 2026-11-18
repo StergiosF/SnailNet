@@ -57,6 +57,19 @@
     measured ? new Date(measured.at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "",
   );
   let pinning = $state(false);
+  let focusing = $state(false);
+  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
+
+  async function setFocusBoost(on: boolean) {
+    focusing = true;
+    try {
+      await service.setFocusBoost(on);
+    } catch {
+      // The switch shows the saved value again from the next snapshot.
+    } finally {
+      focusing = false;
+    }
+  }
 
   async function setAdapt(adapt: boolean) {
     pinning = true;
@@ -152,6 +165,20 @@
         checked={line.pinned !== true}
         disabled={!canEdit || !hasLine || pinning}
         onchange={(e) => void setAdapt(e.currentTarget.checked)}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("focus.title")}</b>
+        <span>{t("focus.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={focusBoost}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setFocusBoost(e.currentTarget.checked)}
       />
     </label>
   </div>

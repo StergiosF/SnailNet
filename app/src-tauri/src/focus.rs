@@ -1,0 +1,161 @@
+//! Focus boost, the app's half (PLAN.md §11.5): which program is in front,
+//! and whether it's a game, told to the service (`FocusChanged`), which
+//! puts that app's traffic first.
+//!
+//! The window in front is polled every 300 ms rather than hooked: it costs
+//! next to nothing and debounces by itself (a program must be in front for
+//! two polls in a row, so alt-tabbing past windows sends nothing). A game
+//! is a program in exclusive fullscreen (Direct3D), or one whose exe sits
+//! in a game launcher's library ([`snailnet_core::games`]).
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+use snailnet_ipc::{Client, PIPE_NAME, Request};
+use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+};
+use windows::Win32::UI::Shell::{QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState};
+use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+use windows::core::PWSTR;
+
+const POLL: Duration = Duration::from_millis(300);
+/// Say it again now and then: a restarted service starts with nothing first.
+const REPEAT: Duration = Duration::from_secs(60);
+
+/// When to tell the service: a program steady in front, once, and again
+/// every [`REPEAT`].
+#[derive(Debug, Default)]
+struct Debounce {
+    last_seen: Option<u32>,
+    told: Option<(u32, Instant)>,
+}
+
+impl Debounce {
+    /// One poll: `pid` is in front at `now`. Returns the PID to report.
+    fn step(&mut self, pid: Option<u32>, now: Instant) -> Option<u32> {
+        let steady = pid.filter(|p| self.last_seen == Some(*p));
+        self.last_seen = pid;
+        let pid = steady?;
+        let due = match self.told {
+            Some((p, at)) => p != pid || now.duration_since(at) >= REPEAT,
+            None => true,
+        };
+        due.then(|| {
+            self.told = Some((pid, now));
+            pid
+        })
+    }
+}
+
+/// Watch the window in front until `stop`.
+pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
+    std::thread::Builder::new()
+        .name("focus-watch".into())
+        .spawn(move || {
+            let mut d = Debounce::default();
+            let own = std::process::id();
+            while !stop.load(Ordering::Relaxed) {
+                // SnailNet's own window isn't worth putting first.
+                let pid = foreground_pid().filter(|p| *p != own);
+                if let Some(pid) = d.step(pid, Instant::now()) {
+                    tell(pid, is_game(pid));
+                }
+                std::thread::sleep(POLL);
+            }
+        })?;
+    Ok(())
+}
+
+/// Best effort: if the service isn't there, the next change or repeat
+/// tries again.
+fn tell(pid: u32, is_game: bool) {
+    if let Ok(mut c) = Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION")) {
+        let _ = c.call(Request::FocusChanged {
+            pid,
+            is_game,
+            confidence: if is_game { 1.0 } else { 0.0 },
+        });
+    }
+}
+
+fn foreground_pid() -> Option<u32> {
+    // SAFETY: plain Win32 queries; a null window gives PID 0.
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_invalid() {
+            return None;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        (pid != 0).then_some(pid)
+    }
+}
+
+/// Exclusive fullscreen Direct3D (the window in front is `pid`'s), or an
+/// exe in a game launcher's library.
+fn is_game(pid: u32) -> bool {
+    // SAFETY: no arguments; the result is checked.
+    let fullscreen =
+        unsafe { SHQueryUserNotificationState() }.is_ok_and(|s| s == QUNS_RUNNING_D3D_FULL_SCREEN);
+    fullscreen || exe_path(pid).is_some_and(|p| snailnet_core::games::in_game_library(&p))
+}
+
+fn exe_path(pid: u32) -> Option<String> {
+    // SAFETY: the handle is checked, used for one query and closed once;
+    // the buffer is valid for `len` UTF-16 units.
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok =
+            QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len)
+                .is_ok();
+        let _ = CloseHandle(h);
+        ok.then(|| String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_program_is_told_once_it_stays_in_front() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        assert_eq!(d.step(Some(1), t0), None, "just arrived");
+        assert_eq!(d.step(Some(1), t0 + POLL), Some(1));
+        assert_eq!(d.step(Some(1), t0 + POLL * 2), None, "already told");
+    }
+
+    #[test]
+    fn alt_tabbing_past_windows_tells_nothing() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        d.step(Some(1), t0);
+        d.step(Some(1), t0 + POLL);
+        assert_eq!(d.step(Some(2), t0 + POLL * 2), None);
+        assert_eq!(d.step(Some(3), t0 + POLL * 3), None);
+        assert_eq!(d.step(None, t0 + POLL * 4), None);
+        assert_eq!(d.step(Some(1), t0 + POLL * 5), None);
+        assert_eq!(
+            d.step(Some(1), t0 + POLL * 6),
+            None,
+            "1 is still the one told"
+        );
+        assert_eq!(d.step(Some(4), t0 + POLL * 7), None);
+        assert_eq!(d.step(Some(4), t0 + POLL * 8), Some(4));
+    }
+
+    #[test]
+    fn it_repeats_now_and_then() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        d.step(Some(1), t0);
+        d.step(Some(1), t0 + POLL);
+        assert_eq!(d.step(Some(1), t0 + REPEAT + POLL), Some(1));
+    }
+}

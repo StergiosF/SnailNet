@@ -4,7 +4,7 @@
 //! and returns the new config revision; the new snapshot arrives through
 //! the bridge.
 
-use snailnet_core::rules::{Line, Rule, Target};
+use snailnet_core::rules::{Line, Rule, Settings, Target};
 use snailnet_ipc::{Client, ClientError, ErrorCode, PIPE_NAME, Reply, Request};
 
 use crate::SaveError;
@@ -119,6 +119,12 @@ pub async fn set_blocked(family_id: String, blocked: bool, rev: u64) -> Result<u
         rev,
     })
     .await
+}
+
+/// Replace the general settings (low latency, local network, focus boost).
+#[tauri::command]
+pub async fn set_settings(settings: Settings, rev: u64) -> Result<u64, SaveError> {
+    send(Request::SetSettings { settings, rev }).await
 }
 
 #[cfg(test)]

@@ -12,7 +12,9 @@ use std::time::Instant;
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::modes;
 use snailnet_core::networks::Switch;
-use snailnet_core::rules::{Boost, Config, Line, Measured, Network, Pause, Plan, Rule, Target};
+use snailnet_core::rules::{
+    Boost, Config, Line, Measured, Network, Pause, Plan, Rule, Settings, Target,
+};
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
@@ -474,6 +476,13 @@ impl Hub {
             Ok(())
         })?;
         Ok(switch)
+    }
+
+    pub fn set_settings(&self, settings: Settings, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            c.settings = settings;
+            Ok(())
+        })
     }
 
     pub fn set_line(&self, line: Line, rev: u64) -> Result<u64, Refusal> {

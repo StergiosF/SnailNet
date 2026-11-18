@@ -366,6 +366,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             rev,
         } => ack(hub.set_blocked(&family_id, blocked, rev)),
         Request::RunSpeedTest => ack(hub.request_speedtest()),
+        Request::SetSettings { settings, rev } => ack(hub.set_settings(settings, rev)),
         Request::FocusChanged { pid, is_game, .. } => {
             hub.focus_changed(pid, is_game);
             ack(Ok(hub.rev()))

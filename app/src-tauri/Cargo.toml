@@ -27,7 +27,7 @@ tauri-plugin-autostart = "=2.7.0"
 # version Tauri already pulls in), PNG-encoded, sent as data URLs.
 base64 = "0.22.1"
 png = "0.18.1"
-windows = { version = "0.62.2", features = ["Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Services"] }
+windows = { version = "0.62.2", features = ["Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Services", "Win32_System_Threading"] }
 
 [lints]
 workspace = true

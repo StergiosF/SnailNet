@@ -115,6 +115,13 @@ class Service {
     return this.#change("set_line", { line: next });
   }
 
+  /** Put the app in front, and games, first (§11.5), or not. */
+  async setFocusBoost(on: boolean): Promise<number> {
+    const settings = this.snapshot?.config.settings;
+    if (!settings) throw notConnected;
+    return this.#change("set_settings", { settings: { ...settings, focus_boost: on } });
+  }
+
   /** Save the line speed (PLAN.md §12.2 `SetLine`); null = don't shape
    *  that direction. Keeps the factor. Resolves to the new revision;
    *  rejects with a SaveError. */

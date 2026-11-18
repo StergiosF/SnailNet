@@ -18,7 +18,7 @@
 use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use snailnet_core::rules::{Config, Line, Rule, Target};
+use snailnet_core::rules::{Config, Line, Rule, Settings, Target};
 
 #[cfg(windows)]
 mod client;
@@ -111,6 +111,12 @@ pub enum Request {
         blocked: bool,
         rev: u64,
     },
+    /// Replace the general settings (low latency, local network, focus
+    /// boost).
+    SetSettings {
+        settings: Settings,
+        rev: u64,
+    },
     FocusChanged {
         pid: u32,
         is_game: bool,
@@ -148,6 +154,7 @@ impl Request {
             Self::Boost { .. } => "Boost",
             Self::StopBoost { .. } => "StopBoost",
             Self::SetBlocked { .. } => "SetBlocked",
+            Self::SetSettings { .. } => "SetSettings",
             Self::FocusChanged { .. } => "FocusChanged",
             Self::Pause { .. } => "Pause",
             Self::Resume { .. } => "Resume",

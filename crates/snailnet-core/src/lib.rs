@@ -6,6 +6,7 @@
 pub mod classify;
 pub mod clock;
 pub mod estimator;
+pub mod games;
 pub mod modes;
 pub mod networks;
 pub mod parse;
