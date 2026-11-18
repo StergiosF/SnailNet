@@ -23,9 +23,42 @@ export const MODES: Mode[] = [
   { id: "quiet-downloads", name: "mode.quiet", body: "mode.quiet.body" },
 ];
 
-/** The modes this config has (an old service may lack some). */
-export function availableModes(profiles: Profile[]): Mode[] {
-  return MODES.filter((m) => profiles.some((p) => p.id === m.id));
+/** A mode as the pickers show it: its words, and whether it's the user's
+ *  own ("Duplicate & edit", §11.2) rather than built in. */
+export interface ModeView {
+  id: string;
+  name: string;
+  body: string;
+  own: boolean;
+}
+
+export const isOwnMode = (id: string) => !MODES.some((m) => m.id === id);
+
+/** The modes this config has, built-in ones first (an old service may
+ *  lack some), then the user's own in config order. */
+export function availableModes(profiles: Profile[]): ModeView[] {
+  return [
+    ...MODES.filter((m) => profiles.some((p) => p.id === m.id)).map((m) => ({
+      id: m.id,
+      name: t(m.name),
+      body: t(m.body),
+      own: false,
+    })),
+    ...profiles
+      .filter((p) => isOwnMode(p.id))
+      .map((p) => ({ id: p.id, name: p.name, body: t("mode.own.body"), own: true })),
+  ];
+}
+
+/** A name for a copy of `name` no mode has yet: "Gaming copy", then
+ *  "Gaming copy 2", … (the service refuses a taken name, any case). */
+export function copyName(name: string, profiles: Profile[]): string {
+  const taken = new Set(profiles.map((p) => p.name.trim().toLowerCase()));
+  const base = t("mode.copy.name", { mode: name }).slice(0, 34);
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? base : `${base} ${n}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
 }
 
 /** A profile's name as the app writes it: a mode's own words, else the

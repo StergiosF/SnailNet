@@ -2,7 +2,79 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, late; newest)
+## Start here (2026-11-18, end of day; newest)
+
+Everything is committed and pushed on `main`. The user leaves decisions
+to Claude (pick, decide, record in PLAN.md, commit + push each verified
+step) and wants the next session to **run a subagent alongside** to
+finish the plan faster. Work stays on `main`: no branches, so no
+worktrees either; split the work by files instead (below).
+
+### Done today (decisions in PLAN.md)
+
+- §11.5: Gaming-while-playing shown in the app (`StatsTick.playing`);
+  per-app overrides "It's a game" / "Never put it first"
+  (`Settings.games` / `never_first`, applied in the service's hub, which
+  resolves the focused PID's family itself; Boost menu + Settings list).
+- §10.3: metered note (app command `network_metered`, WinRT).
+- §11.2: `Ctrl+Alt+S` cycles modes and opens the flyout
+  (`app/src-tauri/src/hotkey.rs`, plugin `tauri-plugin-global-shortcut`
+  =2.4.1, off-switch in Settings → Windows); **Duplicate & edit**
+  (IPC `CopyProfile`/`RenameProfile`/`DeleteProfile`; Split page: Make
+  a copy, Rename, Delete; own modes in tiles/flyout/hotkey).
+- Gates at the end: `cargo clippy --workspace --all-targets -D
+  warnings`, `cargo fmt --check`, `cargo test --workspace` (347 passed),
+  `npm run check` / `lint` / `npx vitest run` (88) / `build` in `app\`.
+- **Nothing from 2026-11-18 has been seen in a real window or run in the
+  real service** (see "First thing next session" further down; the old
+  dev service still locks `target\debug\snailnet-service.exe`).
+
+### What's left of the plan (PLAN.md §21)
+
+Phase 5 (Control), exit "all D9 features complete":
+
+| # | Work | Touches | Notes |
+|---|---|---|---|
+| A | **New-app notification, notify mode** (§11.4): first time an unknown family goes online → toast "{app} went online" with Fine · Give it a slice · Block; no toasts while a game is fullscreen, one summary after; Microsoft components in System32 never prompt | service (`shaper.rs` family seen, `hub.rs` remembers "known" families in config, new IPC event), `snailnet-ipc`, app (`bridge.rs` event, toast code, Settings switch Notify/Off) | Biggest item. Check Context7 for `tauri-plugin-notification` (Windows action buttons may need WinRT `ToastNotification` directly via the `windows` crate) |
+| B | **Strict mode** (§11.4): hold new connections of an unknown app until answered (≤ 20 s), then default action | service shaper/SOCKET layer, `AnswerPrompt` IPC (exists, answers Unsupported) | After A; same files, so same agent |
+| C | **Block at the SOCKET layer + tray counter** (§11.3): refuse `connect`/`bind`/`listen` of blocked families; tray shows a count when ≥ 1 app is blocked | `snailnet-service::shaper`, `snailnet-engine`, `app/src-tauri/src/tray_icon.rs` | Shares shaper.rs with A/B: do it in the same stream as A/B, or after |
+| D | **Family split/merge UI** (§11.6) | `snailnet-core::classify::family` overrides in config, app rows | Mostly core + app UI |
+| E | Small: game-detection confidence in the UI (§11.5); choosing another hotkey (§11.2) | app only | |
+
+Phase 6 (Ship v1.0): **installer** (Tauri bundler + installing the
+service and WinDivert files, uninstall cleans up), **updater**, signing
+notes; PLAN.md §15–§17 and §21 have the details.
+
+### Suggested split for the subagent
+
+- **Main session:** stream A → B → C (all in the service's shaper, hub
+  and IPC plus the app's bridge; one owner avoids conflicts there).
+- **Subagent (general-purpose, same tree, on `main`):** Phase 6
+  installer + updater (new files: bundler config in
+  `app/src-tauri/tauri.conf.json`, scripts under `scripts/`, an
+  install step for the service), or D if Phase 6 needs the user's
+  choices first (signing certificate, update host). Tell it: don't
+  touch `crates/snailnet-service/src/{shaper,hub,ipc}.rs`,
+  `crates/snailnet-ipc`, `app/src-tauri/src/bridge.rs`; run the gates;
+  commit only its own files with `git commit <paths>` (never `git add
+  -A`, never amend/rebase), message ending with the Co-Authored-By line;
+  record decisions in PLAN.md (edit only its own section) and report
+  back. The main session pushes.
+- Both building at once is fine (cargo locks the target dir), just
+  slower. Only one of them should run the elevated dev service.
+
+### Working notes (still true)
+
+- GateGuard hook: before the first edit of each file (and first shell
+  command) state importers/callers, affected API, data, and the user's
+  words, then retry the same call. `app/**` is exempt locally.
+- Commit messages with double quotes break in Windows PowerShell 5.1;
+  commit from Bash with `git commit -F - <<'EOF' … EOF`.
+- Rules in `~/.claude/rules`: no browser automation unless asked; UI
+  goes through the `impeccable` skill (its full audit hasn't been run
+  on today's UI); Context7 before using a library API.
+
+## Earlier: 2026-11-18, late
 
 Everything is committed and pushed on `main`. The user leaves decisions
 to Claude: pick the next step, decide, record it in PLAN.md, commit and
@@ -54,8 +126,8 @@ session" below; do them whenever the user wants.
    line speed in Settings → Connection. Not seen in a real window.
 4. Phase 5 (PLAN.md §21): ~~hotkey~~ **done 2026-11-18** (Ctrl+Alt+S
    cycles modes + opens the flyout; `app/src-tauri/src/hotkey.rs`; not
-   tried in a real session). Left: "Duplicate & edit" a mode (§11.2),
-   new-app toasts notify + strict (§11.4), blocking at the SOCKET layer
+   tried in a real session). Duplicate & edit also done (see the newest
+   section). Left: new-app toasts notify + strict (§11.4), blocking at the SOCKET layer
    and the tray counter (§11.3), family split/merge UI (§11.6). Then
    Phase 6 (installer, updater).
 

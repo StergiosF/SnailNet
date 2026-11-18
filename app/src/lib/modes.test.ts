@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, liveBoost, modeName, summary, users } from "./modes";
+import { availableModes, boostLeft, copyName, liveBoost, modeName, summary, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -38,10 +38,22 @@ const profile = (id: string, name = id): Profile => ({ id, name, rules: [] });
 describe("modes", () => {
   it("shows the modes the config has, in order", () => {
     const ps = [profile("gaming"), profile("balanced"), profile("mine", "Mine")];
-    expect(availableModes(ps).map((m) => m.id)).toEqual(["balanced", "gaming"]);
+    const shown = availableModes(ps);
+    expect(shown.map((m) => m.id)).toEqual(["balanced", "gaming", "mine"]);
+    expect(shown.map((m) => m.own)).toEqual([false, false, true]);
+    expect(shown[1]?.name).toBe("Gaming");
+    expect(shown[2]?.name).toBe("Mine");
     expect(modeName(profile("quiet-downloads", "x"))).toBe("Quiet downloads");
     expect(modeName(profile("mine", "Mine"))).toBe("Mine");
     expect(modeName(null)).toBe("");
+  });
+});
+
+describe("copy name", () => {
+  it("finds a name no mode has, ignoring case", () => {
+    expect(copyName("Gaming", [profile("gaming", "Gaming")])).toBe("Gaming copy");
+    const ps = [profile("a", "gaming COPY"), profile("b", "Gaming copy 2")];
+    expect(copyName("Gaming", ps)).toBe("Gaming copy 3");
   });
 });
 

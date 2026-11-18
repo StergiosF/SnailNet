@@ -381,9 +381,26 @@ impl Hub {
                 .iter_mut()
                 .find(|p| p.id == id)
                 .ok_or_else(|| format!("there is no profile {id:?}"))?;
-            p.rules = modes::template(id).unwrap_or_default();
+            p.rules = modes::template(id)
+                .ok_or("a mode of your own has no starting split to go back to")?;
             Ok(())
         })
+    }
+
+    /// A copy of mode `from` named `name`, made the active mode (§11.2).
+    pub fn copy_profile(&self, from: &str, name: &str, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            c.active_profile = c.copy_profile(from, name)?;
+            Ok(())
+        })
+    }
+
+    pub fn rename_profile(&self, id: &str, name: &str, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| c.rename_profile(id, name))
+    }
+
+    pub fn delete_profile(&self, id: &str, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| c.delete_profile(id))
     }
 
     pub fn reset_all(&self, rev: u64) -> Result<u64, Refusal> {
@@ -809,6 +826,24 @@ mod tests {
         })
         .unwrap();
         assert!(hub.plan(0).0.focus.is_empty(), "switched off");
+    }
+
+    #[test]
+    fn a_copied_mode_becomes_the_active_one() {
+        let (_t, hub) = hub();
+        hub.copy_profile("gaming", "Late night", hub.rev()).unwrap();
+        let c = hub.config();
+        assert_eq!(c.active_profile, "late-night");
+        assert_eq!(hub.plan(0).1, "Late night");
+        assert!(
+            hub.reset_profile("late-night", hub.rev()).is_err(),
+            "no template to go back to"
+        );
+        hub.rename_profile("late-night", "Night", hub.rev())
+            .unwrap();
+        hub.delete_profile("late-night", hub.rev()).unwrap();
+        assert_eq!(hub.config().active_profile, "balanced");
+        assert!(hub.delete_profile("gaming", hub.rev()).is_err());
     }
 
     #[test]

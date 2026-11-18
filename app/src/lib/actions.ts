@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { firstChoiceOf, withFirstChoice, type FirstChoice } from "./firstChoice";
 import { stateKind } from "./format";
 import { t, type Key } from "./i18n";
-import { modeName } from "./modes";
+import { copyName, modeName } from "./modes";
 import { service } from "./service.svelte";
 import type { Measured, SaveError, Target } from "./types";
 import { ui } from "./ui.svelte";
@@ -98,6 +98,47 @@ export async function setFirstChoice(familyId: string, name: string, choice: Fir
   }
 }
 
+/** "Duplicate & edit" (§11.2): copy the active mode; the copy comes on,
+ *  so the Split page edits it. Undo deletes the copy again. */
+export async function copyMode(): Promise<void> {
+  const profile = service.activeProfile;
+  const profiles = service.snapshot?.config.profiles;
+  if (!profile || !profiles) return;
+  const name = copyName(modeName(profile), profiles);
+  try {
+    await caughtUp(await service.copyMode(profile.id, name));
+    const copy = service.snapshot?.config.profiles.find((p) => p.name === name);
+    ui.say({
+      message: t("mode.copy.done", { mode: name }),
+      action: copy ? { label: t("undo"), run: () => void deleteMode(copy.id, name, profile.id) } : undefined,
+    });
+  } catch (e) {
+    failed("mode.change.failed", e);
+  }
+}
+
+export async function renameMode(id: string, name: string): Promise<boolean> {
+  try {
+    await service.renameMode(id, name);
+    return true;
+  } catch (e) {
+    failed("mode.change.failed", e);
+    return false;
+  }
+}
+
+/** Delete one of the user's own modes; `back` is switched to afterwards
+ *  (Undo of a copy goes back to the mode it was copied from). */
+export async function deleteMode(id: string, name: string, back?: string): Promise<void> {
+  try {
+    await caughtUp(await service.deleteMode(id));
+    if (back) await service.switchMode(back);
+    else ui.say({ message: t("mode.delete.done", { mode: name }) });
+  } catch (e) {
+    failed("mode.change.failed", e);
+  }
+}
+
 /** Put the active mode's split back to where it started; Undo puts the
  *  rules it had back. */
 export async function resetSplit(): Promise<void> {
@@ -149,6 +190,12 @@ export async function startService(): Promise<void> {
   else if (outcome === "cancelled") ui.say({ message: t("start.cancelled") });
   else if (outcome === "not_installed") ui.say({ message: t("start.not_installed") });
   else ui.say({ message: t("start.failed", { message: outcome.failed.message }) });
+}
+
+/** Wait (up to 2 s) until the snapshot shows revision `rev`, so the next
+ *  change is made against it. */
+function caughtUp(rev: number): Promise<boolean> {
+  return until(() => (service.snapshot?.rev ?? 0) >= rev, 2_000);
 }
 
 /** Resolves once `ok()` holds (checked every 250 ms), or after `ms`. */

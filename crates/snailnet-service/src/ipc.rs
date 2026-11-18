@@ -351,6 +351,9 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
         Request::SwitchProfile { id, rev } => ack(hub.switch_profile(&id, rev)),
         Request::SetLine { line, rev } => ack(hub.set_line(line, rev)),
         Request::ResetProfile { id, rev } => ack(hub.reset_profile(&id, rev)),
+        Request::CopyProfile { from, name, rev } => ack(hub.copy_profile(&from, &name, rev)),
+        Request::RenameProfile { id, name, rev } => ack(hub.rename_profile(&id, &name, rev)),
+        Request::DeleteProfile { id, rev } => ack(hub.delete_profile(&id, rev)),
         Request::ResetAll { rev } => ack(hub.reset_all(rev)),
         Request::Boost {
             target,

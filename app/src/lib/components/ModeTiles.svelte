@@ -1,12 +1,12 @@
-<script lang="ts">
-  // The four modes (PLAN.md §11.2) as big tiles: one click switches the
+﻿<script lang="ts">
+  // The four modes (PLAN.md Â§11.2) as big tiles: one click switches the
   // whole split. Native radio buttons underneath, so the arrow keys and
   // screen readers work as with any choice of one. The mode that's on is
   // cream, with its glyph on the shell's green; picking one spreads the
   // cream out from its glyph. The tiles arrive one after another.
   import { switchMode } from "../actions";
   import { t } from "../i18n";
-  import { availableModes, type ModeId } from "../modes";
+  import { availableModes } from "../modes";
   import { service } from "../service.svelte";
 
   let { disabled }: { disabled: boolean } = $props();
@@ -14,12 +14,12 @@
   const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
   const active = $derived(service.snapshot?.config.active_profile ?? "");
   const uid = $props.id();
-  // While a game runs, Gaming stands in for the pick (§11.5); the pick
+  // While a game runs, Gaming stands in for the pick (Â§11.5); the pick
   // stays checked, since it's what comes back.
   const picked = $derived(modes.find((m) => m.id === active));
 </script>
 
-{#snippet glyph(id: ModeId)}
+{#snippet glyph(id: string)}
   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
     {#if id === "balanced"}
       <path d="M4 9h16M4 15h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none" />
@@ -30,13 +30,22 @@
         d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2.3 2.3 0 0 1-4 .9L14.5 15h-5l-1.6 2.1a2.3 2.3 0 0 1-4-.9l-.8-3.3A4 4 0 0 1 7 8z"
         fill="currentColor"
       />
-    {:else}
+    {:else if id === "quiet-downloads"}
       <path
         d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"
         stroke="currentColor"
         stroke-width="2.2"
         stroke-linecap="round"
         stroke-linejoin="round"
+        fill="none"
+      />
+    {:else}
+      <!-- One of the user's own modes: three sliders. -->
+      <path
+        d="M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
         fill="none"
       />
     {/if}
@@ -56,8 +65,8 @@
       />
       <span class="fill" aria-hidden="true"></span>
       <span class="gl">{@render glyph(m.id)}</span>
-      <b>{t(m.name)}</b>
-      <span class="body">{t(m.body)}</span>
+      <b>{m.name}</b>
+      <span class="body">{m.body}</span>
       {#if m.id === active}<span class="flag" aria-hidden="true">{t("mode.on")}</span>{/if}
       {#if m.id === "gaming" && service.playing}<span class="flag playing" aria-hidden="true"
           >{t("mode.playing")}</span
@@ -67,7 +76,7 @@
 </div>
 <!-- Always mounted, so screen readers hear it appear; empty, it takes no room. -->
 <p class="note" class:shown={service.playing && picked} role="status">
-  {#if service.playing && picked}{t("mode.playing.note", { mode: t(picked.name) })}{/if}
+  {#if service.playing && picked}{t("mode.playing.note", { mode: picked.name })}{/if}
 </p>
 
 <style>

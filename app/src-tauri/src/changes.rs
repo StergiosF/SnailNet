@@ -69,6 +69,25 @@ pub async fn reset_profile(id: String, rev: u64) -> Result<u64, SaveError> {
     send(Request::ResetProfile { id, rev }).await
 }
 
+/// "Duplicate & edit" (§11.2): copy mode `from` as `name`; the copy
+/// becomes the active mode.
+#[tauri::command]
+pub async fn copy_profile(from: String, name: String, rev: u64) -> Result<u64, SaveError> {
+    send(Request::CopyProfile { from, name, rev }).await
+}
+
+/// Rename one of the user's own modes.
+#[tauri::command]
+pub async fn rename_profile(id: String, name: String, rev: u64) -> Result<u64, SaveError> {
+    send(Request::RenameProfile { id, name, rev }).await
+}
+
+/// Delete one of the user's own modes.
+#[tauri::command]
+pub async fn delete_profile(id: String, rev: u64) -> Result<u64, SaveError> {
+    send(Request::DeleteProfile { id, rev }).await
+}
+
 /// Forget everything: rules, line speed, settings, boost.
 #[tauri::command]
 pub async fn reset_all(rev: u64) -> Result<u64, SaveError> {

@@ -73,6 +73,19 @@ class Service {
     return this.#change("reset_profile", { id });
   }
 
+  /** Copy mode `from` as `name`; the copy becomes the active mode. */
+  async copyMode(from: string, name: string): Promise<number> {
+    return this.#change("copy_profile", { from, name });
+  }
+
+  async renameMode(id: string, name: string): Promise<number> {
+    return this.#change("rename_profile", { id, name });
+  }
+
+  async deleteMode(id: string): Promise<number> {
+    return this.#change("delete_profile", { id });
+  }
+
   /** Forget everything: rules, line speed, settings, boost. */
   async resetAll(): Promise<number> {
     return this.#change("reset_all", {});

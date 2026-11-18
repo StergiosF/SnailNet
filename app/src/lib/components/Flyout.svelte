@@ -111,12 +111,12 @@
           aria-checked={m.id === active}
           class:on={m.id === active}
           class:playing={m.id === "gaming" && service.playing}
-          onclick={() => void switchMode(m.id)}>{t(m.name)}</button
+          onclick={() => void switchMode(m.id)}>{m.name}</button
         >
       {/each}
     </div>
     {#if service.playing && picked}
-      <p class="detail" role="status">{t("mode.playing.note", { mode: t(picked.name) })}</p>
+      <p class="detail" role="status">{t("mode.playing.note", { mode: picked.name })}</p>
     {/if}
   {/if}
 

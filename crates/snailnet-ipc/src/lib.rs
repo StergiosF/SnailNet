@@ -136,6 +136,25 @@ pub enum Request {
         prompt_id: u64,
         action: String,
     },
+    /// "Duplicate & edit" (§11.2): a new mode of the user's own named
+    /// `name`, with `from`'s rules; it becomes the active mode, so editing
+    /// the split edits the copy.
+    CopyProfile {
+        from: String,
+        name: String,
+        rev: u64,
+    },
+    /// Rename one of the user's own modes.
+    RenameProfile {
+        id: String,
+        name: String,
+        rev: u64,
+    },
+    /// Delete one of the user's own modes (Balanced takes over if it was on).
+    DeleteProfile {
+        id: String,
+        rev: u64,
+    },
 }
 
 impl Request {
@@ -160,6 +179,9 @@ impl Request {
             Self::Resume { .. } => "Resume",
             Self::RunSpeedTest => "RunSpeedTest",
             Self::AnswerPrompt { .. } => "AnswerPrompt",
+            Self::CopyProfile { .. } => "CopyProfile",
+            Self::RenameProfile { .. } => "RenameProfile",
+            Self::DeleteProfile { .. } => "DeleteProfile",
         }
     }
 }
@@ -477,6 +499,20 @@ mod tests {
             },
             Request::GetSnapshot,
             Request::Subscribe { stats_hz: 4 },
+            Request::CopyProfile {
+                from: "gaming".into(),
+                name: "Mine".into(),
+                rev: 3,
+            },
+            Request::RenameProfile {
+                id: "mine".into(),
+                name: "Ours".into(),
+                rev: 4,
+            },
+            Request::DeleteProfile {
+                id: "mine".into(),
+                rev: 5,
+            },
             Request::SetRules {
                 profile_id: "gaming".into(),
                 rules: vec![rule()],

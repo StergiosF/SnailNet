@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError};
 
-use snailnet_core::modes::MODES;
+use snailnet_core::modes::{MODES, is_mode};
 use snailnet_ipc::Request;
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Manager, Runtime};
@@ -23,23 +23,22 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     tauri_plugin_global_shortcut::Builder::new().build()
 }
 
-/// The mode after `active` among the modes the config has, in the order
-/// the app shows them; the first one when `active` isn't among them.
-pub fn next_mode<'a>(
-    profiles: impl IntoIterator<Item = &'a str>,
-    active: &str,
-) -> Option<&'static str> {
+/// The mode after `active`: the built-in modes the config has, in the
+/// order the app shows them, then the user's own in config order; the
+/// first one when `active` isn't among them.
+pub fn next_mode<'a>(profiles: impl IntoIterator<Item = &'a str>, active: &str) -> Option<String> {
     let have: Vec<&str> = profiles.into_iter().collect();
-    let modes: Vec<&'static str> = MODES
+    let modes: Vec<&str> = MODES
         .iter()
         .map(|(id, _)| *id)
         .filter(|id| have.contains(id))
+        .chain(have.iter().copied().filter(|id| !is_mode(id)))
         .collect();
-    let at = modes.iter().position(|m| *m == active);
-    match at {
-        Some(i) => modes.get((i + 1) % modes.len()).copied(),
-        None => modes.first().copied(),
-    }
+    let next = match modes.iter().position(|m| *m == active) {
+        Some(i) => modes.get((i + 1) % modes.len()),
+        None => modes.first(),
+    };
+    next.map(|s| (*s).to_owned())
 }
 
 fn marker(app: &AppHandle) -> Option<PathBuf> {
@@ -82,7 +81,7 @@ fn cycle(app: &AppHandle) {
     if let Some((id, rev)) = next {
         tauri::async_runtime::spawn(async move {
             // A failure leaves the old mode on, which the flyout shows.
-            let _ = crate::changes::send(Request::SwitchProfile { id: id.into(), rev }).await;
+            let _ = crate::changes::send(Request::SwitchProfile { id, rev }).await;
         });
     }
 }
@@ -123,25 +122,31 @@ mod tests {
     #[test]
     fn it_steps_through_the_modes_and_wraps() {
         let order: Vec<&str> = MODES.iter().map(|(id, _)| *id).collect();
-        let mut at = order[0];
+        let mut at = order[0].to_owned();
         for want in order.iter().cycle().skip(1).take(order.len()) {
-            at = next_mode(order.iter().copied(), at).unwrap();
+            at = next_mode(order.iter().copied(), &at).unwrap();
             assert_eq!(at, *want);
         }
     }
 
     #[test]
-    fn it_skips_modes_the_config_lacks_and_ignores_others() {
+    fn it_skips_missing_modes_and_ends_with_the_users_own() {
         let order: Vec<&str> = MODES.iter().map(|(id, _)| *id).collect();
-        let have = [order[0], order[2], "mine"];
-        assert_eq!(next_mode(have, order[0]), Some(order[2]));
-        assert_eq!(next_mode(have, order[2]), Some(order[0]));
+        let have = ["mine", order[0], order[2]];
+        let next = |at: &str| next_mode(have, at);
+        assert_eq!(next(order[0]).as_deref(), Some(order[2]));
         assert_eq!(
-            next_mode(have, "mine"),
-            Some(order[0]),
-            "not a mode: start over"
+            next(order[2]).as_deref(),
+            Some("mine"),
+            "the user's own last"
         );
-        assert_eq!(next_mode(["mine"], "mine"), None);
+        assert_eq!(next("mine").as_deref(), Some(order[0]));
+        assert_eq!(
+            next("gone").as_deref(),
+            Some(order[0]),
+            "unknown: start over"
+        );
+        assert_eq!(next_mode([], "x"), None);
     }
 
     #[test]

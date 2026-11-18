@@ -114,6 +114,122 @@ impl Config {
         self.profiles.extend(missing);
         added
     }
+
+    /// "Duplicate & edit" (PLAN.md §11.2): a new mode of the user's own,
+    /// named `name`, with `from`'s rules, listed after the others. Returns
+    /// its id (made from the name, never a built-in mode's).
+    pub fn copy_profile(&mut self, from: &str, name: &str) -> Result<String, String> {
+        let rules = self
+            .profiles
+            .iter()
+            .find(|p| p.id == from)
+            .ok_or_else(|| format!("there is no profile {from:?}"))?
+            .rules
+            .clone();
+        if self.profiles.len() >= MAX_PROFILES {
+            return Err(format!("at most {MAX_PROFILES} modes"));
+        }
+        let name = self.free_name(name, None)?;
+        let base = slug(&name);
+        let id = (1..)
+            .map(|n| {
+                if n == 1 {
+                    base.clone()
+                } else {
+                    format!("{base}-{n}")
+                }
+            })
+            .find(|id| !is_mode(id) && !self.profiles.iter().any(|p| &p.id == id))
+            .expect("some id is free");
+        self.profiles.push(Profile {
+            id: id.clone(),
+            name,
+            rules,
+        });
+        Ok(id)
+    }
+
+    /// Rename one of the user's own modes (built-in ones keep their names).
+    pub fn rename_profile(&mut self, id: &str, name: &str) -> Result<(), String> {
+        if is_mode(id) {
+            return Err("a built-in mode keeps its name".into());
+        }
+        let name = self.free_name(name, Some(id))?;
+        let p = self
+            .profiles
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or_else(|| format!("there is no profile {id:?}"))?;
+        p.name = name;
+        Ok(())
+    }
+
+    /// Delete one of the user's own modes; if it was on, Balanced takes
+    /// over (the first profile when there's no Balanced).
+    pub fn delete_profile(&mut self, id: &str) -> Result<(), String> {
+        if is_mode(id) {
+            return Err("a built-in mode can't be deleted".into());
+        }
+        let at = self
+            .profiles
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or_else(|| format!("there is no profile {id:?}"))?;
+        self.profiles.remove(at);
+        if self.active_profile == id {
+            self.active_profile = if self.profiles.iter().any(|p| p.id == MODES[0].0) {
+                MODES[0].0.into()
+            } else {
+                self.profiles
+                    .first()
+                    .map(|p| p.id.clone())
+                    .unwrap_or_default()
+            };
+        }
+        Ok(())
+    }
+
+    /// `name` trimmed, if it's a usable name no other profile (but `except`)
+    /// has.
+    fn free_name(&self, name: &str, except: Option<&str>) -> Result<String, String> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > MAX_NAME {
+            return Err(format!("a mode's name is 1 to {MAX_NAME} characters"));
+        }
+        let taken = self
+            .profiles
+            .iter()
+            .any(|p| Some(p.id.as_str()) != except && p.name.trim().eq_ignore_ascii_case(name));
+        if taken {
+            return Err(format!("there's already a mode called {name:?}"));
+        }
+        Ok(name.into())
+    }
+}
+
+/// How many profiles a config may hold: the four modes and the user's own.
+pub const MAX_PROFILES: usize = 20;
+/// Longest name of a mode, in characters.
+const MAX_NAME: usize = 40;
+
+/// A profile id from a name: lowercase ASCII letters and digits, other runs
+/// as one `-`, at most 24 long; "mode" when nothing is left.
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out: String = out.chars().take(24).collect();
+    let out = out.trim_end_matches('-');
+    if out.is_empty() {
+        "mode".into()
+    } else {
+        out.into()
+    }
 }
 
 #[cfg(test)]
@@ -131,6 +247,69 @@ mod tests {
             c.plan(0).down.unwrap().validate().unwrap();
         }
         assert!(template("nope").is_none());
+    }
+
+    #[test]
+    fn a_copied_mode_is_the_users_own() {
+        let mut c = Config::default();
+        let id = c.copy_profile("gaming", "  Gaming, my way ").unwrap();
+        assert_eq!(id, "gaming-my-way");
+        let p = c.profiles.last().unwrap();
+        assert_eq!(p.name, "Gaming, my way");
+        assert_eq!(p.rules, template("gaming").unwrap(), "the rules come along");
+        c.validate().unwrap();
+
+        // Ids never clash, with a built-in mode or another copy.
+        assert_eq!(
+            c.copy_profile("balanced", "Balanced!").unwrap(),
+            "balanced-2"
+        );
+        assert_eq!(
+            c.copy_profile("balanced", "balanced 2").unwrap(),
+            "balanced-2-2"
+        );
+        assert_eq!(
+            c.copy_profile("balanced", "Gaming my way").unwrap(),
+            "gaming-my-way-2"
+        );
+        assert_eq!(c.copy_profile("balanced", "Über ★").unwrap(), "ber");
+        assert_eq!(c.copy_profile("balanced", "★★").unwrap(), "mode");
+        c.validate().unwrap();
+
+        assert!(c.copy_profile("nope", "x").is_err());
+        assert!(c.copy_profile("balanced", "   ").is_err());
+        assert!(
+            c.copy_profile("balanced", "gaming").is_err(),
+            "names are unique, any case"
+        );
+    }
+
+    #[test]
+    fn only_the_users_own_modes_are_renamed_or_deleted() {
+        let mut c = Config::default();
+        let id = c.copy_profile("streaming", "Movie night").unwrap();
+        c.rename_profile(&id, "Film night").unwrap();
+        c.rename_profile(&id, "film NIGHT").unwrap();
+        assert_eq!(c.active_profile, "balanced");
+        assert!(c.rename_profile("gaming", "Games").is_err());
+        assert!(c.rename_profile(&id, "Gaming").is_err(), "taken");
+
+        c.active_profile = id.clone();
+        c.delete_profile(&id).unwrap();
+        assert_eq!(c.active_profile, "balanced", "Balanced takes over");
+        assert!(c.delete_profile("gaming").is_err());
+        assert!(c.delete_profile(&id).is_err(), "already gone");
+        c.validate().unwrap();
+    }
+
+    #[test]
+    fn there_is_a_limit() {
+        let mut c = Config::default();
+        for i in c.profiles.len()..MAX_PROFILES {
+            c.copy_profile("balanced", &format!("Mine {i}")).unwrap();
+        }
+        assert!(c.copy_profile("balanced", "One more").is_err());
+        c.validate().unwrap();
     }
 
     #[test]
