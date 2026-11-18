@@ -266,6 +266,8 @@
   "settings.about": "About",
   "settings.about.version": "SnailNet {app}",
   "settings.about.service": "Service {version}",
+  "packs.title": "Keep website and game lists up to date",
+  "packs.body": "Once a day SnailNet fetches newer lists of websites, apps and game folders from GitHub, so new ones are recognised without an update. Nothing is sent but the request.",
   "settings.update": "Updates",
   "settings.update.body": "See whether a newer SnailNet is out.",
   "settings.update.checking": "Checking…",

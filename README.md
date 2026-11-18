@@ -73,6 +73,10 @@ When you report a problem, the service's logs help: they're in
 - **The only connections SnailNet makes itself:**
   - the update check, to GitHub (`github.com/StergiosF/SnailNet`
     releases), only when you click Check for updates in Settings;
+  - the website and game lists, from the same GitHub releases, once a
+    day (two small downloads, checked against SnailNet's signing key
+    before use; kept in `C:\ProgramData\SnailNet\packs.toml`). Turn it
+    off in Settings → About → "Keep website and game lists up to date";
   - the speed test, to Cloudflare (`speed.cloudflare.com`), only when
     you click Measure;
   - pings to your router and to `1.1.1.1` while SnailNet is shaping

@@ -1,0 +1,24 @@
+# Game launcher libraries (PLAN.md §11.5 "Game detection"): an exe whose
+# path contains one of `libraries` is a game, unless the path also
+# contains one of `launchers` (the launchers live beside their games).
+#
+# Matching is case-insensitive on the full path with `\` separators. Each
+# entry starts and ends with `\`, so it matches whole folder names only.
+
+libraries = [
+  '\steamapps\common\',
+  '\epic games\',
+  '\ea games\',
+  '\origin games\',
+  '\ubisoft game launcher\games\',
+  '\riot games\',
+  '\gog galaxy\games\',
+  '\gog games\',
+  '\xboxgames\',
+  '\battle.net\games\',
+]
+
+launchers = [
+  '\epic games\launcher\',
+  '\riot games\riot client\',
+]

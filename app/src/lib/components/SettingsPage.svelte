@@ -114,6 +114,8 @@
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
   const notifyNewApps = $derived(service.snapshot?.config.settings.new_apps !== "off");
   const strictNewApps = $derived(service.snapshot?.config.settings.new_apps === "strict");
+  // Missing from older services: on.
+  const packUpdates = $derived(service.snapshot?.config.settings.pack_updates !== false);
   // The apps the user marked from their Boost menu (§11.5 overrides).
   const choices = $derived.by(() => {
     const s = service.snapshot?.config.settings;
@@ -444,6 +446,20 @@
       </div>
     </div>
     <UpdateRow />
+    <label class="item">
+      <div class="words">
+        <b>{t("packs.title")}</b>
+        <span>{t("packs.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={packUpdates}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setSetting({ pack_updates: e.currentTarget.checked })}
+      />
+    </label>
   </div>
 </section>
 

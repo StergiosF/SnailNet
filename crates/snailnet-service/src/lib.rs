@@ -26,6 +26,7 @@ pub mod ipc;
 pub mod logging;
 pub mod netwatch;
 pub mod newapps;
+pub mod packs;
 pub mod paths;
 pub mod refuse;
 pub mod runner;

@@ -9,15 +9,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
+use snailnet_core::classify::Resolver;
 use snailnet_core::classify::family::UNKNOWN_ID;
-use snailnet_core::classify::{Pack, Resolver};
 use snailnet_core::families::Families;
 use snailnet_core::modes;
 use snailnet_core::networks::Switch;
 use snailnet_core::rules::{
     Boost, Config, Line, Measured, Network, NewApps, Pause, Plan, Rule, Settings, Target,
 };
-use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
     AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, GameTick, GameWhy, NameTick,
@@ -64,13 +63,18 @@ pub struct Hub {
 }
 
 /// Families as the shaper resolves them (same pack, same rules), with a
-/// resolver of its own built on first use.
+/// resolver of its own built on first use and again when the packs change.
 fn family_of_process() -> FamilyOf {
-    let mut found: Option<(Resolver, WinProcesses)> = None;
+    let mut found: Option<(u64, Resolver, WinProcesses)> = None;
     Box::new(move |pid, families: &Families| {
-        let (resolver, procs) = found.get_or_insert_with(|| {
+        let packs = snailnet_core::packs::current();
+        if found.as_ref().is_some_and(|f| f.0 != packs.serial) {
+            found = None;
+        }
+        let (_, resolver, procs) = found.get_or_insert_with(|| {
             (
-                Resolver::new(Pack::builtin(), &windows_dir()),
+                packs.serial,
+                Resolver::new(packs.families.clone(), &windows_dir()),
                 WinProcesses::new(),
             )
         });
@@ -645,6 +649,14 @@ impl Hub {
         Ok(switch)
     }
 
+    /// Newer packs are in use (§17.2): the runner restarts shaping, and
+    /// clients fetch a snapshot with the new site list.
+    pub fn packs_changed(&self) {
+        let rev = self.lock().rev;
+        self.signal.request_reload();
+        let _ = self.events.send(Event::ConfigChanged { rev });
+    }
+
     pub fn set_settings(&self, settings: Settings, rev: u64) -> Result<u64, Refusal> {
         let mode = settings.new_apps;
         let r = self.change(rev, |c| {
@@ -711,6 +723,7 @@ impl Hub {
             let mut c = i.config.clone();
             f(&mut c).map_err(|m| (ErrorCode::Invalid, m))?;
             c.validate()
+                .and_then(|()| c.check_sites())
                 .map_err(|e| (ErrorCode::Invalid, e.to_string()))?;
             if c == i.config {
                 return Ok(i.rev);
@@ -843,7 +856,8 @@ fn tag_ticks(
 /// Every site a rule may name (custom sites replace shipped ones with the
 /// same id), sorted by display name.
 fn known_sites(config: &Config) -> Vec<SiteInfo> {
-    let pack = SitePack::builtin();
+    let packs = snailnet_core::packs::current();
+    let pack = &packs.sites;
     let mut out: Vec<SiteInfo> = pack
         .sites
         .iter()

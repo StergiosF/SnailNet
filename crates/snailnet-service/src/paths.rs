@@ -60,6 +60,16 @@ impl DataDir {
         self.root.join("crashes.txt")
     }
 
+    /// The newest signed pack bundle fetched (PLAN.md §17.2), and its
+    /// minisign signature. The app reads them too (Users may read).
+    pub fn packs(&self) -> PathBuf {
+        self.root.join(snailnet_core::packs::FILE)
+    }
+
+    pub fn packs_sig(&self) -> PathBuf {
+        self.root.join(snailnet_core::packs::SIG_FILE)
+    }
+
     pub fn logs(&self) -> PathBuf {
         self.root.join("logs")
     }

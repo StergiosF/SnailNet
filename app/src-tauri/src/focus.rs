@@ -8,10 +8,12 @@
 //! is a program in exclusive fullscreen (Direct3D), or one whose exe sits
 //! in a game launcher's library ([`snailnet_core::games`]).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
+use snailnet_core::packs;
 use snailnet_ipc::{Client, GameWhy, PIPE_NAME, Request};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
@@ -50,14 +52,53 @@ impl Debounce {
     }
 }
 
+/// The game folders come from the packs the service keeps (PLAN.md
+/// §17.2): its newest signed bundle in `%ProgramData%\SnailNet`, checked
+/// here too, or the compiled-in ones. Looked at every [`REPEAT`], read
+/// again only when the file changed.
+#[derive(Debug, Default)]
+struct SavedPacks {
+    checked: Option<Instant>,
+    modified: Option<SystemTime>,
+}
+
+impl SavedPacks {
+    fn refresh(&mut self, now: Instant) {
+        if self
+            .checked
+            .is_some_and(|at| now.duration_since(at) < REPEAT)
+        {
+            return;
+        }
+        self.checked = Some(now);
+        let dir = std::env::var_os("ProgramData")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+            .join("SnailNet");
+        let modified = std::fs::metadata(dir.join(packs::FILE))
+            .and_then(|m| m.modified())
+            .ok();
+        if modified.is_none() || modified == self.modified {
+            return;
+        }
+        self.modified = modified;
+        // A bad or older bundle leaves the packs as they are.
+        if let Ok(Some(p)) = packs::read_saved(&dir) {
+            packs::install(p);
+        }
+    }
+}
+
 /// Watch the window in front until `stop`.
 pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
     std::thread::Builder::new()
         .name("focus-watch".into())
         .spawn(move || {
             let mut d = Debounce::default();
+            let mut packs = SavedPacks::default();
             let own = std::process::id();
             while !stop.load(Ordering::Relaxed) {
+                packs.refresh(Instant::now());
                 // SnailNet's own window isn't worth putting first.
                 let pid = foreground_pid().filter(|p| *p != own);
                 if let Some(pid) = d.step(pid, Instant::now()) {

@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use snailnet_core::classify::{
-    App, AppId, Attribution, Event, FlowKey, Miss, Pack, Pending, Resolver, Source,
+    App, AppId, Attribution, Event, FlowKey, Miss, Pending, Resolver, Source,
 };
 use snailnet_core::clock::{Clock, MonotonicClock};
 use snailnet_core::families::Families;
@@ -32,7 +32,7 @@ use snailnet_core::parse::dns;
 use snailnet_core::parse::ip::{self, PROTO_TCP, PROTO_UDP, PacketInfo};
 use snailnet_core::rules::Plan;
 use snailnet_core::scheduler::{ClassId, PacketMeta, Priority, SchedulerConfig};
-use snailnet_core::sites::{DomainCache, Names, SiteMatcher, SitePack};
+use snailnet_core::sites::{DomainCache, Names, SiteMatcher};
 use snailnet_core::sniff::{FlowNames, Named, Via};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
@@ -52,7 +52,10 @@ use crate::tags::{self, MAX_SITES, Site};
 pub type WinAttribution = Attribution<WinProcesses>;
 
 pub fn new_attribution() -> WinAttribution {
-    let resolver = Resolver::new(Pack::builtin(), &windows_dir());
+    let resolver = Resolver::new(
+        snailnet_core::packs::current().families.clone(),
+        &windows_dir(),
+    );
     Attribution::new(resolver, WinProcesses::new())
 }
 
@@ -271,11 +274,12 @@ pub struct PlanRules {
 
 impl PlanRules {
     pub fn new(plan: Plan) -> Self {
-        let pack = SitePack::builtin();
+        let packs = snailnet_core::packs::current();
+        let pack = &packs.sites;
         // Custom sites were validated with the config; if they somehow
         // aren't valid, the shipped sites still work.
-        let sites = SiteMatcher::new(&pack, &plan.custom_sites)
-            .or_else(|_| SiteMatcher::new(&pack, &[]))
+        let sites = SiteMatcher::new(pack, &plan.custom_sites)
+            .or_else(|_| SiteMatcher::new(pack, &[]))
             .unwrap_or_default();
         Self { plan, sites }
     }

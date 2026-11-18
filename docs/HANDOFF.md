@@ -2,7 +2,31 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, latest session; newest)
+## Start here (2026-11-18, pack feed; newest)
+
+- **Signed site/game pack feed done** (PLAN.md §17.2 "Pack feed"):
+  `snailnet-core::packs` (bundle `packs.toml` = format, serial, the
+  three pack texts; minisign with the updater key; newest serial wins,
+  never back; `current()` / `install()`), game folders now
+  `assets/games.toml`, service `packs.rs` (daily fetch from the GitHub
+  release `packs`, saved in ProgramData, restart shaping once), app
+  `focus.rs` reads the saved bundle, Settings → About switch
+  (`pack_updates`, on). Site "known" check moved to
+  `Config::check_sites` (changes only).
+- **Publishing:** `scripts/publish-packs.ps1` (`-Upload` puts it on the
+  release; not run, repo private). It bumps `assets/packs-serial.txt`:
+  commit that with the assets. Change a pack → run it, commit, upload.
+- Not seen in a real window or run in the real service. The switch
+  follows the existing switches' markup; no impeccable pass for it.
+
+### Next, in order
+
+1. Final perf run against §20 (needs the elevated real service).
+2. With the user: the real-service test ("First thing next session"
+   further down), VM installs, tag `v1.0.0`; making the repo public
+   (licence first), then `publish-packs.ps1 -Upload`.
+
+## Earlier: 2026-11-18, latest session
 
 Pushed on `main`: `05fb091` E, `b70cae1` audit fixes, `4a45626` README +
 notices. Decisions in PLAN.md §11.2, §11.5, §11.6, §21 Phase 6.

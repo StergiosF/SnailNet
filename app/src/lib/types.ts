@@ -111,6 +111,9 @@ export interface Settings {
   /** The first time an app goes online: a notification, or nothing
    *  (missing from older services: notify). */
   new_apps?: "notify" | "strict" | "off";
+  /** Fetch newer signed site, app and game lists once a day (missing
+   *  from older services: on). */
+  pack_updates?: boolean;
 }
 
 export interface Config {

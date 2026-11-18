@@ -162,6 +162,9 @@ pub struct Timing {
     /// Watch which network the PC is on and keep a line speed per network
     /// (§10.3). Off in tests, which must not change with the real network.
     pub watch_network: bool,
+    /// Fetch newer signed packs once a day (§17.2). Off in tests, which
+    /// must not reach the internet.
+    pub fetch_packs: bool,
 }
 
 impl Default for Timing {
@@ -172,6 +175,7 @@ impl Default for Timing {
             retry_after: Duration::from_secs(10),
             autorate: true,
             watch_network: true,
+            fetch_packs: true,
         }
     }
 }
@@ -234,6 +238,8 @@ pub fn run<E: Engine>(
         env!("CARGO_PKG_VERSION"),
         dir.root().display()
     );
+    // Before the config: its site rules are checked against the packs.
+    crate::packs::load_saved(dir);
     let loaded = store::load(dir).context("loading config.toml")?;
     for p in &loaded.problems {
         warn!("config: {p}");
@@ -260,6 +266,11 @@ pub fn run<E: Engine>(
             let _ = std::thread::Builder::new()
                 .name("snailnet-netwatch".into())
                 .spawn_scoped(s, || crate::netwatch::watch(hub));
+        }
+        if timing.fetch_packs {
+            let _ = std::thread::Builder::new()
+                .name("snailnet-packs".into())
+                .spawn_scoped(s, || crate::packs::watch(hub));
         }
         supervise(hub, guard, engine, timing, now)
     });
@@ -351,6 +362,11 @@ fn supervise<E: Engine>(
                         Wake::Stop => break Outcome::Stop,
                         // A speed test runs with shaping stopped.
                         Wake::Reload if hub.speedtest_pending() => break Outcome::Reload,
+                        // New packs: rebuild the classifier and site matcher.
+                        Wake::Reload if crate::packs::take_restart() => {
+                            info!("new site, app and game lists; restarting shaping");
+                            break Outcome::Reload;
+                        }
                         Wake::Reload => {
                             autorate.follow(&hub.config());
                             let (plan, profile) = hub.plan_live(now(), autorate.live());
@@ -609,6 +625,7 @@ mod tests {
             retry_after: Duration::from_millis(1),
             autorate: false,
             watch_network: false,
+            fetch_packs: false,
         }
     }
 

@@ -1,0 +1,12 @@
+# Test bundle for snailnet-core::packs (signed with a throwaway key).
+format = 1
+serial = 900000000001
+sites = '''
+[[site]]
+id = "example-video"
+name = "Example Video"
+domains = ["*.example-video.test"]
+'''
+games = '''
+libraries = ['\test library\']
+'''

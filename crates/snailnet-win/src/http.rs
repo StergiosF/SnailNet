@@ -1,7 +1,8 @@
-//! Just enough HTTPS for the speed test (PLAN.md §10.1), through Windows'
-//! own WinHTTP: system TLS and the system proxy, no extra dependencies.
-//! Two calls: download a body and throw it away, and upload a body of
-//! zeros, each reporting bytes as they move and stopping at a deadline.
+//! Just enough HTTPS for the speed test (PLAN.md §10.1) and the pack feed
+//! (§17.2), through Windows' own WinHTTP: system TLS and the system proxy,
+//! no extra dependencies. The speed test downloads a body and throws it
+//! away, and uploads a body of zeros, each reporting bytes as they move
+//! and stopping at a deadline; the pack feed GETs a small body.
 
 use std::ffi::c_void;
 use std::io;
@@ -154,6 +155,36 @@ impl Https {
             moved(u64::from(n));
         }
         Ok(total)
+    }
+
+    /// GET `path` and return its body, refusing one over `limit` bytes.
+    /// Redirects are followed (WinHTTP's default, never HTTPS → HTTP).
+    pub fn get(&self, path: &str, limit: usize) -> io::Result<Vec<u8>> {
+        let req = self.request("GET", path)?;
+        // SAFETY: an open request; no headers or body.
+        check(unsafe {
+            WinHttpSendRequest(req.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0)
+        })?;
+        let code = Self::status(&req)?;
+        if code != 200 {
+            return Err(io::Error::other(format!("HTTP {code}")));
+        }
+        let mut body = Vec::new();
+        let mut buf = vec![0u8; CHUNK];
+        loop {
+            let mut n = 0u32;
+            // SAFETY: `buf` holds `CHUNK` writable bytes.
+            check(unsafe {
+                WinHttpReadData(req.0, buf.as_mut_ptr().cast(), CHUNK as u32, &mut n)
+            })?;
+            if n == 0 {
+                return Ok(body);
+            }
+            if body.len() + n as usize > limit {
+                return Err(io::Error::other(format!("over {limit} bytes")));
+            }
+            body.extend_from_slice(&buf[..n as usize]);
+        }
     }
 
     /// POST `len` zero bytes to `path`, until done or `deadline` (then the

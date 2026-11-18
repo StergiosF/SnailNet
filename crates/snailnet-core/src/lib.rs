@@ -10,6 +10,7 @@ pub mod families;
 pub mod games;
 pub mod modes;
 pub mod networks;
+pub mod packs;
 pub mod parse;
 pub mod rules;
 pub mod scheduler;

@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::classify::App;
 use crate::families::{Families, is_family_id};
 use crate::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};
-use crate::sites::{SiteDef, SitePack};
+use crate::sites::SiteDef;
 
 /// The schema version this build writes and reads.
 pub const CONFIG_VERSION: u32 = 1;
@@ -111,6 +111,9 @@ pub struct Settings {
     pub never_first: Vec<String>,
     /// What happens the first time an app goes online (PLAN.md §11.4).
     pub new_apps: NewApps,
+    /// Fetch newer signed site, app and game lists once a day (PLAN.md
+    /// §17.2). On by default.
+    pub pack_updates: bool,
 }
 
 /// What SnailNet does when an app it hasn't seen before goes online
@@ -142,6 +145,7 @@ impl Default for Settings {
             games: Vec::new(),
             never_first: Vec::new(),
             new_apps: NewApps::Notify,
+            pack_updates: true,
         }
     }
 }
@@ -567,20 +571,6 @@ impl Config {
                 return bad(format!("custom site {:?} is defined twice", s.id));
             }
         }
-        let pack = SitePack::builtin();
-        let known = |id: &str| {
-            pack.sites.iter().any(|s| s.id == id) || self.sites.iter().any(|s| s.id == id)
-        };
-        for p in &self.profiles {
-            for r in &p.rules {
-                if r.target.kind == TargetKind::Site && !known(&r.target.id.to_lowercase()) {
-                    return bad(format!(
-                        "profile {:?}: {} is not a known site",
-                        p.id, r.target
-                    ));
-                }
-            }
-        }
         for (i, id) in self.blocked.iter().enumerate() {
             if !is_family_id(id) {
                 return bad(format!("blocked app {id:?} is not a family id"));
@@ -591,13 +581,39 @@ impl Config {
         }
         self.settings.validate().or_else(bad)?;
         self.families.validate().or_else(bad)?;
-        if let Some(b) = &self.boost {
-            if b.target.id.trim().is_empty() {
-                return bad("the boost has an empty target id".into());
+        if let Some(b) = &self.boost
+            && b.target.id.trim().is_empty()
+        {
+            return bad("the boost has an empty target id".into());
+        }
+        Ok(())
+    }
+
+    /// Every site a rule or the boost names is a known one: in the packs
+    /// in use, the compiled-in ones, or the custom sites. Checked on a
+    /// change, not on load: a saved rule whose site later left the packs
+    /// just matches nothing, rather than making the whole config invalid.
+    pub fn check_sites(&self) -> Result<(), RulesError> {
+        let packs = crate::packs::current();
+        let known = |id: &str| packs.knows_site(id) || self.sites.iter().any(|s| s.id == id);
+        for p in &self.profiles {
+            for r in &p.rules {
+                if r.target.kind == TargetKind::Site && !known(&r.target.id.to_lowercase()) {
+                    return Err(RulesError::Invalid(format!(
+                        "profile {:?}: {} is not a known site",
+                        p.id, r.target
+                    )));
+                }
             }
-            if b.target.kind == TargetKind::Site && !known(&b.target.id.to_lowercase()) {
-                return bad(format!("boost: {} is not a known site", b.target));
-            }
+        }
+        if let Some(b) = &self.boost
+            && b.target.kind == TargetKind::Site
+            && !known(&b.target.id.to_lowercase())
+        {
+            return Err(RulesError::Invalid(format!(
+                "boost: {} is not a known site",
+                b.target
+            )));
         }
         Ok(())
     }
@@ -1141,7 +1157,7 @@ ceiling = { down = \"10%\" }
         assert_eq!(r[0].ceiling, None);
         c.boost.as_mut().unwrap().target = Target::site("nope");
         assert!(
-            c.validate()
+            c.check_sites()
                 .unwrap_err()
                 .to_string()
                 .contains("not a known site")
@@ -1241,11 +1257,17 @@ ceiling = { down = \"10%\" }
 
     #[test]
     fn unknown_sites_are_refused_and_custom_ones_accepted() {
-        let e = err(&with_profile(&rule("site", "myintranet", 1000)));
+        // Loading keeps a rule for a site the packs don't have (it matches
+        // nothing); a change naming one is refused.
+        let unknown = Config::parse(&with_profile(&rule("site", "myintranet", 1000))).unwrap();
+        let e = unknown.check_sites().unwrap_err().to_string();
         assert!(e.contains("site:myintranet is not a known site"), "{e}");
+        let known = Config::parse(&with_profile(&rule("site", "youtube", 1000))).unwrap();
+        known.check_sites().unwrap();
         let text = with_profile(&rule("site", "myintranet", 1000))
             + "[[sites]]\nid = \"myintranet\"\nname = \"Intranet\"\ndomains = [\"*.corp.example\"]\n";
         let c = Config::parse(&text).unwrap();
+        c.check_sites().unwrap();
         assert_eq!(c.plan(0).custom_sites[0].id, "myintranet");
         assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
         let twice = text.clone()

@@ -4058,6 +4058,7 @@ dependencies = [
  "aes-gcm",
  "arc-swap",
  "hkdf",
+ "minisign-verify",
  "proptest",
  "serde",
  "sha2 0.11.1",
