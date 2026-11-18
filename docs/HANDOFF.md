@@ -41,7 +41,7 @@ user leaves decisions to Claude; commit + push each verified step.
    heavy apps, then the latency/split part of §20. Scripts were one-offs
    in the scratchpad; rebuild them from "Running elevated" below: the
    release service `run --console --data-dir <scratch> --pipe
-   \.\pipe\snailnet-perf`, two curl copies `a.exe=40` / `b.exe=60`,
+   \\.\pipe\snailnet-perf`, two curl copies `a.exe=40` / `b.exe=60`,
    ping 1.1.1.1 idle vs loaded, TCP connect times with
    `curl -w %{time_connect}`, per-thread CPU via `GetThreadDescription`.
    Clear the scratch `crashes.txt` + `running` before each start (killing
