@@ -52,8 +52,12 @@ session" below; do them whenever the user wants.
 3. ~~**Metered network note (§10.3)**~~ **Done (2026-11-18):** app
    command `network_metered` (WinRT `ConnectionCost`), a note under the
    line speed in Settings → Connection. Not seen in a real window.
-4. Then Phase 5 (profiles/hotkey, new-app notifications, §11.4), Phase 6
-   (installer, updater).
+4. Phase 5 (PLAN.md §21): ~~hotkey~~ **done 2026-11-18** (Ctrl+Alt+S
+   cycles modes + opens the flyout; `app/src-tauri/src/hotkey.rs`; not
+   tried in a real session). Left: "Duplicate & edit" a mode (§11.2),
+   new-app toasts notify + strict (§11.4), blocking at the SOCKET layer
+   and the tray counter (§11.3), family split/merge UI (§11.6). Then
+   Phase 6 (installer, updater).
 
 ### Still owed (need the user)
 

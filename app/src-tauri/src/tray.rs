@@ -163,6 +163,24 @@ fn toggle_flyout(app: &AppHandle, icon: Rect) {
     let _ = w.set_focus();
 }
 
+/// Open the flyout by the tray icon (the hotkey); already open, it stays.
+pub fn show_flyout(app: &AppHandle) {
+    let Some(w) = app.get_webview_window(FLYOUT) else {
+        return;
+    };
+    if w.is_visible().unwrap_or(false) {
+        return;
+    }
+    if let Some(icon) = app
+        .tray_by_id(tray_icon::TRAY_ID)
+        .and_then(|t| t.rect().ok().flatten())
+    {
+        let _ = place(&w, icon);
+    }
+    let _ = w.show();
+    let _ = w.set_focus();
+}
+
 /// Put the flyout next to the tray icon, inside the icon's monitor's work
 /// area (above the taskbar, or below it when the taskbar is at the top).
 fn place(w: &WebviewWindow, icon: Rect) -> tauri::Result<()> {

@@ -16,6 +16,7 @@ pub mod autostart;
 pub mod bridge;
 pub mod changes;
 pub mod focus;
+pub mod hotkey;
 pub mod icon;
 pub mod metered;
 pub mod service_start;
@@ -138,12 +139,14 @@ pub fn run() {
             tray::open_main(app);
         }))
         .plugin(autostart::plugin())
+        .plugin(hotkey::plugin())
         .manage(shared.clone())
         .manage(icon::Icons::default())
         .setup(move |app| {
             // Before the tray, so its "Start with Windows" check is current.
             autostart::setup(app);
             tray::setup(app)?;
+            hotkey::setup(app.handle());
             let sink = TauriSink {
                 app: app.handle().clone(),
                 shared,
@@ -182,6 +185,8 @@ pub fn run() {
             autostart::autostart_enabled,
             autostart::set_autostart,
             metered::network_metered,
+            hotkey::hotkey_enabled,
+            hotkey::set_hotkey,
             service_start::start_service
         ])
         .run(tauri::generate_context!())

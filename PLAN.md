@@ -506,7 +506,8 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 
 ### 11.2 Profiles (Control)
 
-- **Built as modes (2026-11-17):** four built-in profiles, `snailnet-core::modes`: **Balanced** (no rules), **Streaming** (Discord/Zoom High, YouTube/Twitch/Netflix slices, launchers and updaters only when free), **Gaming** (Discord High, video Low, downloads only when free; games stay in Everything else), **Quiet downloads** (launchers and updaters only when free). Older configs get the missing ones on load; the user's own Balanced is kept. One click on the Now page or the flyout switches (`SwitchProfile`); "Reset split" puts a mode back to its template (`ResetProfile`, with Undo); Settings → "Reset SnailNet" restores the defaults and shows first run again (`ResetAll`). Not yet: hotkey, duplicate & edit.
+- **Built as modes (2026-11-17):** four built-in profiles, `snailnet-core::modes`: **Balanced** (no rules), **Streaming** (Discord/Zoom High, YouTube/Twitch/Netflix slices, launchers and updaters only when free), **Gaming** (Discord High, video Low, downloads only when free; games stay in Everything else), **Quiet downloads** (launchers and updaters only when free). Older configs get the missing ones on load; the user's own Balanced is kept. One click on the Now page or the flyout switches (`SwitchProfile`); "Reset split" puts a mode back to its template (`ResetProfile`, with Undo); Settings → "Reset SnailNet" restores the defaults and shows first run again (`ResetAll`). Not yet: duplicate & edit.
+- **Hotkey, built (2026-11-18):** `Ctrl+Alt+S` (fixed for now; choosing other keys later) moves to the next mode in the order the app shows them (wrapping; modes the config lacks are skipped) and opens the tray flyout, which shows the mode that is on. Registered by the app (`app/src-tauri/src/hotkey.rs`, `tauri-plugin-global-shortcut` =2.4.1), not stored in `config.toml`: it belongs to the Windows user, like Start with Windows, so the app keeps it (an empty `hotkey-off` file in its config folder means off). On by default; Settings → Windows has the switch, which says so when another program already holds the keys.
 
 - A profile = a complete rule set + Low-latency setting.
 - Shipped presets: **Balanced** (no rules, Low-latency on), **Gaming** (games High, launchers/updaters Low, Windows Update ceiling 20%), **Streaming** (site packs for video Normal, downloads Low), **Downloads** (everything to downloaders, Low-latency off).
@@ -719,7 +720,7 @@ Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), n
 
 - **Connection:** measured speeds per network, Re-measure, manual override, Low-latency mode + strength (Auto / Gentle / Strong).
 - **Behaviour:** Focus boost, New-app notifications (Notify / Strict / Off), LAN exempt, start with Windows (tray app; service always runs).
-- **Hotkeys.**
+- **Hotkeys.** (Built 2026-11-18: the mode hotkey switch, under Windows.)
 - **Sites:** manage site packs and custom domains; "Unidentified connections" explainer.
 - **Updates:** auto-check, channel (stable/beta), "Check now".
 - **Language.**

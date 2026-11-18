@@ -32,7 +32,24 @@
     invoke<boolean>("autostart_enabled")
       .then((on) => (autostart = on))
       .catch(() => (autostart = null));
+    invoke<boolean>("hotkey_enabled")
+      .then((on) => (hotkey = on))
+      .catch(() => (hotkey = null));
   });
+
+  // Ctrl+Alt+S switches mode (§11.2). Off when turned off, or when another
+  // program holds those keys; the switch says which by refusing to stay on.
+  let hotkey = $state<boolean | null>(null);
+  let hotkeyTaken = $state(false);
+  async function setHotkey(on: boolean) {
+    try {
+      hotkey = await invoke<boolean>("set_hotkey", { on });
+      hotkeyTaken = on && !hotkey;
+    } catch {
+      hotkey = !on;
+      hotkeyTaken = on;
+    }
+  }
 
   async function setAutostart(on: boolean) {
     try {
@@ -262,6 +279,20 @@
         checked={autostart === true}
         disabled={autostart === null}
         onchange={(e) => void setAutostart(e.currentTarget.checked)}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("settings.hotkey")}</b>
+        <span>{hotkeyTaken ? t("settings.hotkey.taken") : t("settings.hotkey.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={hotkey === true}
+        disabled={hotkey === null}
+        onchange={(e) => void setHotkey(e.currentTarget.checked)}
       />
     </label>
   </div>
