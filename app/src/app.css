@@ -156,6 +156,10 @@ input:not([type]) {
   outline: 2px solid var(--focus-outer);
   outline-offset: 2px;
 }
+/* Focus that arrived after a mouse click (lib/focusRing.ts): no ring. */
+[data-quiet-focus]:focus-visible {
+  outline: none;
+}
 
 ::-webkit-scrollbar {
   width: 12px;

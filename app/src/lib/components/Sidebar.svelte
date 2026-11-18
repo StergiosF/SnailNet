@@ -202,7 +202,7 @@
     transition: opacity 160ms linear;
   }
   .line:hover .pen,
-  .line:focus-visible .pen {
+  .line:focus-visible:not([data-quiet-focus]) .pen {
     opacity: 1;
   }
   @media (forced-colors: active) {
