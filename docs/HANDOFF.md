@@ -2,37 +2,96 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-18)
+## Start here (updated 2026-11-18, end of session)
 
-- **Phase 3 states finished (2026-11-18):** Start SnailNet on the
-  not-running notice (UAC, `service_start.rs`), an Offline notice, hidden
-  website traffic under "Using your internet", a one-time hint on "The
-  split", and no focus ring after a mouse click when a dialog hands focus
-  back (`focusRing.ts`). Not yet seen in a real window. Left in Phase 3:
-  the exit test with someone new to the app. Then Phase 4 (speed test,
-  passive estimator, per-network speed, low-latency auto-tune).
-- **Phase 4 started (2026-11-18):** `snailnet-core::estimator` (pure
-  logic, tested) and `snailnet-win::ping` (ICMP + gateway) are built.
-  User's choices: the probe pings the router and 1.1.1.1; the speed test
-  uses Cloudflare. **Wired into the service** (`autorate.rs`, commit
-  55f5a2f): probe thread (1 Hz busy, 30 s idle, 5-min min baseline per
-  host), the runner feeds the estimator each second and applies the rate
-  live on a ≥ 2% move; `line.pinned` holds typed speeds; capacity capped
-  at 3× the typed speed. Logged as "line speed: shaping at down …".
-  **Not yet tried on the real line**: the dev service in `target\debug`
-  was running (exe locked), so it still has the old build. To try:
-  stop it (elevated), `cargo build -p snailnet-service`, run it again,
-  start a big download and watch the log.
-- **Speed test built (2026-11-18, 45d6123 + dc55e46):** service runs it
-  with shaping off (state `Measuring`), saves `[line.measured]` and the
-  speeds; app: Measure in first run and Settings → Connection, the ping
-  readout, "Follow the line automatically" (= not pinned). CLI
-  `snailnet speedtest`. Measured once by test: 22.0 / 25.7 Mbps, 11 / 40
-  ms (dev service was shaping down). **Needs a service rebuild** to try
-  (exe locked, see above). **Next in Phase 4:** speeds per network
-  (§10.3: key by network GUID / SSID + gateway MAC), then focus boost
-  (foreground hook, game detection). Phase 4 exit: ping under load
-  within +10 ms on your line; games boosted automatically.
+Everything below is committed and pushed on `main` (last: 5df79b0).
+The user leaves decisions to Claude: pick the next step, decide, record
+the decision in PLAN.md, commit and push each verified step.
+
+### Where we are
+
+- **Phase 3 (the app): built.** Done this session: "Start SnailNet" on
+  the not-running notice (UAC, `app/src-tauri/src/service_start.rs`), an
+  Offline notice, hidden-name website traffic under "Using your
+  internet", a one-time hint on "The split", and no focus ring on the
+  button a dialog hands focus back to, Enter included
+  (`app/src/lib/focusRing.ts`, user's request). **Owed:** the Phase 3
+  exit test (someone new solves the motivating scenario, mouse only,
+  < 15 s); needs the user and a tester.
+- **Phase 4 (Smart): half built.**
+  - `snailnet-core::estimator`: pure per-direction logic (ping-driven,
+    like cake-autorate): calm + pressing raises ≤ 10%/min, a > 30 ms
+    rise cuts 5%/s to 30% of the reference, Low-latency factor tunes
+    0.80–0.97, capped at 3× the reference.
+  - `snailnet-win::ping` (ICMP + gateway) and `snailnet-win::http`
+    (WinHTTP: system TLS/proxy, no new crates).
+  - `snailnet-service::autorate`: probe thread pings the router and
+    1.1.1.1 (user's choice) at 1 Hz while busy, 30 s idle; baseline =
+    lowest RTT of 5 min; the runner feeds it each second and applies the
+    rate live on a ≥ 2% move (`Config::plan_live`). `line.pinned` = keep
+    typed speeds. Log line: `line speed: shaping at down …`.
+  - `snailnet-service::speedtest`: `RunSpeedTest` → runner stops shaping
+    (state `Measuring`), tests Cloudflare (user's choice) ~20 s, saves
+    speeds + `[line.measured]` (at, down/up, idle/loaded ping). CLI
+    `snailnet speedtest`. One real run: 22.0 / 25.7 Mbps, 11 / 40 ms.
+  - App: "Measure my connection" in first run; Settings → Connection has
+    Measure, last result, "Ping while downloading", "Follow the line
+    automatically" (off = pinned); a Measuring notice.
+- **Nothing of Phase 4 has run inside the real service yet.** The dev
+  service in `target\debug` was running all session with the user's
+  real config (shaping at 23 Mbps), which locks the exe, so it has the
+  old build. A background `npm run tauri dev` also died (exit 101).
+
+### First thing next session (needs the user, elevated)
+
+1. Stop the dev service, `cargo build -p snailnet-service`, start it
+   again (`target\debug\snailnet-service.exe run --console`), then
+   `npm run tauri dev` in `app\`.
+2. Look at the new screens (user's eyes; no browser automation by
+   default): Settings → Connection, the Start button (stop the service
+   to see it), the split hint, the hidden-traffic line.
+3. Click Measure; then start a big download and watch the log for
+   `line speed:` steps and the ping staying low. Tune the estimator's
+   constants if it oscillates.
+
+### Next work, in order (no user needed)
+
+1. **Speeds per network (PLAN.md §10.3).** Key by the network identity
+   (NLM network GUID, or Wi-Fi SSID + gateway MAC via `GetIpNetTable2`);
+   store `[[networks]]` in config (id, name, down/up, measured, pinned);
+   on a network change the runner switches `line` to that network's
+   (unknown network: keep watching only, or the last speed, and offer
+   Measure). Show the network name in Settings → Connection; Windows'
+   "metered" flag as a note.
+2. **Focus boost (PLAN.md §11, Phase 4):** foreground hook in the app
+   (`SetWinEventHook` EVENT_SYSTEM_FOREGROUND) → `FocusChanged` (already
+   in the IPC, answered Unsupported); game detection (fullscreen,
+   known launchers' folders, GPU use); auto-boost the game while in
+   front; overrides in Settings.
+3. Phase 4 exit check with the user: ping under load within +10 ms on
+   their line; games boosted automatically.
+4. Then Phase 5 (profiles/hotkey, new-app notifications), Phase 6
+   (installer, updater).
+
+### Still owed from earlier phases (need the user)
+
+Phase 2 exit check (YouTube 45% in Chrome/Edge/Firefox, secure DNS on and
+off), Phase 1 soak run 3 (24 h, fixed build), the anti-cheat test.
+
+### Working notes
+
+- A GateGuard hook asks for facts (callers, no duplicate, data shape,
+  the user's words) before the first Bash call and before creating any
+  new file; state them, then retry.
+- Rules: `~/.claude/rules`: no browser automation unless asked; UI work
+  goes through the `impeccable` skill (PRODUCT.md is its context; no
+  DESIGN.md yet). Context7 for library docs.
+- Checks: `cargo clippy --workspace --all-targets`, `cargo fmt --all`,
+  `cargo test --workspace` (the service's lib tests build separate exes,
+  so they run even while the dev service locks its exe); in `app\`:
+  `npm run check`, `npm run lint`, `npx vitest run`, `npm run build`.
+  Network tests are `#[ignore]` (run with `--ignored`).
+- "LF will be replaced by CRLF" warnings on commit are harmless.
 
 ## Start here (2026-11-17)
 
