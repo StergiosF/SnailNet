@@ -1,43 +1,13 @@
 <script lang="ts">
-  // Settings → About → Updates (PLAN.md §17.2): check the release feed when
-  // asked, then install with one more click. Installing runs the signed
-  // installer, which stops the service for a few seconds and restarts the
-  // app, so it never happens without that click.
-  import { invoke } from "@tauri-apps/api/core";
+  // Settings → Updates (PLAN.md §17.2): what the last check found (the app
+  // checks by itself too, update.svelte.ts), Check for updates, and Install
+  // once a newer version is out. Installing runs the signed installer,
+  // which stops the service for a few seconds and restarts the app, so it
+  // never happens without that click.
   import { t } from "../i18n";
+  import { updates } from "../update.svelte";
 
-  type Check =
-    | { kind: "up_to_date" }
-    | { kind: "available"; version: string; notes: string | null }
-    | { kind: "failed"; message: string };
-
-  type Status =
-    | { kind: "idle" }
-    | { kind: "checking" }
-    | { kind: "installing"; version: string }
-    | Check;
-
-  let status = $state<Status>({ kind: "idle" });
-
-  async function check() {
-    status = { kind: "checking" };
-    try {
-      status = await invoke<Check>("check_update");
-    } catch (e) {
-      status = { kind: "failed", message: String(e) };
-    }
-  }
-
-  async function install(version: string) {
-    status = { kind: "installing", version };
-    try {
-      // Returns only on failure: on success the installer takes over.
-      await invoke("install_update");
-    } catch (e) {
-      status = { kind: "failed", message: String(e) };
-    }
-  }
-
+  const status = $derived(updates.status);
   const body = $derived.by(() => {
     switch (status.kind) {
       case "idle":
@@ -54,7 +24,6 @@
         return t("settings.update.failed");
     }
   });
-  const busy = $derived(status.kind === "checking" || status.kind === "installing");
 </script>
 
 <div class="item">
@@ -64,11 +33,11 @@
   </div>
   {#if status.kind === "available"}
     {@const version = status.version}
-    <button type="button" class="btn btn-accent" onclick={() => void install(version)}>
-      {t("settings.update.install")}
+    <button type="button" class="btn btn-accent" onclick={() => void updates.install()}>
+      {t("settings.update.install", { version })}
     </button>
   {:else}
-    <button type="button" class="btn" disabled={busy} onclick={() => void check()}>
+    <button type="button" class="btn" disabled={updates.busy} onclick={() => void updates.check()}>
       {status.kind === "failed" ? t("settings.update.retry") : t("settings.update.check")}
     </button>
   {/if}

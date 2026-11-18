@@ -19,6 +19,12 @@
   DetailPrint "Stopping the ${SNAILNET_SERVICE} service if it runs..."
   nsExec::ExecToLog '"$SYSDIR\net.exe" stop ${SNAILNET_SERVICE}'
   Pop $0
+  ; Earlier installs left the app as snailnet.exe. Copying SnailNet.exe
+  ; over it keeps the old lower-case name (NTFS keeps a file's case), and
+  ; Task Manager then lists the app as "snailnet". Rename it first.
+  ${If} ${FileExists} "$INSTDIR\snailnet.exe"
+    Rename "$INSTDIR\snailnet.exe" "$INSTDIR\SnailNet.exe"
+  ${EndIf}
 !macroend
 
 ; After files are copied: register (or update) the service to run the

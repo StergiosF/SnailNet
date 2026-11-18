@@ -53,10 +53,10 @@
   {/if}
   {#if ui.coach && s && canEdit}
     <div class="coach" role="note" aria-labelledby="coach-title">
-      <p>
+      <div class="words">
         <b id="coach-title">{t("coach.title")}</b>
-        {t("coach.body")}
-      </p>
+        <p>{t("coach.body")}</p>
+      </div>
       <button type="button" class="btn btn-quiet" onclick={() => ui.dismissCoach()}>{t("coach.ok")}</button>
     </div>
   {/if}
@@ -141,15 +141,18 @@
   }
   .coach {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 12px;
     padding: 12px 12px 12px 14px;
     border-radius: 12px;
     background: var(--shell-soft);
     animation: rise-in 420ms var(--ease-out) 600ms backwards;
   }
-  .coach p {
+  .coach .words {
     flex: 1;
+    min-width: 0;
+  }
+  .coach p {
     margin: 0;
     font-size: 13px;
     line-height: 1.45;

@@ -1,12 +1,14 @@
 <script lang="ts">
   // The side rail (PLAN.md §14.2): the snail and the name, the pages (Now,
   // Split, Settings), and at the bottom Pause and the line as the user set
-  // it, which opens the speed dialog. Its top is part of the window's drag
+  // it, which opens the speed dialog, and the update button: quiet until a
+  // newer SnailNet is out, then lit, and one click installs it. Its top is part of the window's drag
   // region.
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { service } from "../service.svelte";
   import { ui, type Page } from "../ui.svelte";
+  import { updates } from "../update.svelte";
   import PauseControl from "./PauseControl.svelte";
   import Snail from "./Snail.svelte";
 
@@ -20,6 +22,21 @@
   const canSet = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const hasLine = $derived(line.down_mbps !== undefined || line.up_mbps !== undefined);
   const fig = (v: number | undefined) => (v === undefined ? "–" : String(Math.round(v * 10) / 10));
+  const updateLabel = $derived.by(() => {
+    const s = updates.status;
+    switch (s.kind) {
+      case "available":
+        return t("sidebar.update.available", { version: s.version });
+      case "installing":
+        return t("sidebar.update.installing");
+      case "checking":
+        return t("settings.update.checking");
+      case "up_to_date":
+        return t("sidebar.update.none");
+      default:
+        return t("settings.update.check");
+    }
+  });
 </script>
 
 <aside class="side">
@@ -71,6 +88,16 @@
       {/if}
     </button>
   {/if}
+  <button
+    type="button"
+    class="update"
+    class:lit={updates.available !== null}
+    disabled={updates.busy}
+    aria-live="polite"
+    onclick={() => void (updates.available ? updates.install() : updates.check())}
+  >
+    <i class="icon" aria-hidden="true">{updates.available ? "" : ""}</i>{updateLabel}
+  </button>
 </aside>
 
 <style>
@@ -205,7 +232,44 @@
   .line:focus-visible:not([data-quiet-focus]) .pen {
     opacity: 1;
   }
+  .update {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    margin-top: 6px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    transition: background-color 120ms linear, color 120ms linear;
+  }
+  .update:hover:not(:disabled) {
+    background: var(--fill-subtle-hover);
+    color: var(--text-primary);
+  }
+  .update .icon {
+    font-size: 13px;
+  }
+  .update.lit {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+  }
+  .update.lit:hover:not(:disabled) {
+    background: var(--accent-hover);
+    color: var(--on-accent);
+  }
+  .update:disabled {
+    opacity: 0.7;
+  }
   @media (forced-colors: active) {
+    .update.lit {
+      outline: 2px solid Highlight;
+    }
     .side {
       border-right: 1px solid CanvasText;
     }

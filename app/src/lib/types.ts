@@ -182,6 +182,8 @@ export interface ClassTick {
   bps: number;
   drops: number;
   queued_bytes: number;
+  /** UI only (steady.ts): quiet just now, still listed for a few seconds. */
+  held?: boolean;
 }
 
 export interface FamilyTick {
@@ -189,6 +191,8 @@ export interface FamilyTick {
   name: string;
   bps: number;
   unidentified_bps: number;
+  /** UI only (steady.ts): quiet just now, still listed for a few seconds. */
+  held?: boolean;
 }
 
 export interface SiteTick {

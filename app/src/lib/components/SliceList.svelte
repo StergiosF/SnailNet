@@ -5,7 +5,7 @@
   // modes have many: every launcher and updater). While the service is
   // still answering, three quiet placeholder rows.
   import { t } from "../i18n";
-  import { QUIET_BPS, type Ledger, type Slice } from "../ledger";
+  import type { Ledger, Slice } from "../ledger";
   import { ui } from "../ui.svelte";
   import SliceRow from "./SliceRow.svelte";
   import Snail from "./Snail.svelte";
@@ -15,7 +15,7 @@
   const other = $derived(ledger?.slices.at(-1) ?? null);
   /** Quiet "only when free" rules (unless one's settings are open). */
   const folded = (s: Slice) =>
-    s.rule >= 0 && s.enabled && s.share === null && s.bps < QUIET_BPS && ui.open !== s.key;
+    s.rule >= 0 && s.enabled && s.share === null && !s.active && ui.open !== s.key;
   const shown = $derived(ledger?.slices.filter((s) => !folded(s)) ?? []);
   const rest = $derived(ledger?.slices.filter(folded) ?? []);
   let unfold = $state(false);

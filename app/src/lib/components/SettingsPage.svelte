@@ -1,10 +1,10 @@
 <script lang="ts">
-  // Settings (PLAN.md §14.6), one scrolling page of groups: the connection
-  // (speed, Measure, the last test and its ping, following the line
-  // automatically), starting with Windows, the two resets (this mode's split; all
-  // of SnailNet, which shows setup again), and what version is running.
-  // More arrives with the features behind it (low-ping strength, pause,
-  // notifications, hotkeys).
+  // Settings (PLAN.md §14.6), one scrolling page of groups, most used
+  // first: your internet (speed, Measure, the last test with its ping,
+  // following the line, other networks); games and the app you're using;
+  // new apps (notifications, how apps are grouped); Windows (start with
+  // Windows, the hotkey); version and updates; and last, starting over
+  // (this mode's split; all of SnailNet, which shows setup again).
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
@@ -197,32 +197,11 @@
         <div class="words">
           <b>{t("measure.last", { date: measuredOn })}</b>
           <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
-        </div>
-      </div>
-      {#if measured.idle_ms !== undefined && measured.loaded_ms !== undefined}
-        <div class="item">
-          <div class="words">
-            <b>{t("ping.title")}</b>
+          {#if measured.idle_ms !== undefined && measured.loaded_ms !== undefined}
             <span class="num"
               >{t("ping.body", { idle: Math.round(measured.idle_ms), loaded: Math.round(measured.loaded_ms) })}</span
             >
-          </div>
-        </div>
-      {/if}
-    {/if}
-    {#if others.length > 0}
-      <div class="item">
-        <div class="words">
-          <b>{t("settings.networks")}</b>
-          <span>{t("settings.networks.body")}</span>
-          <ul class="nets">
-            {#each others as n (n.id)}
-              <li>
-                <span class="net">{n.name}</span>
-                <span class="num">{t("settings.line.value", { down: fig(n.line.down_mbps), up: fig(n.line.up_mbps) })}</span>
-              </li>
-            {/each}
-          </ul>
+          {/if}
         </div>
       </div>
     {/if}
@@ -240,6 +219,28 @@
         onchange={(e) => void setAdapt(e.currentTarget.checked)}
       />
     </label>
+    {#if others.length > 0}
+      <div class="item">
+        <div class="words">
+          <b>{t("settings.networks")}</b>
+          <span>{t("settings.networks.body")}</span>
+          <ul class="nets">
+            {#each others as n (n.id)}
+              <li>
+                <span class="net">{n.name}</span>
+                <span class="num">{t("settings.line.value", { down: fig(n.line.down_mbps), up: fig(n.line.up_mbps) })}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </div>
+    {/if}
+  </div>
+</section>
+
+<section aria-labelledby="set-first">
+  <h2 class="group-title" id="set-first">{t("settings.first")}</h2>
+  <div class="card group">
     <label class="item">
       <div class="words">
         <b>{t("focus.title")}</b>
@@ -290,6 +291,42 @@
           </ul>
         </div>
       </div>
+    {/if}
+  </div>
+</section>
+
+<section aria-labelledby="set-apps">
+  <h2 class="group-title" id="set-apps">{t("settings.apps")}</h2>
+  <div class="card group">
+    <label class="item">
+      <div class="words">
+        <b>{t("settings.newapps")}</b>
+        <span>{t("settings.newapps.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={notifyNewApps}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "notify" : "off" })}
+      />
+    </label>
+    {#if notifyNewApps}
+      <label class="item">
+        <div class="words">
+          <b>{t("settings.strict")}</b>
+          <span>{t("settings.strict.body")}</span>
+        </div>
+        <input
+          type="checkbox"
+          role="switch"
+          class="switch"
+          checked={strictNewApps}
+          disabled={!canEdit || focusing}
+          onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "strict" : "notify" })}
+        />
+      </label>
     {/if}
     {#if grouped.length > 0}
       <div class="item">
@@ -379,60 +416,6 @@
         />
       </div>
     </div>
-    <label class="item">
-      <div class="words">
-        <b>{t("settings.newapps")}</b>
-        <span>{t("settings.newapps.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={notifyNewApps}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "notify" : "off" })}
-      />
-    </label>
-    {#if notifyNewApps}
-      <label class="item">
-        <div class="words">
-          <b>{t("settings.strict")}</b>
-          <span>{t("settings.strict.body")}</span>
-        </div>
-        <input
-          type="checkbox"
-          role="switch"
-          class="switch"
-          checked={strictNewApps}
-          disabled={!canEdit || focusing}
-          onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "strict" : "notify" })}
-        />
-      </label>
-    {/if}
-  </div>
-</section>
-
-<section aria-labelledby="set-reset">
-  <h2 class="group-title" id="set-reset">{t("settings.reset")}</h2>
-  <div class="card group">
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.resetMode", { mode })}</b>
-        <span>{t("settings.resetMode.body", { mode })}</span>
-      </div>
-      <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
-        {t("split.reset")}
-      </button>
-    </div>
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.resetAll")}</b>
-        <span>{t("settings.resetAll.body")}</span>
-      </div>
-      <button type="button" class="btn" disabled={!canEdit} onclick={() => (confirming = true)}>
-        {t("settings.resetAll.button")}
-      </button>
-    </div>
   </div>
 </section>
 
@@ -460,6 +443,30 @@
         onchange={(e) => void setSetting({ pack_updates: e.currentTarget.checked })}
       />
     </label>
+  </div>
+</section>
+
+<section aria-labelledby="set-reset">
+  <h2 class="group-title" id="set-reset">{t("settings.reset")}</h2>
+  <div class="card group">
+    <div class="item">
+      <div class="words">
+        <b>{t("settings.resetMode", { mode })}</b>
+        <span>{t("settings.resetMode.body", { mode })}</span>
+      </div>
+      <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
+        {t("split.reset")}
+      </button>
+    </div>
+    <div class="item">
+      <div class="words">
+        <b>{t("settings.resetAll")}</b>
+        <span>{t("settings.resetAll.body")}</span>
+      </div>
+      <button type="button" class="btn" disabled={!canEdit} onclick={() => (confirming = true)}>
+        {t("settings.resetAll.button")}
+      </button>
+    </div>
   </div>
 </section>
 

@@ -24,6 +24,7 @@
   import { noticeOf } from "./lib/notice";
   import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
+  import { updates } from "./lib/update.svelte";
   import type { Target } from "./lib/types";
 
   onMount(() => {
@@ -33,8 +34,10 @@
     // "Give it a slice" on a new-app notification (§11.4).
     const unlisten = listen<{ family: string }>("give-slice", (e) => ui.giveSlice(e.payload.family));
     const stopTick = ui.tick();
+    const stopUpdates = updates.watch();
     return () => {
       stopTick();
+      stopUpdates();
       void unlisten.then((u) => u());
     };
   });

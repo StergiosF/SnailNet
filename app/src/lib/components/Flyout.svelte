@@ -14,7 +14,6 @@
   import { availableModes } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
-  import { QUIET_BPS } from "../ledger";
   import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -57,7 +56,7 @@
     return p !== undefined && (p.until === undefined || ui.now < p.until);
   });
   const rows = $derived(
-    book?.slices.filter((s) => !(s.rule >= 0 && s.enabled && s.share === null && s.bps < QUIET_BPS)) ?? [],
+    book?.slices.filter((s) => !(s.rule >= 0 && s.enabled && s.share === null && !s.active)) ?? [],
   );
 
   async function openMain() {

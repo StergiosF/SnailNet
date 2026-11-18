@@ -3,7 +3,7 @@
 // the split in short. Pure, so it's tested.
 
 import { sameTarget } from "./rules";
-import { statusText, QUIET_BPS, type Ledger, type Slice } from "./ledger";
+import { statusText, type Ledger, type Slice } from "./ledger";
 import { t, type Key } from "./i18n";
 import type { Boost, GameTick, GameWhy, Profile, Target } from "./types";
 
@@ -116,7 +116,7 @@ export function users(
   const out: User[] = [];
   for (const s of l.slices) {
     if (s.target !== null) {
-      if (s.bps >= QUIET_BPS) {
+      if (s.active) {
         out.push({ key: s.key, target: s.target, name: s.name, bps: s.bps, status: statusText(s.status), boosted: false });
       }
       continue;

@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { withSpeeds } from "./line";
 import { withBar } from "./rules";
+import { Steady } from "./steady";
 import type { Families, Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
 
 const notConnected: SaveError = { kind: "failed", message: "not connected" };
@@ -12,7 +13,9 @@ const notConnected: SaveError = { kind: "failed", message: "not connected" };
 class Service {
   link = $state<Link>({ kind: "connecting" });
   snapshot = $state<Snapshot | null>(null);
+  /** The live stats, steadied for the eye (steady.ts). */
   stats = $state<StatsTick | null>(null);
+  #steady = new Steady();
 
   /** The freshest service state: the stats stream's, else the snapshot's. */
   state = $derived<ServiceState | null>(
@@ -163,14 +166,17 @@ class Service {
     await Promise.all([
       listen<Link>("link", (e) => {
         this.link = e.payload;
-        if (e.payload.kind !== "connected") this.stats = null;
+        if (e.payload.kind !== "connected") {
+          this.stats = null;
+          this.#steady.reset();
+        }
       }),
       listen<Snapshot>("snapshot", (e) => (this.snapshot = e.payload)),
       listen<ServiceState>("service-state", (e) => {
         if (this.snapshot) this.snapshot.state = e.payload;
       }),
       listen<StatsTick>("stats", (e) => {
-        this.stats = e.payload;
+        this.stats = this.#steady.step(e.payload);
         for (const s of e.payload.down?.sites ?? []) {
           if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
         }
@@ -179,7 +185,7 @@ class Service {
     const now = await invoke<Latest>("current");
     this.link = now.link;
     this.snapshot ??= now.snapshot;
-    this.stats ??= now.stats;
+    if (this.stats === null && now.stats) this.stats = this.#steady.step(now.stats);
   }
 }
 

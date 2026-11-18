@@ -1,8 +1,9 @@
 <script lang="ts">
   // The Now page (PLAN.md §14.2): "What matters right now?" and the four
   // modes; who is using the internet, each with a Boost; the split in
-  // short; and at the bottom one plain sentence on how things are going
-  // (who uses the most, and whether anyone is waiting).
+  // short. One plain sentence on how things are going
+  // (who uses the most, and whether anyone is waiting), right under the
+  // question it answers.
   //
   // Its one authored moment: the snail's shell (the same spiral as the
   // icon) draws itself once, large and faint, behind the question as the
@@ -29,15 +30,17 @@
       d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0"
     />
   </svg>
-  <h1>{t("now.title")}</h1>
+  <header>
+    <h1>{t("now.title")}</h1>
+    {#if glance}
+      <p class="glance" aria-live="off"><b>{glance.title}</b> {glance.detail}</p>
+    {/if}
+  </header>
   <ModeTiles disabled={!canEdit} />
   <div class="cols">
     <div class="arrive" style:--d="220ms"><WhoCard {ledger} {canEdit} /></div>
     <div class="arrive" style:--d="280ms"><SplitCard {ledger} {canEdit} /></div>
   </div>
-  {#if glance}
-    <p class="glance arrive" style:--d="340ms" aria-live="off"><b>{glance.title}</b> {glance.detail}</p>
-  {/if}
 </div>
 
 <style>
@@ -99,13 +102,15 @@
     gap: 14px;
     align-items: start;
   }
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .glance {
     margin: 0;
-    padding: 14px 18px;
-    border-radius: 14px;
-    background: rgb(10 33 29 / 0.72);
-    box-shadow: var(--shadow-card);
-    font-size: 14px;
+    max-width: 72ch;
+    font-size: 15px;
     line-height: 1.45;
     color: var(--text-secondary);
   }

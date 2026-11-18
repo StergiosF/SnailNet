@@ -58,6 +58,8 @@ export interface Slice {
   /** What the slice keeps for it on a busy line, or null (not shaping). */
   kept: number | null;
   status: Status;
+  /** Moving now, or only just gone quiet (steady.ts): keep it in view. */
+  active: boolean;
   /** Everything else only: its apps, busiest first. */
   members: Member[];
   /** Colour slot (0–5) for rules; -1 for Everything else. */
@@ -109,7 +111,7 @@ export function membersOf(
       .filter((s) => s.family === f.family && siteRule(s.site))
       .reduce((sum, s) => sum + s.bps, 0);
     const bps = Math.max(0, f.bps - toSites);
-    if (bps < QUIET_BPS) continue;
+    if (bps < QUIET_BPS && !f.held) continue;
     out.push({
       key: `family:${f.family}`,
       target,
@@ -156,6 +158,7 @@ export function ledger(
       bps,
       kept,
       status: st,
+      active: bps >= QUIET_BPS || tick?.held === true,
       members: [],
       ink: ink++ % 6,
     };
@@ -176,6 +179,7 @@ export function ledger(
     bps: otherBps,
     kept: otherKept,
     status: status(otherBps, otherKept, busy, otherTick),
+    active: otherBps >= QUIET_BPS || otherTick?.held === true,
     members: membersOf(dir, rules),
     ink: -1,
   });
