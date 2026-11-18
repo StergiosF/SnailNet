@@ -4,11 +4,10 @@
 //! | status    | when                                   | icon                    |
 //! |-----------|----------------------------------------|-------------------------|
 //! | `Normal`  | connected, shaping or watching only    | the snail               |
-//! | `Warning` | safe mode, or shaping failed open      | snail + amber dot       |
+//! | `Warning` | safe mode, failed open, or paused      | snail + amber dot       |
 //! | `Offline` | no connection to the service           | faded grey snail        |
 //!
-//! Paused (amber glyph) and the blocked-apps dot come with those features:
-//! the service has neither yet.
+//! Blocked apps get no mark of their own: the main window lists them.
 
 use std::sync::Mutex;
 

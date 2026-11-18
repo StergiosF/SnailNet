@@ -36,6 +36,8 @@ class Ui {
   toast = $state<Toast | null>(null);
   /** Unix seconds, ticking every few seconds (boost countdowns). */
   now = $state(Math.floor(Date.now() / 1000));
+  /** Whether Windows says this PC has a network (§14.8 Offline). */
+  online = $state(typeof navigator === "undefined" ? true : navigator.onLine);
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** The row whose editor is open (a slice key), or null. */
   open = $state<string | null>(null);
@@ -137,7 +139,14 @@ class Ui {
   /** Keep `now` current; returns the stop function. */
   tick(): () => void {
     const id = setInterval(() => (this.now = Math.floor(Date.now() / 1000)), 5000);
-    return () => clearInterval(id);
+    const net = () => (this.online = navigator.onLine);
+    window.addEventListener("online", net);
+    window.addEventListener("offline", net);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", net);
+      window.removeEventListener("offline", net);
+    };
   }
 }
 

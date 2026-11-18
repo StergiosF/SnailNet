@@ -10,7 +10,7 @@
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { glance, ledger, parts, statusText } from "../ledger";
-  import { pause, resume, switchMode } from "../actions";
+  import { pause, resume, startService, switchMode } from "../actions";
   import { availableModes } from "../modes";
   import { noticeOf } from "../notice";
   import { QUIET_BPS } from "../ledger";
@@ -37,7 +37,13 @@
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
   const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
   const notice = $derived(
-    noticeOf(service.link, service.state, { setSpeed: () => void openMain(), resume: () => void resume() }, ui.now),
+    noticeOf(
+      service.link,
+      service.state,
+      { setSpeed: () => void openMain(), resume: () => void resume(), startService: () => void startService() },
+      ui.now,
+      ui.online,
+    ),
   );
   const strip = $derived(book ? parts(book) : []);
   const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));

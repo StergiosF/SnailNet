@@ -16,6 +16,7 @@ pub mod autostart;
 pub mod bridge;
 pub mod changes;
 pub mod icon;
+pub mod service_start;
 pub mod tray;
 pub mod tray_icon;
 
@@ -174,7 +175,8 @@ pub fn run() {
             changes::resume,
             changes::set_blocked,
             autostart::autostart_enabled,
-            autostart::set_autostart
+            autostart::set_autostart,
+            service_start::start_service
         ])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");

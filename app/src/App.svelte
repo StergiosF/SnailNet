@@ -19,7 +19,7 @@
   import { glance, ledger } from "./lib/ledger";
   import { needsFirstRun } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
-  import { resume } from "./lib/actions";
+  import { resume, startService } from "./lib/actions";
   import { noticeOf } from "./lib/notice";
   import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
@@ -61,7 +61,13 @@
     downBook && service.stats ? glance(downBook, downLine === undefined ? null : downLine * 1e6) : null,
   );
   const notice = $derived(
-    noticeOf(service.link, service.state, { setSpeed: () => lineDialog.show(), resume: () => void resume() }, ui.now),
+    noticeOf(
+      service.link,
+      service.state,
+      { setSpeed: () => lineDialog.show(), resume: () => void resume(), startService: () => void startService() },
+      ui.now,
+      ui.online,
+    ),
   );
 </script>
 

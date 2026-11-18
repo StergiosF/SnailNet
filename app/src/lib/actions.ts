@@ -2,6 +2,7 @@
 // boost, reset. Each says how it went in the toast at the bottom of the
 // window; a reset of the split can be undone from there.
 
+import { invoke } from "@tauri-apps/api/core";
 import { t, type Key } from "./i18n";
 import { modeName } from "./modes";
 import { service } from "./service.svelte";
@@ -111,4 +112,22 @@ export async function resetAll(): Promise<boolean> {
     failed("settings.resetAll.failed", e);
     return false;
   }
+}
+
+/** What `start_service` (app/src-tauri/src/service_start.rs) reports. */
+type StartOutcome = "asked" | "cancelled" | "not_installed" | { failed: { message: string } };
+
+/** "Start SnailNet" on the not-running notice: Windows asks for admin
+ *  rights, then the app reconnects by itself. */
+export async function startService(): Promise<void> {
+  let outcome: StartOutcome;
+  try {
+    outcome = await invoke<StartOutcome>("start_service");
+  } catch (e) {
+    outcome = { failed: { message: String(e) } };
+  }
+  if (outcome === "asked") ui.say({ message: t("start.asked") });
+  else if (outcome === "cancelled") ui.say({ message: t("start.cancelled") });
+  else if (outcome === "not_installed") ui.say({ message: t("start.not_installed") });
+  else ui.say({ message: t("start.failed", { message: outcome.failed.message }) });
 }

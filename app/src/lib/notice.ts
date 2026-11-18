@@ -12,6 +12,7 @@ import type { Notice } from "./ui.svelte";
 export interface NoticeActions {
   setSpeed: () => void;
   resume: () => void;
+  startService: () => void;
 }
 
 export function noticeOf(
@@ -19,13 +20,19 @@ export function noticeOf(
   s: ServiceState | null,
   actions: NoticeActions,
   now: number,
+  online = true,
 ): Notice | null {
   switch (link.kind) {
     case "connecting":
     case "connected":
       break;
     case "not_running":
-      return { severity: "caution", title: t("link.not_running.title"), message: t("link.not_running.body") };
+      return {
+        severity: "caution",
+        title: t("link.not_running.title"),
+        message: t("link.not_running.body"),
+        action: { label: t("link.not_running.action"), onclick: actions.startService },
+      };
     case "rejected":
       return { severity: "critical", title: t("link.rejected.title"), message: t("link.rejected.body") };
     case "denied":
@@ -38,6 +45,8 @@ export function noticeOf(
       return { severity: "caution", title: t("link.lost.title"), message: t("link.lost.body") };
   }
   if (s === null) return null;
+  // No network outranks the service's own news: nothing flows either way.
+  if (!online) return { severity: "info", title: t("offline.title"), message: t("offline.body") };
   switch (stateKind(s)) {
     case "unshaped":
       return {
