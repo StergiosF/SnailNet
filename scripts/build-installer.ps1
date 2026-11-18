@@ -9,7 +9,9 @@ param(
 #   2. the app through the Tauri bundler with tauri.release.conf.json
 #      (NSIS, per-machine, service hooks, WinDivert files, updater
 #      artifacts signed with the updater key),
-#   3. latest.json for the GitHub release, pointing at
+#   3. THIRD-PARTY-NOTICES.txt into the target folder (bundled under
+#      licenses\ next to WinDivert's licence; scripts\third-party-notices.ps1),
+#   4. latest.json for the GitHub release, pointing at
 #      https://github.com/StergiosF/SnailNet/releases/download/v<version>/.
 # Output: target\release\bundle\nsis\ (SnailNet_<version>_x64-setup.exe,
 # its .sig, and latest.json). Upload all three to the release v<version>.
@@ -38,10 +40,10 @@ $target = if ($TargetDir) { $TargetDir } else { Join-Path $root 'target' }
 $env:CARGO_TARGET_DIR = $target
 $conf = Join-Path $root 'app\src-tauri\tauri.release.conf.json'
 if ($TargetDir) {
-    # The release config names ../../target/release/snailnet-service.exe;
-    # point it at the other target folder instead.
-    $svc = (Join-Path $target 'release\snailnet-service.exe') -replace '\\', '/'
-    $json = (Get-Content $conf -Raw) -replace '\.\./\.\./target/release/snailnet-service\.exe', $svc
+    # The release config names files in ../../target/ (the service, the
+    # notices); point them at the other target folder instead.
+    $fwd = ("$target" -replace '\\', '/').TrimEnd('/')
+    $json = (Get-Content $conf -Raw) -replace '\.\./\.\./target/', "$fwd/"
     $conf = Join-Path $target 'tauri.release.conf.json'
     New-Item -ItemType Directory -Force $target | Out-Null
     Set-Content -Path $conf -Value $json -Encoding utf8
@@ -55,6 +57,10 @@ try {
 Push-Location (Join-Path $root 'app')
 try {
     if (-not (Test-Path 'node_modules')) { Invoke-Step 'npm ci' { npm ci } }
+    # After npm ci: the notices read the bundled npm packages' licences.
+    Invoke-Step 'third-party notices' {
+        & (Join-Path $PSScriptRoot 'third-party-notices.ps1') -Out (Join-Path $target 'THIRD-PARTY-NOTICES.txt')
+    }
     Invoke-Step 'tauri build (NSIS)' { npm run tauri -- build --config $conf }
 } finally { Pop-Location }
 
