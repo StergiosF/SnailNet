@@ -2,7 +2,81 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, later; newest)
+## Start here (2026-11-18, end of session; newest)
+
+Everything is committed and pushed on `main` (last code commit:
+`bfb2b16`). The user leaves decisions to Claude: pick, decide, record in
+PLAN.md, run the gates, commit + push each verified step. No branches.
+
+### State
+
+- **Phase 5 (Control) is done except E.** This session: B strict mode
+  (`7836402`), C SOCKET refusal + tray counter (`998d75d`), D family
+  split/merge (`bfb2b16`). Decisions for each are in PLAN.md §11.3,
+  §11.4, §11.6; short notes in "Session notes" below.
+- **Phase 6:** installer, updater and `release.yml` exist (built, never
+  run).
+- **Nothing since Phase 4 has run in the real service or been seen in a
+  real window.** Every automated gate passes. Riskiest untested parts:
+  the SOCKET refusal against the real driver (`refuse.rs`), strict-mode
+  holds, WinRT toasts, the tray badge at real size, the installer.
+
+### Next, in order
+
+1. **E (small, app only):** game-detection confidence in the UI (§11.5:
+   why SnailNet thinks it's a game: fullscreen, launcher library, or
+   "you said so"); choosing another hotkey than `Ctrl+Alt+S` (§11.2,
+   `app/src-tauri/src/hotkey.rs`, Settings → Windows).
+2. **impeccable audit** of the UI added since Phase 4 (Boost menu
+   grouping items, Settings lists and switches, toast wording). No
+   browser unless the user asks; say what wasn't seen.
+3. **Phase 6 leftovers (§21):** signed site/game pack feed (packs update
+   without a new build); README with the "help, my internet broke"
+   section, licences (WinDivert's licence and the bundle; see
+   `deny.toml`), privacy statement; final perf run against §20.
+4. **With the user (elevated / VMs):** the real-service test under
+   "First thing next session" further down; then the Phase 6 exit: a
+   clean install on fresh Windows 10 and 11 VMs, then tag `v1.0.0`.
+
+### Needs the user
+
+- Make the repo (or a releases repo) public for the update feed; add the
+  `TAURI_SIGNING_PRIVATE_KEY` secret; back up
+  `%USERPROFILE%\.tauri\snailnet-updater.key`; bump the version from
+  0.0.1.
+- Run the elevated dev service and look at the app (steps further down).
+  The old dev service may still lock `target\debug\snailnet-service.exe`
+  ("Access is denied" on build): stop it first.
+- VM tests of the installer.
+
+### Gates (run before every commit)
+
+- Repo root: `cargo fmt --all --check`, `cargo clippy --workspace
+  --all-targets -- -D warnings`, `cargo test --workspace`.
+- `app\src-tauri`: `cargo fmt --check`, `cargo clippy --all-targets --
+  -D warnings`, `cargo test`.
+- `app\`: `npm run check`, `npm run lint`, `npx vitest run`,
+  `npm run build`.
+- `runner::tests::no_line_speed_means_no_shaping` (20 ms timing) can
+  fail under load; it passes alone.
+
+### Working notes
+
+- GateGuard hook: before the first edit of each file (and the first
+  shell command, and anything it calls destructive) state importers,
+  affected API, data and the user's words, then retry. `app/**` is
+  exempt.
+- Commit from Bash with `git commit -F - <<'EOF' … EOF` (quotes break in
+  PowerShell 5.1). Edit scripts with backslashes: Python raw strings,
+  written to a file first (long heredocs with quotes can break Bash).
+- No repo prettier config: don't run prettier on existing files (it
+  reflows them). New TS files are fine at `--print-width 120`.
+- WinDivert filters have no `!(…)`; check filters with
+  `WinDivertLib::check_filter` (no admin) in a unit test.
+- Rules in `~/.claude/rules`: no browser automation unless asked; UI
+  work through `impeccable`; Context7 before using a library API.
+
+## Session notes (2026-11-18, later)
 
 - **B, strict mode (§11.4), done:** `new_apps = "strict"`; a held app's
   family joins `Plan.blocked` until answered or 20 s (`Newcomers` holds,
