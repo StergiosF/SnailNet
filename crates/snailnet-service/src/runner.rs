@@ -847,12 +847,12 @@ mod tests {
     #[test]
     fn a_fail_open_is_retried() {
         let (_t, d) = setup(true);
-        let (r, f) = run_for(
-            &d,
-            fake(&[Script::FailsOpenAfter(2), Script::Runs]),
-            Duration::from_millis(80),
-            1_000,
-        );
+        let engine = fake(&[Script::FailsOpenAfter(2), Script::Runs]);
+        let starts = engine.starts.clone();
+        // Stop once the retry has started, not after a fixed time.
+        let (r, f) = run_with(&d, engine, 1_000, |_| {
+            eventually(|| starts.load(Ordering::SeqCst) == 2);
+        });
         assert_eq!(r.unwrap(), Ended::Stopped);
         assert_eq!(f.starts.load(Ordering::SeqCst), 2);
         assert_eq!(f.live.load(Ordering::SeqCst), 0);
@@ -890,13 +890,11 @@ mod tests {
         for now in [100, 200] {
             let _ = CrashGuard::start(&d, now).unwrap();
         }
-        // …so one fail-open now is the third strike.
-        let (r, f) = run_for(
-            &d,
-            fake(&[Script::FailsOpenAfter(1)]),
-            Duration::from_millis(50),
-            300,
-        );
+        // …so one fail-open now is the third strike. Wait for it rather than
+        // a fixed time: on a slow machine the stop could come first.
+        let (r, f) = run_with(&d, fake(&[Script::FailsOpenAfter(1)]), 300, |hub| {
+            eventually(|| matches!(hub.state(), ServiceState::SafeMode { failures: 3 }));
+        });
         assert_eq!(r.unwrap(), Ended::StoppedInSafeMode);
         assert_eq!(f.starts.load(Ordering::SeqCst), 1);
     }
