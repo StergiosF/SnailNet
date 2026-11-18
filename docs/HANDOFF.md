@@ -11,6 +11,15 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   back (`focusRing.ts`). Not yet seen in a real window. Left in Phase 3:
   the exit test with someone new to the app. Then Phase 4 (speed test,
   passive estimator, per-network speed, low-latency auto-tune).
+- **Phase 4 started (2026-11-18):** `snailnet-core::estimator` (pure
+  logic, tested) and `snailnet-win::ping` (ICMP + gateway) are built.
+  User's choices: the probe pings the router and 1.1.1.1; the speed test
+  uses Cloudflare. **Next:** wire them into the service: a probe thread
+  pinging at 1 Hz only while busy, an idle baseline per host (lowest RTT
+  of the last few minutes), one `Direction` per direction fed from the
+  shaper's per-second throughput, and the live rate applied when it moves
+  > 2%. Then the speed test (HTTP client, consent, results per network),
+  then the UI (Settings → Connection, "Ping under load").
 
 ## Start here (2026-11-17)
 
