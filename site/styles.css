@@ -453,7 +453,6 @@ h3 {
 
 main > section {
   position: relative;
-  min-height: calc(var(--h, 1) * 100svh);
   padding: var(--pad-t) 0 var(--pad-b);
 }
 .section--band {
@@ -461,10 +460,16 @@ main > section {
   --text-secondary: #c8d8d2;
   background: var(--surface-1);
 }
-.section--cream {
-  background: var(--accent);
+/* Cream as a panel set on the ground, not a full-width flip. */
+.section--cream > .wrap {
+  padding: clamp(28px, 5vw, 72px);
+  border-radius: var(--r-frame);
+  background:
+    radial-gradient(800px 420px at 12% 0%, #fbf6ea, transparent 70%),
+    var(--accent);
   color: var(--cream-ink);
   color-scheme: light;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 40px 80px -40px rgb(0 0 0 / 0.65);
 }
 .section--cream .intro {
   color: var(--cream-ink-2);
@@ -1435,25 +1440,25 @@ main > section {
 .beats li {
   display: grid;
   gap: 2px;
-  padding: 16px 0 16px 40px;
+  padding: 16px 0 16px 52px;
   border-top: 1px solid var(--stroke-card);
   position: relative;
 }
-.beats li::before {
-  counter-increment: beat;
-  content: counter(beat);
+.beats .beats__ic {
   position: absolute;
   left: 0;
-  top: 17px;
+  top: 15px;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: var(--shell-soft);
   color: var(--mint);
-  font-size: 14px;
-  font-weight: 700;
+}
+.beats__ic svg {
+  width: 18px;
+  height: 18px;
 }
 .beats b {
   font-size: 17px;
@@ -1571,29 +1576,51 @@ main > section {
 .steps {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+/* Each card spans four shared rows, so the three panels start level. */
 .stepcard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 10px;
   padding: 28px 28px 0;
   overflow: hidden;
 }
 .stepcard__n {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  justify-self: start;
+  width: 44px;
+  height: 44px;
   margin-bottom: 6px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+}
+.stepcard__n svg {
+  width: 22px;
+  height: 22px;
+}
+.stepcard__n b {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--shell);
+  color: var(--on-shell);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 0 0 3px var(--surface-2);
 }
 .stepcard p {
   color: var(--text-secondary);
 }
 .stepcard .panel {
-  flex: 1;
+  align-self: stretch;
 }
 .panel {
   display: grid;
@@ -1724,18 +1751,6 @@ main > section {
   grid-column: 1 / -1;
   justify-self: start;
   margin-top: 24px;
-}
-@media (min-width: 1024px) and (min-height: 760px) {
-  #features {
-    --h: 2;
-  }
-  #features .wrap {
-    display: grid;
-    grid-template-rows: 100svh auto;
-  }
-  .g2__b {
-    margin-top: 0;
-  }
 }
 
 .features {
@@ -2081,14 +2096,30 @@ main > section {
 .faq {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 var(--gap);
+  gap: var(--gap);
 }
 .faq__item {
   display: grid;
   gap: 10px;
   align-content: start;
-  padding: 28px 0 32px;
-  border-top: 1px solid var(--stroke-card);
+  padding: 28px 28px 32px;
+  border-radius: var(--r-card);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 60%), var(--surface-1);
+  box-shadow: var(--shadow-card);
+}
+.faq__ic {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: var(--shell-soft);
+  color: var(--mint);
+}
+.faq__ic svg {
+  width: 22px;
+  height: 22px;
 }
 .faq__item h3 {
   font-size: 20px;
@@ -2111,21 +2142,39 @@ main > section {
 /* ---------- 7. The close and the footer, on the shell's green ---------- */
 
 .closing {
-  --h: 1;
-  min-height: 100svh;
   padding: var(--pad-t) 0 40px;
+}
+/* The shell's green as a panel on the ground, the snail on its trail. */
+.close-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 36px var(--gap);
+  padding: clamp(28px, 5vw, 64px);
+  border-radius: var(--r-frame);
   background:
-    radial-gradient(900px 500px at 50% 0%, rgb(255 255 255 / 0.12), transparent 70%),
+    radial-gradient(900px 500px at 20% 0%, rgb(255 255 255 / 0.16), transparent 70%),
+    radial-gradient(600px 400px at 100% 100%, rgb(6 37 32 / 0.22), transparent 70%),
     var(--shell);
   color: var(--on-shell);
   color-scheme: light;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.3) inset, 0 40px 80px -40px rgb(0 0 0 / 0.65);
 }
-.closing__in {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 80px;
-  min-height: calc(100svh - var(--pad-t) - 40px);
+.close__art {
+  align-self: end;
+  justify-self: end;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+}
+.close__trail {
+  fill: none;
+  stroke: var(--on-shell);
+  stroke-opacity: 0.3;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 2 18;
 }
 .close {
   display: grid;
@@ -2151,7 +2200,7 @@ main > section {
 .closing .btn--primary:active {
   background: #040f0d;
 }
-.closing :focus-visible {
+.close-panel :focus-visible {
   outline-color: var(--on-shell);
 }
 .release {
@@ -2159,18 +2208,20 @@ main > section {
   font-weight: 500;
 }
 .install {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap);
   width: 100%;
-  margin-top: 40px;
 }
 .install li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
-  padding-top: 18px;
-  border-top: 1px solid rgb(6 37 32 / 0.28);
+  padding: 18px 20px 20px;
+  border-radius: 14px;
+  background: rgb(6 37 32 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(6 37 32 / 0.14);
 }
 .install li > span:last-child {
   display: grid;
@@ -2197,11 +2248,30 @@ main > section {
 }
 .foot {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 16px 32px;
-  padding-top: 28px;
-  border-top: 1px solid rgb(6 37 32 / 0.28);
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 32px var(--gap);
+  margin-top: 64px;
+}
+.foot__brand p {
+  max-width: 36ch;
+  margin-top: 12px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.foot__col {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+}
+.foot__col h3 {
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.foot__col a {
+  font-size: 15px;
 }
 .brand--foot {
   font-size: 22px;
@@ -2212,7 +2282,7 @@ main > section {
   justify-content: flex-end;
   gap: 4px 24px;
 }
-.foot__links a,
+.foot__col a,
 .legal a {
   font-weight: 600;
   text-decoration: underline;
@@ -2220,13 +2290,16 @@ main > section {
   text-underline-offset: 4px;
   transition: text-decoration-color 160ms linear;
 }
-.foot__links a:hover,
+.foot__col a:hover,
 .legal a:hover {
   text-decoration-color: currentColor;
 }
 .legal {
   grid-column: 1 / -1;
+  padding-top: 24px;
+  border-top: 1px solid var(--stroke-card);
   font-size: 14px;
+  color: var(--text-secondary);
 }
 @media (max-width: 1023px) {
   .install {
@@ -2234,11 +2307,24 @@ main > section {
     gap: 0;
     margin-top: 24px;
   }
+  .install {
+    gap: 10px;
+  }
   .install li {
-    padding: 16px 0;
+    padding: 16px;
+  }
+  .close-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .close__art {
+    max-width: 320px;
+    justify-self: center;
   }
   .foot {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .foot__brand {
+    grid-column: 1 / -1;
   }
   .foot__links {
     justify-content: flex-start;
@@ -2257,8 +2343,8 @@ main > section {
     width: 22px;
     height: 22px;
   }
-  .closing__in {
-    gap: 56px;
+  .foot {
+    margin-top: 48px;
   }
 }
 
@@ -2288,9 +2374,9 @@ main > section {
     gap: var(--gap);
   }
   .beats li {
-    padding: 52px 0 0;
+    padding: 60px 0 0;
   }
-  .beats li::before {
+  .beats .beats__ic {
     top: 16px;
   }
   .conns {
@@ -2303,7 +2389,7 @@ main > section {
     padding: 12px 0;
   }
   .faq__item {
-    padding: 22px 0 24px;
+    padding: 22px 20px 24px;
   }
 }
 
@@ -2351,5 +2437,187 @@ main > section {
   *::after {
     transition-duration: 1ms !important;
     animation: none !important;
+  }
+}
+
+/* ---------- Motion: the charts draw themselves once, in view ---------- */
+
+@media (forced-colors: none) {
+  [data-reveal] .trace__line {
+    stroke-dasharray: 1 1;
+  }
+  [data-reveal="wait"] .trace__line {
+    stroke-dashoffset: 1;
+  }
+  [data-reveal="in"] .trace__line {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 2200ms linear;
+  }
+  [data-reveal="wait"] :is(.trace__mark, .trace__note, .trace__label, .trace__now) {
+    opacity: 0;
+  }
+  [data-reveal="in"] :is(.trace__mark, .trace__note) {
+    transition: opacity 400ms 560ms linear;
+  }
+  [data-reveal="in"] :is(.trace__label, .trace__now) {
+    transition: opacity 500ms 2100ms linear;
+  }
+  [data-reveal="wait"] .mbar i {
+    clip-path: inset(0 100% 0 0);
+  }
+  [data-reveal="in"] .mbar i {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 900ms var(--ease-out);
+  }
+  [data-reveal="in"] .mbar i + i {
+    transition-delay: 160ms;
+  }
+  [data-reveal="in"] .stepcard:nth-child(2) .mbar i {
+    transition-delay: 200ms;
+  }
+  [data-reveal="in"] .stepcard:nth-child(2) .mbar i + i {
+    transition-delay: 360ms;
+  }
+  [data-reveal="in"] .stepcard:nth-child(3) .mbar i {
+    transition-delay: 400ms;
+  }
+  [data-reveal="in"] .stepcard:nth-child(3) .mbar i + i {
+    transition-delay: 560ms;
+  }
+}
+/* Now, on the line with SnailNet: a dot, and a slow ring from it. */
+.trace__now {
+  fill: var(--mint);
+  stroke: var(--surface-1);
+  stroke-width: 3;
+}
+.trace__ping {
+  fill: var(--mint);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+[data-reveal="in"] .trace__ping {
+  animation: ping 2600ms 2400ms var(--ease-out) infinite;
+}
+@keyframes ping {
+  from {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+/* ---------- Icons beside words ---------- */
+
+.reads dt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.reads dt svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--cream-link);
+}
+
+/* The mode that's on says so, as in the app. */
+.tile:has(input:checked)::after {
+  content: "On";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--on-accent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ---------- Features: menus come from the button that opens them ---------- */
+
+.frow--btn {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+.frow__left {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: calc(var(--left) * 1%);
+  height: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--mint);
+  opacity: 0.75;
+}
+.fbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: var(--surface-3);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.fbtn svg {
+  width: 14px;
+  height: 14px;
+}
+.fbtn--live,
+.fbtn--on {
+  background: var(--shell);
+  color: var(--on-shell);
+  box-shadow: 0 0 0 4px var(--shell-soft);
+}
+.menu--from {
+  position: relative;
+  margin-top: 4px;
+}
+.menu--from::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 36px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  box-shadow: -1px -1px 0 var(--stroke-card);
+  transform: rotate(45deg);
+}
+.frow--add {
+  background: transparent;
+  border: 1.5px dashed var(--stroke-strong);
+  color: var(--text-secondary);
+}
+.frow--add b {
+  color: var(--text-primary);
+}
+.ico--add {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--stroke-strong);
+}
+.ico--add svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+@media (forced-colors: active) {
+  .faq__item,
+  .close-panel,
+  .section--cream > .wrap {
+    border: 1px solid CanvasText;
   }
 }

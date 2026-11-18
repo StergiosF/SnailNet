@@ -135,13 +135,13 @@
       <h2 id="why-h">Ping stays low while Steam downloads</h2>
       <p class="intro">A game download takes the whole line: the video buffers, the call breaks up and ping jumps mid-match. SnailNet keeps every app to its slice.</p>
       <ol class="beats">
-        <li><b>A game download starts</b><span>Steam takes its slice, plus any room nobody else is using.</span></li>
-        <li><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
-        <li><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-download"/></svg></span><b>A game download starts</b><span>Steam takes its slice, plus any room nobody else is using.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
       </ol>
     </div>
 
-    <figure class="card chart" aria-labelledby="chart-t">
+    <figure class="card chart" data-reveal aria-labelledby="chart-t">
       <div class="chart__top">
         <p class="chart__title" id="chart-t">Ping during a game download</p>
         <ul class="legend">
@@ -158,8 +158,10 @@
         <text class="trace__note" x="210" y="62" aria-hidden="true">Steam starts downloading</text>
         <text class="trace__axis" x="48" y="24" aria-hidden="true">Ping (lower is better)</text>
         <text class="trace__axis" x="620" y="368" text-anchor="end" aria-hidden="true">Time</text>
-        <polyline class="trace__line trace__line--without" points="40,322 60,320 80,323 100,321 120,322 140,320 160,322 180,321 200,320 220,190 240,118 260,162 280,85 300,132 320,75 340,178 360,108 380,62 400,150 420,98 440,168 460,80 480,125 500,90 520,182 540,70 560,142 580,110 600,82 620,155"/>
-        <polyline class="trace__line trace__line--with" points="40,321 60,322 80,320 100,322 120,321 140,322 160,320 180,321 200,322 220,316 240,314 260,317 280,313 300,316 320,315 340,313 360,317 380,314 400,316 420,313 440,315 460,317 480,314 500,316 520,313 540,315 560,317 580,314 600,316 620,315"/>
+        <polyline class="trace__line trace__line--without" pathLength="1" points="40,322 60,320 80,323 100,321 120,322 140,320 160,322 180,321 200,320 220,190 240,118 260,162 280,85 300,132 320,75 340,178 360,108 380,62 400,150 420,98 440,168 460,80 480,125 500,90 520,182 540,70 560,142 580,110 600,82 620,155"/>
+        <polyline class="trace__line trace__line--with" pathLength="1" points="40,321 60,322 80,320 100,322 120,321 140,322 160,320 180,321 200,322 220,316 240,314 260,317 280,313 300,316 320,315 340,313 360,317 380,314 400,316 420,313 440,315 460,317 480,314 500,316 520,313 540,315 560,317 580,314 600,316 620,315"/>
+        <circle class="trace__ping" cx="620" cy="315" r="6" aria-hidden="true"/>
+        <circle class="trace__now" cx="620" cy="315" r="6" aria-hidden="true"/>
         <text class="trace__label" x="612" y="296" text-anchor="end" aria-hidden="true">With SnailNet</text>
       </svg>
     </figure>
@@ -173,9 +175,9 @@
       <h2 id="how-h">How the split works, in 3 steps</h2>
       <p class="intro">Each slice is a guarantee when the line is busy, never a cage. On a 20 Mbps line:</p>
     </div>
-    <div class="grid steps">
+    <div class="grid steps" data-reveal>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true">1</span>
+        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-slice"/></svg><b>1</b></span>
         <h3>Give each app a slice</h3>
         <p>Steam 40%, YouTube 60%. Apps you haven't named share the rest, never under 5%.</p>
         <div class="panel" data-ui aria-hidden="true">
@@ -185,7 +187,7 @@
         </div>
       </article>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true">2</span>
+        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-busy"/></svg><b>2</b></span>
         <h3>A busy line keeps every slice</h3>
         <p>While both want more, Steam gets 8 Mbps and YouTube 12, however hard Steam pushes.</p>
         <div class="panel" data-ui aria-hidden="true">
@@ -195,7 +197,7 @@
         </div>
       </article>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true">3</span>
+        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-spare"/></svg><b>3</b></span>
         <h3>Spare room goes where it's needed</h3>
         <p>Pause the video and Steam gets the whole line. Press play and YouTube's slice comes straight back.</p>
         <div class="panel" data-ui aria-hidden="true">
@@ -267,6 +269,7 @@
           <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
           <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
           <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/netflix.svg" alt=""></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">When the line is free</span></span>
+          <span class="frow frow--add"><span class="ico ico--add"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></span><span class="frow__nm"><b>Add a website</b><small>Type a name, like twitch.tv</small></span></span>
         </div>
       </article>
 
@@ -274,8 +277,8 @@
         <h3>Lets games and calls go first</h3>
         <p>The app in front sends first. Boost lets one app go first for an hour, four hours or until you stop it.</p>
         <div class="panel panel--boost" data-ui aria-hidden="true">
-          <span class="frow frow--boosted"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52 min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span></span>
-          <span class="menu">
+          <span class="frow frow--boosted frow--btn"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52 min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg>Boost</span><i class="frow__left" style="--left: 87"></i></span>
+          <span class="menu menu--from">
             <b>Let Discord go first</b>
             <small>It gets at least half your line, then everything goes back by itself.</small>
             <span class="menu__item is-on">For 1 hour</span>
@@ -304,7 +307,8 @@
         <p>If anything goes wrong, your traffic flows straight through. Pause stops everything in one click.</p>
         <div class="panel panel--pause" data-ui aria-hidden="true">
           <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
-          <span class="menu">
+          <span class="fbtn fbtn--on"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span>
+          <span class="menu menu--from">
             <b>Pause SnailNet</b>
             <small>Nothing is shared out or blocked while it's paused.</small>
             <span class="menu__item">For 15 minutes</span>
@@ -325,8 +329,8 @@
       <h2 id="privacy-h">Nothing about you leaves your PC</h2>
       <p class="intro">No account, no telemetry, no analytics, and uninstalling can delete everything it kept.</p>
       <dl class="reads">
-        <div><dt>Reads, on your PC only</dt><dd>Which program owns each connection, and the website's name as it connects.</dd></div>
-        <div><dt>Never reads</dt><dd>What you send or receive. Your settings and logs stay on your PC.</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye"/></svg>Reads, on your PC only</dt><dd>Which program owns each connection, and the website's name as it connects.</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye-off"/></svg>Never reads</dt><dd>What you send or receive. Your settings and logs stay on your PC.</dd></div>
       </dl>
       <a class="link" href="https://github.com/StergiosF/SnailNet#privacy">Read the full privacy notes</a>
     </div>
@@ -352,27 +356,27 @@
     </div>
     <div class="faq">
       <div class="faq__item">
-        <h3>If I close the window, does it stop?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-service"/></svg></span><h3>If I close the window, does it stop?</h3>
         <p>No. A Windows service does the work, so your rules keep working with the app closed. Use Pause to stop shaping.</p>
       </div>
       <div class="faq__item">
-        <h3>Will it make my internet slower?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-speed"/></svg></span><h3>Will it make my internet slower?</h3>
         <p>It sends slightly below your line speed on purpose, which keeps ping low while something big downloads. The cost is a sliver of top speed.</p>
       </div>
       <div class="faq__item">
-        <h3>Does it work in every browser?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-globe"/></svg></span><h3>Does it work in every browser?</h3>
         <p>Yes. Website rules go by the site's name. A few sites hide their names; their traffic still counts toward the browser's slice.</p>
       </div>
       <div class="faq__item">
-        <h3>Does it work with my game's anti-cheat?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span><h3>Does it work with my game's anti-cheat?</h3>
         <p>It hasn't been tested with anti-cheat systems yet. If a game complains, pause SnailNet and please open an issue on GitHub.</p>
       </div>
       <div class="faq__item">
-        <h3>Does it shape uploads too?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-upload"/></svg></span><h3>Does it shape uploads too?</h3>
         <p>Yes, when you give it an upload speed. Leave a speed empty and SnailNet leaves that direction alone.</p>
       </div>
       <div class="faq__item">
-        <h3>Does it cost anything?</h3>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-free"/></svg></span><h3>Does it cost anything?</h3>
         <p>No. SnailNet is free and open source under the GPL-3.0, with no account and no telemetry.</p>
       </div>
     </div>
@@ -383,12 +387,18 @@
 
 <!-- The close and the footer: one section on the shell's green. -->
 <footer class="closing" id="download" aria-labelledby="close-h">
-  <div class="wrap closing__in">
-    <div class="close">
-      <h2 id="close-h">Download SnailNet for Windows</h2>
-      <p class="close__line">Free and open source, with no account. Windows 10 and 11, 64-bit.</p>
-      <a class="btn btn--primary btn--xl" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
-      <p class="release" data-release hidden></p>
+  <div class="wrap">
+    <div class="close-panel">
+      <div class="close">
+        <h2 id="close-h">Download SnailNet for Windows</h2>
+        <p class="close__line">Free and open source, with no account. Windows 10 and 11, 64-bit.</p>
+        <a class="btn btn--primary btn--xl" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
+        <p class="release" data-release hidden></p>
+      </div>
+      <svg class="close__art" viewBox="0 0 520 360" aria-hidden="true">
+        <path class="close__trail" d="M10 318C120 318 160 300 250 304"/>
+        <use href="#snail-dark" x="200" y="20" width="320" height="320"/>
+      </svg>
       <ol class="install">
         <li><span class="install__n" aria-hidden="true">1</span><span><b>Run the installer</b><small>Windows asks for permission once, to add the SnailNet service.</small></span></li>
         <li><span class="install__n" aria-hidden="true">2</span><span><b>Choose More info, then Run anyway</b><small>It isn't code-signed yet, so Windows may say it protected your PC.</small></span></li>
@@ -397,15 +407,23 @@
     </div>
 
     <div class="foot">
-      <a class="brand brand--foot" href="#top" aria-label="SnailNet, back to the top">
-        <svg viewBox="0 0 512 512" width="36" height="36" aria-hidden="true"><use href="#snail-dark"/></svg>
-        <span>SnailNet</span>
-      </a>
-      <nav class="foot__links" aria-label="Project links">
+      <div class="foot__brand">
+        <a class="brand brand--foot" href="#top" aria-label="SnailNet, back to the top">
+          <svg viewBox="0 0 512 512" width="36" height="36" aria-hidden="true"><use href="#snail-light"/></svg>
+          <span>SnailNet</span>
+        </a>
+        <p>Shares your PC's internet between apps and websites, by percentage.</p>
+      </div>
+      <nav class="foot__col" aria-labelledby="foot-project">
+        <h3 id="foot-project">Project</h3>
         <a href="https://github.com/StergiosF/SnailNet">Source on GitHub</a>
         <a href="https://github.com/StergiosF/SnailNet/releases">All releases</a>
-        <a href="https://github.com/StergiosF/SnailNet#readme">README</a>
         <a href="https://github.com/StergiosF/SnailNet/blob/main/LICENSE">Licence</a>
+      </nav>
+      <nav class="foot__col" aria-labelledby="foot-help">
+        <h3 id="foot-help">Help</h3>
+        <a href="https://github.com/StergiosF/SnailNet#readme">README</a>
+        <a href="https://github.com/StergiosF/SnailNet#help-my-internet-broke">If your internet breaks</a>
         <a href="https://github.com/StergiosF/SnailNet/issues">Report a problem</a>
       </nav>
       <p class="legal">© 2026 Stergios Fotoglou. SnailNet is free software under the GNU GPL v3. Set in Atkinson Hyperlegible Next (<a href="fonts/OFL.txt">OFL</a>). Product names and logos are trademarks of their owners.</p>
@@ -439,6 +457,17 @@
     <symbol id="g-window" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 9.5h17"/></g></symbol>
     <symbol id="g-drag" viewBox="0 0 24 24"><path d="M8 12h8M6 9l-3 3 3 3M18 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="g-router" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01M12 13V9M8.5 7.5a5 5 0 0 1 7 0M6 5a8.5 8.5 0 0 1 12 0"/></g></symbol>
+    <symbol id="g-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+    <symbol id="g-eye-off" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.6 3.4M6.6 7.4C4 9.2 2.5 12 2.5 12S6 18.5 12 18.5c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2M4 4l16 16"/></g></symbol>
+    <symbol id="g-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" fill="currentColor"/></symbol>
+    <symbol id="s-slice" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><circle cx="11" cy="13" r="8"/><path d="M14 2.5a8.5 8.5 0 0 1 7.5 7.5H14z" fill="currentColor"/></g></symbol>
+    <symbol id="s-busy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="10" rx="2.5"/><path d="M10 7v10"/><path d="M5.5 12h1.5M13.5 12h4.5" stroke-width="2.4"/></g></symbol>
+    <symbol id="s-spare" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h13m-4.5-4.5L16 12l-4.5 4.5M20.5 5v14"/></g></symbol>
+    <symbol id="q-service" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="13" rx="2.5"/><path d="M3 8.5h18M8 21h8M12 17.5V21"/><path d="m10 11.5 4 3m0-3-4 3"/></g></symbol>
+    <symbol id="q-speed" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.4" fill="currentColor"/></g></symbol>
+    <symbol id="q-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></g></symbol>
+    <symbol id="q-upload" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9m0 0-4.5 4.5M12 9l4.5 4.5M5 4h14"/></g></symbol>
+    <symbol id="q-free" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10z"/></g></symbol>
     <symbol id="m-balanced" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
     <symbol id="m-streaming" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
     <symbol id="m-gaming" viewBox="0 0 24 24"><path d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2.3 2.3 0 0 1-4 .9L14.5 15h-5l-1.6 2.1a2.3 2.3 0 0 1-4-.9l-.8-3.3A4 4 0 0 1 7 8z" fill="currentColor"/></symbol>

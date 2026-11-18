@@ -138,6 +138,27 @@
     window.addEventListener("scroll", clear, { passive: true });
   }
 
+  // ---------- Charts draw themselves once, as they come into view ----------
+  // Without the observer, or with reduced motion, they stay drawn.
+
+  const reveals = document.querySelectorAll("[data-reveal]");
+  if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const seen = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          e.target.dataset.reveal = "in";
+          seen.unobserve(e.target);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    reveals.forEach((el) => {
+      el.dataset.reveal = "wait";
+      seen.observe(el);
+    });
+  }
+
   // ---------- The split demo ----------
   // A 20 Mbps line (5% is 1 Mbps) between a Steam download (wants all it can get) and
   // YouTube (a stream wanting about 9 Mbps). Each slice is a guarantee when

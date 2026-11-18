@@ -17,8 +17,12 @@ was built from, kept for its research and its "why v1 looked bad".
   illustration); "How the split works, in 3 steps" on the lighter band,
   with the live split demo to try under the steps; four features as
   a 2×2 over two screens (website slices, Boost, modes, stepping aside and
-  Pause); privacy on **cream**; six open FAQ answers; the close and footer
-  on the **shell green** (dark button there). Deal and reasons are in the
+  Pause); privacy on a **cream** panel; six open FAQ answers as cards with
+  icons; the close on a **shell green** panel (dark button, the snail on
+  its trail) and the footer on the ground. Cream and green are panels set
+  on the dark ground, never full-width flips; sections size to their
+  content (no screen-height minimums). The ping chart and the step bars
+  draw once as they scroll into view (none with reduced motion). Deal and reasons are in the
   comment at the top of `site/index.html`.
 - **Checked:** `design-taste-frontend` `check.mjs` has no findings at
   1440×900, 1280×800, 1024×768, 820×1180 and 768×1024; perf about 70 KB.
