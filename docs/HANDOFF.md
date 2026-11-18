@@ -2,7 +2,32 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, end of day; newest)
+## Start here (2026-11-18, night; newest)
+
+Pushed on `main` (last: b9e0c61). Done this session (decisions in PLAN.md):
+
+- **A, new-app notifications, notify mode (§11.4):** `snailnet-service::newapps`
+  (`known-apps.txt`, 10-minute quiet learning, Windows parts and apps with
+  rules stay quiet), `Event::NewApp` (cap `new-apps`), `Snapshot.prompts`,
+  `AnswerPrompt` fine/slice/block; app `toast.rs` (WinRT toasts, AUMID
+  `net.snailnet.app`, summary after fullscreen games), `give-slice` opens the
+  split; Settings → Windows switch. Not seen in a real window or service.
+- **Phase 6 (subagent, 5cc9d75 + b9e0c61):** NSIS installer
+  (`tauri.release.conf.json`, `windows/hooks.nsh`, `scripts/build-installer.ps1`),
+  updater (`updates.rs`, Settings → About → Updates), `release.yml`.
+  The installer builds but was never run. The updater key lives at
+  `%USERPROFILE%\.tauri\snailnet-updater.key` (not in the repo).
+- **Needs the user:** make the repo (or a releases repo) public for the
+  update feed; add the `TAURI_SIGNING_PRIVATE_KEY` secret; back up the key;
+  bump the version from 0.0.1; test the installer on clean Win10/11 VMs.
+
+Next: **B strict mode** (hold a new family by putting it in the plan's
+blocked list for ≤ 20 s; dropped SYNs retry by themselves; note that apply()
+restarts the shaper when blocking starts), then **C** (the WinDivert SOCKET
+layer is opened SNIFF today; refusing `connect` needs a non-sniff handle, so
+weigh fail-closed risk; tray counter), **D** family split/merge, **E** small.
+
+## Start here (2026-11-18, end of day)
 
 Everything is committed and pushed on `main`. The user leaves decisions
 to Claude (pick, decide, record in PLAN.md, commit + push each verified
