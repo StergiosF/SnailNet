@@ -12,6 +12,7 @@
       "../../target/release/snailnet-service.exe": "snailnet-service.exe",
       "../../third_party/windivert/x64/WinDivert.dll": "WinDivert.dll",
       "../../third_party/windivert/x64/WinDivert64.sys": "WinDivert64.sys",
+      "../../LICENSE": "licenses/SnailNet-LICENSE.txt",
       "../../third_party/windivert/LICENSE": "licenses/WinDivert-LICENSE.txt",
       "../../target/THIRD-PARTY-NOTICES.txt": "licenses/THIRD-PARTY-NOTICES.txt"
     },

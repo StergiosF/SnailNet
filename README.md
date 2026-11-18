@@ -101,8 +101,10 @@ cd app; npm ci; npm run tauri dev
 
 ## Licences
 
-- SnailNet's own licence hasn't been chosen yet; until it is, all rights
-  are reserved.
+- **SnailNet** is free software under the GNU General Public License,
+  version 3 or (at your option) any later version: see `LICENSE`
+  (shipped as `licenses\SnailNet-LICENSE.txt` in the install folder).
+  Copyright © 2026 Stergios Fotoglou.
 - **WinDivert** 2.2.2 (driver and DLL, unmodified, loaded at run time) is
   used under the GNU LGPL v3 (it is dual-licensed LGPLv3 / GPLv2). Its
   licence ships as `licenses\WinDivert-LICENSE.txt` in the install folder,

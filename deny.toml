@@ -24,7 +24,7 @@ allow = [
 ]
 
 [licenses.private]
-# Our own crates are UNLICENSED and publish = false.
+# Our own crates are GPL-3.0-or-later (LICENSE) and publish = false.
 ignore = true
 
 [bans]
