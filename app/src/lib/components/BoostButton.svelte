@@ -65,10 +65,15 @@
     menu?.hidePopover();
     if (own) void putBack(own);
   }
-  function merge(e: Event & { currentTarget: HTMLSelectElement }) {
-    const into = others.find((o) => o.id === e.currentTarget.value);
+  // The select only picks; the button does it. Chromium on Windows fires
+  // `change` on every arrow key in a closed select, so acting on change
+  // would merge into whichever app the first key press landed on.
+  let mergeTo = $state("");
+  function merge() {
+    const into = others.find((o) => o.id === mergeTo);
     if (!into) return;
     menu?.hidePopover();
+    mergeTo = "";
     void mergeInto({ id: target.id, name }, into);
   }
   function choose(choice: FirstChoice) {
@@ -126,15 +131,18 @@
         {/each}
       {/if}
       {#if others.length > 0}
-        <label class="merge">
-          <span>{t("group.merge")}</span>
-          <select onchange={merge}>
-            <option value="" selected>…</option>
-            {#each others as o (o.id)}
-              <option value={o.id}>{o.name}</option>
-            {/each}
-          </select>
-        </label>
+        <div class="merge" role="group" aria-labelledby="{uid}-merge">
+          <span id="{uid}-merge">{t("group.merge")}</span>
+          <div class="row">
+            <select bind:value={mergeTo} aria-labelledby="{uid}-merge">
+              <option value="">{t("group.merge.pick")}</option>
+              {#each others as o (o.id)}
+                <option value={o.id}>{o.name}</option>
+              {/each}
+            </select>
+            <button type="button" class="go" disabled={mergeTo === ""} onclick={merge}>{t("group.merge.go")}</button>
+          </div>
+        </div>
       {/if}
       <hr />
       <button type="button" role="menuitem" class="danger" onclick={blockIt}>
@@ -187,8 +195,13 @@
     font-size: 13px;
     color: var(--text-secondary);
   }
+  .merge .row {
+    display: flex;
+    gap: 6px;
+  }
   .merge select {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     height: 34px;
     padding: 0 8px;
     border: 0;
@@ -196,6 +209,22 @@
     background: var(--surface-3);
     color: var(--text-primary);
     font-size: 14px;
+  }
+  .merge .go {
+    flex: none;
+    width: auto;
+    height: 34px;
+    padding: 0 12px;
+    background: var(--surface-3);
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+  .merge .go:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .merge .go:disabled {
+    opacity: 0.5;
   }
   @media (forced-colors: active) {
     .b {

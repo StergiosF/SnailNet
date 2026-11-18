@@ -60,16 +60,17 @@
       hotkeyTaken = on ? { keys } : null;
     }
   }
-  async function setHotkeyKeys(keys: string) {
+  async function setHotkeyKeys(select: HTMLSelectElement) {
     if (!hotkey) return;
+    const keys = select.value;
     const kept = keysLabel(hotkey.keys);
     try {
       hotkey = await invoke<HotkeyInfo>("set_hotkey_keys", { keys });
       hotkeyTaken = null;
     } catch {
       hotkeyTaken = { keys: keysLabel(keys), kept };
-      // Put the select back on the keys still in use.
-      hotkey = { ...hotkey };
+      // Back on the keys still in use (same value, so Svelte won't).
+      select.value = hotkey.keys;
     }
   }
 
@@ -355,17 +356,15 @@
       </div>
       <div class="hotkey">
         {#if hotkey?.on}
-          {#key hotkey}
-            <select
-              aria-label={t("settings.hotkey.pick")}
-              value={hotkey.keys}
-              onchange={(e) => void setHotkeyKeys(e.currentTarget.value)}
-            >
-              {#each hotkey.choices as c (c.keys)}
-                <option value={c.keys}>{c.label}</option>
-              {/each}
-            </select>
-          {/key}
+          <select
+            aria-label={t("settings.hotkey.pick")}
+            value={hotkey.keys}
+            onchange={(e) => void setHotkeyKeys(e.currentTarget)}
+          >
+            {#each hotkey.choices as c (c.keys)}
+              <option value={c.keys}>{c.label}</option>
+            {/each}
+          </select>
         {/if}
         <input
           type="checkbox"
