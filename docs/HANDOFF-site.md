@@ -1,5 +1,38 @@
 # Handoff: revamp the SnailNet landing page
 
+## Done: v2 shipped (2026-11-18)
+
+The revamp below is built and live; the rest of this file is the brief it
+was built from, kept for its research and its "why v1 looked bad".
+
+- **Choices the user made:** headless screenshots allowed while building;
+  **no measured ping numbers on the page** (the ping picture is an
+  unnumbered illustration, labelled "lower is better", its alt text says
+  it's a sketch); no app screenshots (visuals are HTML drawn from the
+  app's components); design references left to Claude.
+- **Composition (top to bottom):** centred hero with the live split demo
+  at hero scale inside an app window (the demo *is* the hero); "Ping stays
+  low while Steam downloads" (three beats beside the ping illustration);
+  "How the split works, in 3 steps" on the lighter band; four features as
+  a 2×2 over two screens (website slices, Boost, modes, stepping aside and
+  Pause); privacy on **cream**; six open FAQ answers; the close and footer
+  on the **shell green** (dark button there). Deal and reasons are in the
+  comment at the top of `site/index.html`.
+- **Checked:** `design-taste-frontend` `check.mjs` has no findings at
+  1440×900, 1280×800, 1024×768, 820×1180 and 768×1024; perf about 70 KB.
+  Accepted against the skill's rules on purpose: the tagline stays the h1
+  (brand), the release-button wording ("Coming soon · watch on GitHub")
+  stays (tested plumbing), and on a 390 phone sections are taller than one
+  screen because the stacked content needs it (the phone hero grows so all
+  of the demo stays reachable).
+- **Tests:** `scripts/site-test.cjs` (jsdom from a temp install; usage in
+  its header) covers the download buttons and the demo: 11 tests.
+- **The snail** was also fixed the same day: its eye stalks now grow from
+  the head (app icon set, tray, Snail.svelte, README pictures, favicons,
+  og.png).
+
+---
+
 Start a fresh session with: **"read docs/HANDOFF-site.md and revamp the
 landing page"**. Written 2026-11-18, after v1 of the page shipped. The
 project handoff is `docs/HANDOFF.md`; the app's look is

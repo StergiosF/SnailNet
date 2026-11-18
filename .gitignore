@@ -5,5 +5,6 @@ node_modules/
 app/dist/
 app/src-tauri/gen/
 
-# Design-skill scratch (impeccable)
+# Design-skill scratch (impeccable, design-taste-frontend)
 .impeccable/
+.taste-skill/
