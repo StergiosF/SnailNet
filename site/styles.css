@@ -672,6 +672,435 @@ main > section {
   }
 }
 
+/* ---------- The app itself: its Now page, as NowPage.svelte draws it ---------- */
+
+.app {
+  container: app / inline-size;
+  display: flex;
+  width: min(100%, 1200px);
+  margin: 0;
+  margin-inline: auto;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.35;
+  pointer-events: none;
+  user-select: none;
+}
+.app svg {
+  fill: none;
+  stroke: currentColor;
+}
+.app__side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 208px;
+  padding: 12px 12px 16px;
+  background: var(--surface-side);
+}
+.app__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 24px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.app__brand svg {
+  stroke: none;
+}
+.app__nav {
+  display: grid;
+  gap: 2px;
+}
+.app__nav > span {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.app__nav svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.app__nav .is-on {
+  background: var(--shell-soft);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.app__nav .is-on svg {
+  color: var(--shell);
+}
+.app__pause {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin-top: auto;
+  padding: 0 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  font-size: 15px;
+  font-weight: 700;
+}
+.app__pause svg {
+  width: 16px;
+  height: 16px;
+}
+.app__line {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 10px 12px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.app__k {
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+.app__lrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.app__lrow b {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.app__lrow small,
+.awho__mb small {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.app__main {
+  container: page / inline-size;
+  flex: 1;
+  min-width: 0;
+  background:
+    radial-gradient(900px 420px at 62% -12%, rgb(47 168 142 / 0.17), transparent 70%),
+    var(--surface-ground);
+}
+.app__bar {
+  display: flex;
+  height: 32px;
+}
+.app__bar .win__caps i {
+  width: 46px;
+}
+.app__brand--bar {
+  display: none;
+  padding: 0 0 0 14px;
+  font-size: 13px;
+  gap: 8px;
+}
+.app__page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 32px 28px;
+  isolation: isolate;
+}
+.app__shell {
+  position: absolute;
+  z-index: -1;
+  top: -96px;
+  right: -24px;
+  width: 420px;
+  height: 420px;
+  color: var(--shell);
+  stroke-linecap: round;
+}
+.app__shell circle {
+  stroke-width: 2;
+  stroke-opacity: 0.1;
+}
+.app__shell path {
+  stroke-width: 10;
+  stroke-opacity: 0.09;
+}
+.app__h {
+  margin-top: 4px;
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.app__tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.atile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 132px;
+  padding: 16px 16px 18px;
+  border-radius: var(--r-card);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 70%), var(--surface-1);
+  box-shadow: var(--shadow-card);
+}
+.atile b {
+  font-size: 16px;
+}
+.atile__body {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.atile__gl {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 6px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+.atile__gl svg {
+  width: 20px;
+  height: 20px;
+  stroke: none;
+}
+.atile.is-on {
+  background: linear-gradient(160deg, #f6f0df, var(--accent) 60%, #e6dcc4);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-raised);
+}
+.atile.is-on .atile__body {
+  color: #2f4a43;
+}
+.atile.is-on .atile__gl {
+  background: var(--shell);
+  color: var(--on-shell);
+}
+.atile__flag {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--on-accent);
+  color: var(--accent);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+.app__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.acard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
+}
+.acard__t {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+}
+.acard--who {
+  gap: 8px;
+  padding: 16px 12px 10px;
+}
+.acard--who .acard__t {
+  padding: 0 6px 4px;
+}
+.awho {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px;
+}
+.awho .ico {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-control);
+}
+.awho .ico img {
+  width: 22px;
+  height: 22px;
+}
+.awho__nm {
+  display: grid;
+  min-width: 0;
+}
+.awho__nm b {
+  font-size: 15px;
+}
+.awho__nm small {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.awho__mb {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.aboost {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.acard--split {
+  gap: 12px;
+  padding: 16px 18px;
+}
+.asbar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.asbar i {
+  display: flex;
+  align-items: center;
+  width: calc(var(--w) * 1%);
+  padding-left: 8px;
+  background: var(--c);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+  color: var(--on-ink);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+.asrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 40px;
+  align-items: center;
+  gap: 10px;
+}
+.asrow i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+}
+.asrow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asrow small {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.asrow b {
+  text-align: right;
+}
+.acard__btns {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.abtn {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+.abtn--quiet {
+  background: transparent;
+  color: var(--text-secondary);
+}
+/* Narrower windows, as the app itself reflows. */
+@container app (max-width: 760px) {
+  .app__side {
+    display: none;
+  }
+  .app__brand--bar {
+    display: flex;
+  }
+}
+@container page (max-width: 760px) {
+  .app__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .atile {
+    min-height: 0;
+  }
+}
+@container page (max-width: 620px) {
+  .app__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container page (max-width: 480px) {
+  .app__page {
+    gap: 14px;
+    padding: 0 14px 18px;
+  }
+  .app__h {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  .app__shell {
+    width: 260px;
+    height: 260px;
+    top: -60px;
+  }
+  .atile {
+    padding: 12px;
+  }
+  .atile__body {
+    display: none;
+  }
+  .atile__flag {
+    top: 10px;
+    right: 10px;
+  }
+  .acard--split {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  .atile,
+  .acard {
+    border: 1px solid CanvasText;
+  }
+  .atile.is-on {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+}
+
+/* The split to try, under the three steps. */
+.try {
+  margin-top: calc(var(--gap) * 2);
+}
+
 /* ---------- The app window and the live split ---------- */
 
 .win {

@@ -10,10 +10,12 @@ was built from, kept for its research and its "why v1 looked bad".
   unnumbered illustration, labelled "lower is better", its alt text says
   it's a sketch); no app screenshots (visuals are HTML drawn from the
   app's components); design references left to Claude.
-- **Composition (top to bottom):** centred hero with the live split demo
-  at hero scale inside an app window (the demo *is* the hero); "Ping stays
-  low while Steam downloads" (three beats beside the ping illustration);
-  "How the split works, in 3 steps" on the lighter band; four features as
+- **Composition (top to bottom):** centred hero with the app itself, its
+  Now page drawn in HTML from the app's components (side rail, the four
+  modes, "Using your internet", the split card; static, `role="img"`);
+  "Ping stays low while Steam downloads" (three beats beside the ping
+  illustration); "How the split works, in 3 steps" on the lighter band,
+  with the live split demo to try under the steps; four features as
   a 2×2 over two screens (website slices, Boost, modes, stepping aside and
   Pause); privacy on **cream**; six open FAQ answers; the close and footer
   on the **shell green** (dark button there). Deal and reasons are in the
@@ -24,7 +26,7 @@ was built from, kept for its research and its "why v1 looked bad".
   (brand), the release-button wording ("Coming soon · watch on GitHub")
   stays (tested plumbing), and on a 390 phone sections are taller than one
   screen because the stacked content needs it (the phone hero grows so all
-  of the demo stays reachable).
+  of the app window stays in view).
 - **Tests:** `scripts/site-test.cjs` (jsdom from a temp install; usage in
   its header) covers the download buttons and the demo: 11 tests.
 - **First release, v0.0.1, published 2026-11-18** (tag pushed, Release
