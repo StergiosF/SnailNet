@@ -111,6 +111,33 @@
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
+  // ---------- The header marks the section you're in ----------
+
+  const links = [...document.querySelectorAll('.nav__links a[href^="#"]')];
+  const targets = links.map((a) => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+  if ("IntersectionObserver" in window && targets.length) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          links.forEach((a) => {
+            if (a.getAttribute("href") === `#${e.target.id}`) a.setAttribute("aria-current", "true");
+            else a.removeAttribute("aria-current");
+          });
+        }
+      },
+      // A section counts as "in" while it crosses the middle of the screen.
+      { rootMargin: "-50% 0px -50% 0px" }
+    );
+    targets.forEach((t) => io.observe(t));
+    // Above the first named section (the hero, the why): nothing is marked.
+    const first = targets[0];
+    const clear = () => {
+      if (first.getBoundingClientRect().top > innerHeight / 2) links.forEach((a) => a.removeAttribute("aria-current"));
+    };
+    window.addEventListener("scroll", clear, { passive: true });
+  }
+
   // ---------- The split demo ----------
   // A 20 Mbps line (5% is 1 Mbps) between a Steam download (wants all it can get) and
   // YouTube (a stream wanting about 9 Mbps). Each slice is a guarantee when
@@ -181,7 +208,7 @@
       [segB, (inner * (100 - p)) / 100],
     ].forEach(([seg, width]) => {
       seg.classList.remove("is-narrow");
-      const need = seg.querySelector(".dbar__label").scrollWidth + 36;
+      const need = seg.querySelector(".dbar__label").scrollWidth + 48;
       seg.classList.toggle("is-narrow", width < need);
     });
 

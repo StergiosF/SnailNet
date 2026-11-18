@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-type="software">
+<html lang="en" data-type="software" data-buttons="tonal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -29,236 +29,304 @@
 </head>
 <body>
 <!--
-  Direction (design-taste-frontend 2.5): kind software. Hero dealt: collage
-  (text left, the app's window on a lit ground at right, cut by its frame,
-  one small card over its lower-left). Palette and type: the app's own
-  "Garden" tokens and Atkinson Hyperlegible Next (PRODUCT.md brand, fixed),
-  not dealt. Ground: sage light from the shell. No shader effect, no scroll
-  moment: the one motion moment is the split bar settling in the demo.
-  Product visuals are HTML renderings of the app's own components
-  (app/src/lib/components) with demo data; no screenshots supplied.
+  v2 (2026-11-18), a redesign; docs/HANDOFF-site.md has the brief.
+  Kind: software. Deal (design-taste-frontend 2.5): hero centred (the
+  headline over one window: here the live split, the product's own control,
+  at hero scale); nav-centre (re-dealt from nav-mega: four words, no menus
+  to put in a panel); buttons tonal (cream primary, shell-tinted secondary);
+  features-2x2; close-type. Rhythm and footer follow the brief over the
+  deal: deep green, one lighter band (how it works), one cream section
+  (privacy), the close and footer on the shell's green.
+  Palette and type: the app's own Garden tokens and Atkinson Hyperlegible
+  Next (PRODUCT.md, fixed). No effect, scene or scroll moment: the one
+  motion is the split bar itself, which moves when you move it.
+  Product visuals are HTML drawn from the app's components with demo data
+  (no screenshots supplied). The ping picture has no numbers on purpose:
+  the user chose an illustration over the measured result.
 -->
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="nav">
   <div class="wrap nav__in">
     <a class="brand" href="#top" aria-label="SnailNet, back to the top">
-      <svg class="snail" viewBox="0 0 512 512" width="30" height="30" aria-hidden="true"><use href="#snail-light"/></svg>
+      <svg viewBox="0 0 512 512" width="32" height="32" aria-hidden="true"><use href="#snail-light"/></svg>
       <span>SnailNet</span>
     </a>
     <nav class="nav__links" aria-label="Sections">
-      <a href="#split">How it works</a>
+      <a href="#how">How it works</a>
       <a href="#features">Features</a>
-      <a href="#trust">Privacy</a>
-      <a class="nav__gh" href="https://github.com/StergiosF/SnailNet"><img class="ink" src="assets/icons/github.svg" alt="" width="18" height="18">GitHub</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#questions">Questions</a>
     </nav>
-    <a class="btn btn-accent nav__cta" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
+    <div class="nav__end">
+      <a class="nav__gh" href="https://github.com/StergiosF/SnailNet" aria-label="SnailNet on GitHub"><img class="ink" src="assets/icons/github.svg" alt="" width="20" height="20"></a>
+      <a class="btn btn--primary btn--sm" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
+    </div>
   </div>
 </header>
 
 <main id="main">
 
-<!-- 1. Hero -->
+<!-- Hero: the tagline, one plain sentence, two actions, then the split itself, live. -->
 <section class="hero" id="top" aria-labelledby="hero-h">
-  <div class="wrap grid hero__grid">
-    <div class="hero__text">
-      <h1 id="hero-h">Put the bandwidth hogs in the <span class="hl">slow lane</span>.</h1>
-      <p class="lead">SnailNet shares your PC's internet between apps and websites by percentage, so the game download and YouTube both keep going.</p>
-      <div class="actions">
-        <a class="btn btn-accent btn-lg" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
-        <a class="btn btn-lg" href="#split">See how it works</a>
-      </div>
-      <ul class="chips">
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-heart"/></svg>Free</li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-code"/></svg>Open source (GPL-3.0)</li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-window"/></svg>Windows 10 and 11, 64-bit</li>
-      </ul>
-      <p class="release" data-release hidden></p>
+  <div class="wrap hero__in">
+    <p class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-window"/></svg>Free and open source · Windows 10 and 11</p>
+    <h1 id="hero-h">Put the bandwidth hogs in the <span class="hl">slow lane</span>.</h1>
+    <p class="lead">SnailNet shares your PC's internet between apps and websites by percentage, so the game download and YouTube both keep going.</p>
+    <div class="actions">
+      <a class="btn btn--primary" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
+      <a class="btn btn--tonal" href="https://github.com/StergiosF/SnailNet"><img class="ink" src="assets/icons/github.svg" alt="" width="18" height="18">See the code on GitHub</a>
     </div>
 
-    <div class="hero__art" role="img" aria-label="The SnailNet window in Balanced mode: YouTube and a Steam download share the line, and the split gives YouTube 55%, Steam 40% and everything else 5%.">
-      <svg class="art__shell" viewBox="0 0 512 512" aria-hidden="true"><circle cx="224" cy="250" r="150"/><path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0"/></svg>
-
-      <div class="win" aria-hidden="true">
-        <div class="win__bar">
+    <div class="stage">
+      <div class="win" data-demo data-ui>
+        <div class="win__bar" aria-hidden="true">
+          <span class="win__brand"><svg viewBox="0 0 512 512" width="20" height="20"><use href="#snail-light"/></svg>SnailNet</span>
+          <span class="win__crumb">Split</span>
           <span class="win__caps"><i><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></i><i><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" rx="1"/></svg></i><i><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10"/></svg></i></span>
         </div>
         <div class="win__body">
-          <div class="side">
-            <div class="side__brand"><svg viewBox="0 0 512 512" width="26" height="26"><use href="#snail-light"/></svg>SnailNet</div>
-            <span class="side__item is-on"><svg viewBox="0 0 24 24"><use href="#g-now"/></svg>Now</span>
-            <span class="side__item"><svg viewBox="0 0 24 24"><use href="#g-split"/></svg>Split</span>
-            <span class="side__item"><svg viewBox="0 0 24 24"><use href="#g-gear"/></svg>Settings</span>
+          <div class="demo__head">
+            <p class="demo__title">Try the split <span>on a 20 Mbps line</span></p>
+            <p class="demo__hint"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-drag"/></svg>Drag the cream handle</p>
+            <button type="button" class="btn btn--tonal btn--sm" data-pause aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#g-pause" data-pause-icon/></svg><span data-pause-label>Pause the video</span></button>
           </div>
-          <div class="now">
-            <svg class="now__shell" viewBox="0 0 512 512"><circle cx="224" cy="250" r="150"/><path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0"/></svg>
-            <p class="now__q">What matters right now?</p>
-            <div class="tiles tiles--win">
-              <span class="tile on"><span class="tile__gl"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Everyone gets a fair share.</span><span class="flag">On</span></span>
-              <span class="tile"><span class="tile__gl"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="tile__body">Video and calls first, downloads in the spare room.</span></span>
-              <span class="tile"><span class="tile__gl"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Voice chat first. Video and downloads step back.</span></span>
-              <span class="tile"><span class="tile__gl"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="tile__body">Downloads only use what nobody else wants.</span></span>
-            </div>
-            <div class="card who">
-              <p class="card-title">Using your internet</p>
-              <span class="who__row"><span class="ico"><img src="assets/icons/youtube.svg" alt=""></span><span class="who__nm"><b>YouTube</b><small>gets all it asks for</small></span><span class="who__mb">12.4<small> Mbps</small></span><span class="boost"><svg viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span></span>
-              <span class="who__row"><span class="ico"><img class="ink" src="assets/icons/steam.svg" alt=""></span><span class="who__nm"><b>Steam</b><small>0.7 Mbps of it is spare room</small></span><span class="who__mb">10.2<small> Mbps</small></span><span class="boost"><svg viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span></span>
-              <span class="who__row"><span class="ico"><img src="assets/icons/discord.svg" alt=""></span><span class="who__nm"><b>Discord</b><small>in Everything else</small></span><span class="who__mb">0.3<small> Mbps</small></span><span class="boost"><svg viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span></span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div class="card mini" aria-hidden="true">
-        <p class="card-title">The split</p>
-        <div class="mini__bar"><i class="k0 w55">55%</i><i class="k1 w40">40%</i><i class="ks w5"></i></div>
-        <span class="mini__row"><i class="sw k0"></i><span>YouTube</span><small>12.4 / 13.1 Mbps</small><b>55%</b></span>
-        <span class="mini__row"><i class="sw k1"></i><span>Steam</span><small>10.2 / 9.5 Mbps</small><b>40%</b></span>
-        <span class="mini__row"><i class="sw ks"></i><span>Everything else</span><small>0.6 / 1.2 Mbps</small><b>5%</b></span>
+          <div class="dbar" data-bar>
+            <div class="dbar__seg dbar__seg--a" data-seg="a"><span class="dbar__label"><span class="dbar__name">Steam</span> <b data-pct="a">40%</b></span></div>
+            <div class="dbar__seg dbar__seg--b" data-seg="b"><i class="dbar__lent"></i><span class="dbar__label"><span class="dbar__name">YouTube</span> <b data-pct="b">60%</b></span></div>
+            <div class="dbar__handle" data-handle role="slider" tabindex="0" aria-label="Steam's slice of the line" aria-valuemin="5" aria-valuemax="95" aria-valuenow="40" aria-valuetext="Steam 40%, YouTube 60%"></div>
+          </div>
+
+          <div class="drows">
+            <div class="drow">
+              <span class="ico"><img width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span>
+              <span class="drow__nm"><b>Steam</b><small data-status="a">11.0 Mbps · 3.0 Mbps of it is spare room</small></span>
+              <span class="stepper">
+                <button type="button" class="step" data-step="a" data-dir="-1" aria-label="Smaller slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+                <b data-pct="a">40%</b>
+                <button type="button" class="step" data-step="a" data-dir="1" aria-label="Bigger slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+              </span>
+            </div>
+            <div class="drow">
+              <span class="ico"><img width="24" height="24" src="assets/icons/youtube.svg" alt=""></span>
+              <span class="drow__nm"><b>YouTube</b><small data-status="b">9.0 Mbps · lending 3.0 Mbps it isn't using</small></span>
+              <span class="stepper">
+                <button type="button" class="step" data-step="b" data-dir="-1" aria-label="Smaller slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+                <b data-pct="b">60%</b>
+                <button type="button" class="step" data-step="b" data-dir="1" aria-label="Bigger slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+              </span>
+            </div>
+          </div>
+          <p class="visually-hidden" aria-live="polite" data-live></p>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 2. The split, live -->
-<section class="section" id="split" aria-labelledby="split-h">
-  <div class="wrap">
-    <div class="head">
-      <h2 id="split-h">Your connection, shared out by percentage</h2>
-      <p class="intro">A game download takes the whole line, the video buffers and ping jumps mid-match. With SnailNet each one gets its slice instead.</p>
+<!-- The problem, then the fix, beside the picture of it. -->
+<section class="section" id="why" aria-labelledby="why-h">
+  <div class="wrap split">
+    <div class="split__text">
+      <h2 id="why-h">Ping stays low while Steam downloads</h2>
+      <p class="intro">A game download takes the whole line: the video buffers, the call breaks up and ping jumps mid-match. SnailNet keeps every app to its slice.</p>
+      <ol class="beats">
+        <li><b>A game download starts</b><span>Steam takes its slice, plus any room nobody else is using.</span></li>
+        <li><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
+        <li><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
+      </ol>
     </div>
 
-    <div class="card demo" data-demo>
-      <div class="demo__top">
-        <h3 class="card-title">Try the split</h3>
-        <span class="demo__line">On a 20 Mbps line</span>
+    <figure class="card chart" aria-labelledby="chart-t">
+      <div class="chart__top">
+        <p class="chart__title" id="chart-t">Ping during a game download</p>
+        <ul class="legend">
+          <li><i class="sw sw--without"></i>Without SnailNet</li>
+          <li><i class="sw sw--with"></i>With SnailNet</li>
+        </ul>
       </div>
+      <svg class="trace" viewBox="0 0 640 380" role="img" aria-label="A sketch of ping over time, not a measurement. Before the download both lines are low. Once Steam starts downloading, ping without SnailNet jumps up and down far above the start; with SnailNet it stays low and flat.">
+        <g class="trace__grid" aria-hidden="true">
+          <path d="M40 340H620"/>
+          <path d="M40 30V340"/>
+        </g>
+        <path class="trace__mark" d="M200 52V340" aria-hidden="true"/>
+        <text class="trace__note" x="210" y="62" aria-hidden="true">Steam starts downloading</text>
+        <text class="trace__axis" x="48" y="24" aria-hidden="true">Ping (lower is better)</text>
+        <text class="trace__axis" x="620" y="368" text-anchor="end" aria-hidden="true">Time</text>
+        <polyline class="trace__line trace__line--without" points="40,322 60,320 80,323 100,321 120,322 140,320 160,322 180,321 200,320 220,190 240,118 260,162 280,85 300,132 320,75 340,178 360,108 380,62 400,150 420,98 440,168 460,80 480,125 500,90 520,182 540,70 560,142 580,110 600,82 620,155"/>
+        <polyline class="trace__line trace__line--with" points="40,321 60,322 80,320 100,322 120,321 140,322 160,320 180,321 200,322 220,316 240,314 260,317 280,313 300,316 320,315 340,313 360,317 380,314 400,316 420,313 440,315 460,317 480,314 500,316 520,313 540,315 560,317 580,314 600,316 620,315"/>
+        <text class="trace__label" x="612" y="296" text-anchor="end" aria-hidden="true">With SnailNet</text>
+      </svg>
+    </figure>
+  </div>
+</section>
 
-      <div class="dbar" data-bar>
-        <div class="dbar__seg dbar__seg--a" data-seg="a"><span class="dbar__label"><span class="dbar__name">Steam</span> <b class="num" data-pct="a">40%</b></span></div>
-        <div class="dbar__seg dbar__seg--b" data-seg="b"><i class="dbar__lent" data-lent></i><span class="dbar__label"><span class="dbar__name">YouTube</span> <b class="num" data-pct="b">60%</b></span></div>
-        <div class="dbar__handle" data-handle role="slider" tabindex="0" aria-label="Steam's slice of the line" aria-valuemin="5" aria-valuemax="95" aria-valuenow="40" aria-valuetext="Steam 40%, YouTube 60%"></div>
-      </div>
-      <p class="demo__hint"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-drag"/></svg>Drag the cream handle, or use − and + below.</p>
-
-      <div class="drows">
-        <div class="drow">
-          <span class="ico ico-lg"><img class="ink" src="assets/icons/steam.svg" alt=""></span>
-          <span class="drow__nm"><b>Steam</b><small data-status="a">11.0 Mbps · 3.0 Mbps of it is spare room</small></span>
-          <span class="stepper">
-            <button type="button" class="step" data-step="a" data-dir="-1" aria-label="Smaller slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
-            <b class="num" data-pct="a">40%</b>
-            <button type="button" class="step" data-step="a" data-dir="1" aria-label="Bigger slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
-          </span>
+<!-- How it works: three steps, each the split in a different state. -->
+<section class="section section--band" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="head">
+      <h2 id="how-h">How the split works, in 3 steps</h2>
+      <p class="intro">Each slice is a guarantee when the line is busy, never a cage. On a 20 Mbps line:</p>
+    </div>
+    <div class="grid steps">
+      <article class="card stepcard">
+        <span class="stepcard__n" aria-hidden="true">1</span>
+        <h3>Give each app a slice</h3>
+        <p>Steam 40%, YouTube 60%. Apps you haven't named share the rest, never under 5%.</p>
+        <div class="panel" data-ui aria-hidden="true">
+          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><b>Steam</b><span class="srow__step"><i>−</i>40%<i>+</i></span></span>
+          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><b>YouTube</b><span class="srow__step"><i>−</i>60%<i>+</i></span></span>
+          <span class="srow srow--rest"><span class="ico ico--stone"></span><b>Everything else</b><span class="srow__step">5%</span></span>
         </div>
-        <div class="drow">
-          <span class="ico ico-lg"><img src="assets/icons/youtube.svg" alt=""></span>
-          <span class="drow__nm"><b>YouTube</b><small data-status="b">9.0 Mbps · lending 3.0 Mbps it isn't using</small></span>
-          <span class="stepper">
-            <button type="button" class="step" data-step="b" data-dir="-1" aria-label="Smaller slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
-            <b class="num" data-pct="b">60%</b>
-            <button type="button" class="step" data-step="b" data-dir="1" aria-label="Bigger slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
-          </span>
+      </article>
+      <article class="card stepcard">
+        <span class="stepcard__n" aria-hidden="true">2</span>
+        <h3>A busy line keeps every slice</h3>
+        <p>While both want more, Steam gets 8 Mbps and YouTube 12, however hard Steam pushes.</p>
+        <div class="panel" data-ui aria-hidden="true">
+          <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b" style="--w: 60">60%</i></span>
+          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>8.0 Mbps · using its whole slice, wants more</small></span>
+          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>12.0 Mbps · using its whole slice, wants more</small></span>
         </div>
-      </div>
-
-      <div class="demo__foot">
-        <button type="button" class="btn" data-pause aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#g-pause" data-pause-icon/></svg><span data-pause-label>Pause the video</span></button>
-        <p>A slice is a guarantee when the line is busy, never a cage: what one doesn't use, the other gets.</p>
-      </div>
-      <p class="visually-hidden" aria-live="polite" data-live></p>
+      </article>
+      <article class="card stepcard">
+        <span class="stepcard__n" aria-hidden="true">3</span>
+        <h3>Spare room goes where it's needed</h3>
+        <p>Pause the video and Steam gets the whole line. Press play and YouTube's slice comes straight back.</p>
+        <div class="panel" data-ui aria-hidden="true">
+          <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b mbar__b--lent" style="--w: 60">lent</i></span>
+          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>20.0 Mbps · 12.0 Mbps of it is spare room</small></span>
+          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>quiet right now · lending 12.0 Mbps it isn't using</small></span>
+        </div>
+      </article>
     </div>
   </div>
 </section>
 
-<!-- 3. Three things -->
-<section class="section section--side" id="features" aria-labelledby="features-h">
+<!-- Four features, each with the piece of the app it is. -->
+<section class="section" id="features" aria-labelledby="features-h">
   <div class="wrap">
+    <div class="g2__a">
     <div class="head">
-      <h2 id="features-h">Website rules, games first, and modes</h2>
-      <p class="intro">The split does the sharing. These three keep it right while you play, watch and talk.</p>
+      <h2 id="features-h">SnailNet features for games, streams and calls</h2>
     </div>
-    <div class="grid fgrid">
-      <article class="card feat feat--sites">
-        <div class="feat__ui" aria-hidden="true">
-          <span class="srow"><span class="ico"><img src="assets/icons/youtube.svg" alt=""></span><span class="srow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill num">30%</span></span>
-          <span class="srow"><span class="ico"><img src="assets/icons/twitch.svg" alt=""></span><span class="srow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill num">20%</span></span>
-          <span class="srow"><span class="ico"><img src="assets/icons/netflix.svg" alt=""></span><span class="srow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill pill--free">When free</span></span>
-        </div>
-        <div class="feat__text">
-          <span class="badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-globe"/></svg></span>
-          <h3>Gives websites their own slice</h3>
-          <p>YouTube, Twitch or Netflix get a share in whichever browser you watch in, ahead of the browser's own slice.</p>
+    <div class="grid features">
+      <article class="card feat">
+        <h3>Gives websites their own slice</h3>
+        <p>A rule for YouTube, Twitch or Netflix works in every browser, ahead of the browser's own slice.</p>
+        <div class="panel" data-ui aria-hidden="true">
+          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
+          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
+          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/netflix.svg" alt=""></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">When the line is free</span></span>
         </div>
       </article>
 
-      <article class="card feat feat--first">
-        <div class="feat__ui" aria-hidden="true">
-          <span class="who__row is-boosted"><span class="ico"><img src="assets/icons/discord.svg" alt=""></span><span class="who__nm"><b>Discord</b><small>Boosted · 52 min left</small></span><span class="who__mb">0.4<small> Mbps</small></span></span>
-          <div class="pop">
+      <article class="card feat">
+        <h3>Lets games and calls go first</h3>
+        <p>The app in front sends first. Boost lets one app go first for an hour, four hours or until you stop it.</p>
+        <div class="panel panel--boost" data-ui aria-hidden="true">
+          <span class="frow frow--boosted"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52 min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span></span>
+          <span class="menu">
             <b>Let Discord go first</b>
-            <p>It gets at least half your line, then everything goes back by itself.</p>
-            <span class="pop__item">For 1 hour</span>
-            <span class="pop__item">For 4 hours</span>
-            <span class="pop__item">Until I stop it</span>
-          </div>
-        </div>
-        <div class="feat__text">
-          <span class="badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-boost"/></svg></span>
-          <h3>Lets games and calls go first</h3>
-          <p>The app in front gets its traffic out first, and SnailNet sends just below your line speed, so ping stays low.</p>
+            <small>It gets at least half your line, then everything goes back by itself.</small>
+            <span class="menu__item is-on">For 1 hour</span>
+            <span class="menu__item">For 4 hours</span>
+            <span class="menu__item">Until I stop it</span>
+          </span>
         </div>
       </article>
-
-      <article class="feat feat--modes">
-        <div class="feat__text">
-          <span class="badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-split"/></svg></span>
-          <h3>Switches modes in one click</h3>
-          <p>Each mode changes the whole split at once. Pick one from the tray, or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> anywhere to step through them.</p>
-        </div>
-        <fieldset class="tiles tiles--demo">
+    </div>
+    </div>
+    <div class="grid features g2__b">
+      <article class="card feat">
+        <h3>Switches whole setups in one click</h3>
+        <p>Four modes change the whole split at once. Pick one in the tray, or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>.</p>
+        <fieldset class="panel tiles" data-ui>
           <legend class="visually-hidden">Try a mode</legend>
           <label class="tile"><input type="radio" name="mode" value="balanced"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Everyone gets a fair share.</span></label>
           <label class="tile"><input type="radio" name="mode" value="streaming"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="tile__body">Video and calls first, downloads in the spare room.</span></label>
-          <label class="tile"><input type="radio" name="mode" value="gaming" checked><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Voice chat first. Video and downloads step back for your game.</span></label>
+          <label class="tile"><input type="radio" name="mode" value="gaming" checked><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Voice chat first. Video and downloads step back.</span></label>
           <label class="tile"><input type="radio" name="mode" value="quiet"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="tile__body">Downloads only use what nobody else wants.</span></label>
         </fieldset>
       </article>
+
+      <article class="card feat">
+        <h3>Steps aside instead of breaking things</h3>
+        <p>If anything goes wrong, your traffic flows straight through. Pause stops everything in one click.</p>
+        <div class="panel panel--pause" data-ui aria-hidden="true">
+          <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
+          <span class="menu">
+            <b>Pause SnailNet</b>
+            <small>Nothing is shared out or blocked while it's paused.</small>
+            <span class="menu__item">For 15 minutes</span>
+            <span class="menu__item is-on">For 1 hour</span>
+            <span class="menu__item">Until I resume</span>
+          </span>
+        </div>
+      </article>
+      <a class="link features__more" href="https://github.com/StergiosF/SnailNet#using-snailnet">Read how to use SnailNet</a>
     </div>
   </div>
 </section>
 
-<!-- 4. Trust -->
-<section class="section" id="trust" aria-labelledby="trust-h">
-  <div class="wrap">
-    <div class="grid tgrid">
-      <div class="trust__text">
-        <h2 id="trust-h">Safe for your connection and your privacy</h2>
-        <div class="point point--safe">
-          <span class="badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span>
-          <h3>Steps aside instead of breaking things</h3>
-          <p>If the service stops, packets flow straight through. After three failures in ten minutes it goes into Safe mode, and Pause stops all shaping in one click.</p>
-        </div>
-        <div class="point point--private">
-          <span class="badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-lock"/></svg></span>
-          <h3>Nothing about you leaves your PC</h3>
-          <p>No telemetry, no account, no analytics. SnailNet reads which app owns a connection and the website's name, never what you send or receive.</p>
-        </div>
-        <a class="tlink" href="https://github.com/StergiosF/SnailNet#help-my-internet-broke">Read what to do if your internet breaks</a>
-      </div>
+<!-- Privacy, on cream. -->
+<section class="section section--cream" id="privacy" aria-labelledby="privacy-h">
+  <div class="wrap split">
+    <div class="split__text">
+      <h2 id="privacy-h">Nothing about you leaves your PC</h2>
+      <p class="intro">No account, no telemetry, no analytics, and uninstalling can delete everything it kept.</p>
+      <dl class="reads">
+        <div><dt>Reads, on your PC only</dt><dd>Which program owns each connection, and the website's name as it connects.</dd></div>
+        <div><dt>Never reads</dt><dd>What you send or receive. Your settings and logs stay on your PC.</dd></div>
+      </dl>
+      <a class="link" href="https://github.com/StergiosF/SnailNet#privacy">Read the full privacy notes</a>
+    </div>
+    <div class="conns" data-ui>
+      <h3 class="conns__title">The only connections SnailNet makes</h3>
+      <ul>
+        <li><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/github.svg" alt=""></span><span><b>Update check</b><small>To GitHub, only when you click Check for updates</small></span></li>
+        <li><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/github.svg" alt=""></span><span><b>Website and game lists</b><small>From GitHub once a day, signed. You can turn it off.</small></span></li>
+        <li><span class="ico ico--wide"><img loading="lazy" width="24" height="24" src="assets/icons/cloudflare.svg" alt=""></span><span><b>Speed test</b><small>To Cloudflare, only when you click Measure</small></span></li>
+        <li><span class="ico ico--glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-router"/></svg></span><span><b>Pings</b><small>To your router and 1.1.1.1 while shaping, to stay just below your line speed</small></span></li>
+      </ul>
+    </div>
+  </div>
+</section>
 
-      <div class="trust__ui" role="img" aria-label="SnailNet's notice when it steps aside, and the four connections it makes itself: the update check, the website and game lists, the speed test, and pings to your router and 1.1.1.1.">
-        <div class="notice" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="20" height="20"><use href="#g-shield"/></svg>
-          <p><b>Traffic control stepped aside</b> Your internet works normally. SnailNet tries again in a moment.</p>
-        </div>
-        <div class="card conns" aria-hidden="true">
-          <p class="card-title">The only connections SnailNet makes</p>
-          <span class="crow"><span class="ico"><img class="ink" src="assets/icons/github.svg" alt=""></span><span><b>Update check</b><small>GitHub, only when you click Check for updates</small></span></span>
-          <span class="crow"><span class="ico"><img class="ink" src="assets/icons/github.svg" alt=""></span><span><b>Website and game lists</b><small>GitHub, once a day, signed; you can turn it off</small></span></span>
-          <span class="crow"><span class="ico ico-wide"><img src="assets/icons/cloudflare.svg" alt=""></span><span><b>Speed test</b><small>Cloudflare, only when you click Measure</small></span></span>
-          <span class="crow"><span class="ico ico-glyph"><svg viewBox="0 0 24 24"><use href="#g-router"/></svg></span><span><b>Pings</b><small>To your router and 1.1.1.1 while shaping, to stay just below your line speed</small></span></span>
-        </div>
+<!-- Questions, every answer open. -->
+<section class="section" id="questions" aria-labelledby="questions-h">
+  <div class="wrap">
+    <div class="head head--row">
+      <h2 id="questions-h">Questions</h2>
+      <p class="intro">What people ask before they install it. If your internet ever breaks, the help on GitHub takes you through it step by step.</p>
+      <a class="link" href="https://github.com/StergiosF/SnailNet#help-my-internet-broke">Read the help for a broken connection</a>
+    </div>
+    <div class="faq">
+      <div class="faq__item">
+        <h3>If I close the window, does it stop?</h3>
+        <p>No. A Windows service does the work, so your rules keep working with the app closed. Use Pause to stop shaping.</p>
+      </div>
+      <div class="faq__item">
+        <h3>Will it make my internet slower?</h3>
+        <p>It sends slightly below your line speed on purpose, which keeps ping low while something big downloads. The cost is a sliver of top speed.</p>
+      </div>
+      <div class="faq__item">
+        <h3>Does it work in every browser?</h3>
+        <p>Yes. Website rules go by the site's name. A few sites hide their names; their traffic still counts toward the browser's slice.</p>
+      </div>
+      <div class="faq__item">
+        <h3>Does it work with my game's anti-cheat?</h3>
+        <p>It hasn't been tested with anti-cheat systems yet. If a game complains, pause SnailNet and please open an issue on GitHub.</p>
+      </div>
+      <div class="faq__item">
+        <h3>Does it shape uploads too?</h3>
+        <p>Yes, when you give it an upload speed. Leave a speed empty and SnailNet leaves that direction alone.</p>
+      </div>
+      <div class="faq__item">
+        <h3>Does it cost anything?</h3>
+        <p>No. SnailNet is free and open source under the GPL-3.0, with no account and no telemetry.</p>
       </div>
     </div>
   </div>
@@ -266,41 +334,30 @@
 
 </main>
 
-<!-- 5. Download again, and the footer -->
+<!-- The close and the footer: one section on the shell's green. -->
 <footer class="closing" id="download" aria-labelledby="close-h">
   <div class="wrap closing__in">
-    <div class="grid closing__top">
-      <div class="close">
-        <svg class="close__snail" viewBox="0 0 512 512" width="72" height="72" aria-hidden="true"><use href="#snail-light"/></svg>
-        <h2 id="close-h">Download SnailNet for Windows</h2>
-        <p class="intro">It adds a small Windows service and the WinDivert driver, and uninstalling removes both. Close the app and your rules keep working.</p>
-        <div class="actions">
-          <a class="btn btn-accent btn-lg" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
-        </div>
-        <ul class="chips">
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-heart"/></svg>Free</li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-code"/></svg>Open source (GPL-3.0)</li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-window"/></svg>Windows 10 and 11, 64-bit</li>
-        </ul>
-        <p class="release" data-release hidden></p>
-      </div>
-
-      <div class="install">
-        <h3>Up and running in three steps</h3>
-        <ol class="steps">
-          <li class="step--1"><span class="steps__n" aria-hidden="true">1</span><span><b>Download and run the installer</b><small>It asks Windows for permission once, to install the service.</small></span></li>
-          <li class="step--2"><span class="steps__n" aria-hidden="true">2</span><span><b>Choose More info, then Run anyway</b><small>The installer isn't code-signed yet, so Windows may show “Windows protected your PC”.</small></span></li>
-          <li class="step--3"><span class="steps__n" aria-hidden="true">3</span><span><b>Set your speed and pick a mode</b><small>SnailNet measures your connection in about 20 seconds, or you can type it.</small></span></li>
-        </ol>
-      </div>
+    <div class="close">
+      <h2 id="close-h">Download SnailNet for Windows</h2>
+      <p class="close__line">Free and open source, with no account. Windows 10 and 11, 64-bit.</p>
+      <a class="btn btn--primary btn--xl" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
+      <p class="release" data-release hidden></p>
+      <ol class="install">
+        <li><span class="install__n" aria-hidden="true">1</span><span><b>Run the installer</b><small>Windows asks for permission once, to add the SnailNet service.</small></span></li>
+        <li><span class="install__n" aria-hidden="true">2</span><span><b>Choose More info, then Run anyway</b><small>It isn't code-signed yet, so Windows may say it protected your PC.</small></span></li>
+        <li><span class="install__n" aria-hidden="true">3</span><span><b>Tell it your speed</b><small>It measures your line in about 20 seconds, or you type it.</small></span></li>
+      </ol>
     </div>
 
     <div class="foot">
+      <a class="brand brand--foot" href="#top" aria-label="SnailNet, back to the top">
+        <svg viewBox="0 0 512 512" width="36" height="36" aria-hidden="true"><use href="#snail-dark"/></svg>
+        <span>SnailNet</span>
+      </a>
       <nav class="foot__links" aria-label="Project links">
         <a href="https://github.com/StergiosF/SnailNet">Source on GitHub</a>
         <a href="https://github.com/StergiosF/SnailNet/releases">All releases</a>
         <a href="https://github.com/StergiosF/SnailNet#readme">README</a>
-        <a href="https://github.com/StergiosF/SnailNet#privacy">Privacy</a>
         <a href="https://github.com/StergiosF/SnailNet/blob/main/LICENSE">Licence</a>
         <a href="https://github.com/StergiosF/SnailNet/issues">Report a problem</a>
       </nav>
@@ -309,7 +366,7 @@
   </div>
 </footer>
 
-<!-- Shared drawings: the snail (src-tauri/icons/snail.svg, its body light as on the side rail) and the glyphs. -->
+<!-- Shared drawings: the snail (src-tauri/icons/snail.svg; its body light as on the side rail, or dark on the green) and the glyphs. -->
 <svg class="defs" width="0" height="0" aria-hidden="true">
   <defs>
     <symbol id="snail-light" viewBox="0 0 512 512">
@@ -320,18 +377,18 @@
       <circle cx="224" cy="250" r="150" fill="#2FA88E"/>
       <path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0" stroke="#0E3B35" stroke-width="20" stroke-linecap="round" fill="none"/>
     </symbol>
+    <symbol id="snail-dark" viewBox="0 0 512 512">
+      <path d="M64 404c0-18 14-30 34-30h300c34 0 58-26 62-62l4-34c2-16 26-14 26 2v52c0 54-42 98-96 98H98c-20 0-34-10-34-26z" fill="#0a211d"/>
+      <path d="M470 276 442 192M484 276l4-86" stroke="#0a211d" stroke-width="16" stroke-linecap="round" fill="none"/>
+      <circle cx="440" cy="182" r="17" fill="#0a211d"/>
+      <circle cx="488" cy="182" r="17" fill="#0a211d"/>
+      <circle cx="224" cy="250" r="150" fill="#efe8d6"/>
+      <path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0" stroke="#0E3B35" stroke-width="20" stroke-linecap="round" fill="none"/>
+    </symbol>
     <symbol id="g-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-now" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
-    <symbol id="g-split" viewBox="0 0 24 24"><path d="M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
-    <symbol id="g-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></g></symbol>
-    <symbol id="g-boost" viewBox="0 0 24 24"><path d="M13.5 3 5 13.5h6L10 21l9-11h-6z" fill="currentColor"/></symbol>
     <symbol id="g-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
     <symbol id="g-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
     <symbol id="g-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.3 3 7.9 7 9.5 4-1.6 7-5.2 7-9.5V6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/></g></symbol>
-    <symbol id="g-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.5v2"/></g></symbol>
-    <symbol id="g-code" viewBox="0 0 24 24"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7-4.3-7-9.6A3.9 3.9 0 0 1 12 7.6a3.9 3.9 0 0 1 7 2.3c0 5.3-7 9.6-7 9.6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
     <symbol id="g-window" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 9.5h17"/></g></symbol>
     <symbol id="g-drag" viewBox="0 0 24 24"><path d="M8 12h8M6 9l-3 3 3 3M18 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="g-router" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01M12 13V9M8.5 7.5a5 5 0 0 1 7 0M6 5a8.5 8.5 0 0 1 12 0"/></g></symbol>
