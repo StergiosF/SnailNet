@@ -692,7 +692,7 @@ Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), n
 1. **Welcome:** one sentence ("Split your internet between apps, like 40% for downloads and 60% for YouTube.") plus the privacy line ("SnailNet only reads website names, never content, and nothing leaves your PC").
 2. **Measure your connection:** big circular progress, then results ("▼ 100 Mbps ▲ 20 Mbps · ping under load: 140 → 18 ms with Low-latency mode"). Skip → type speeds / measure later.
 3. **What matters to you?** Three cards: *Gaming*, *Streaming & calls*, *Just keep downloads polite* → picks the starting profile.
-4. **Done.** The main window opens with the live list already filling in. A one-time coach mark on the split bar: "Drag to share. Unused share is never wasted."
+4. **Done.** The main window opens with the live list already filling in. A one-time hint on "The split" card (built 2026-11-18; − / + replaced dragging): "Give an app more with − and +. Fine-tune opens every slice. Share nobody is using goes to whoever needs it, so none is wasted." Got it or Fine-tune puts it away.
 
 ### 14.6 Settings (single scrolling page, Windows Settings style)
 
@@ -716,6 +716,8 @@ Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), n
 ### 14.8 States to design (none may be left as an afterthought)
 
 Empty (no traffic yet) · Loading/connecting to service · Service not running (with a "Start service" button that elevates) · Safe mode · Paused · Offline (no network) · Speed test failed · Unidentified site traffic · Blocked app · Very narrow window · Many apps (100+, virtualised list) · High-contrast mode.
+
+- **Built (2026-11-18):** all but "Speed test failed" (Phase 4). Start SnailNet runs `sc start` through UAC (`service_start.rs`); Offline follows Windows' network state; unidentified traffic is a line under "Using your internet" (Mbps and which apps). Many apps: instead of a virtualised list, "Using your internet" shows the busiest five, quiet "only when free" slices fold into one row and Everything else shows its first apps with "N more".
 
 ### 14.9 Accessibility
 

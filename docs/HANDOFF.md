@@ -2,7 +2,17 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-17)
+## Start here (updated 2026-11-18)
+
+- **Phase 3 states finished (2026-11-18):** Start SnailNet on the
+  not-running notice (UAC, `service_start.rs`), an Offline notice, hidden
+  website traffic under "Using your internet", a one-time hint on "The
+  split", and no focus ring after a mouse click when a dialog hands focus
+  back (`focusRing.ts`). Not yet seen in a real window. Left in Phase 3:
+  the exit test with someone new to the app. Then Phase 4 (speed test,
+  passive estimator, per-network speed, low-latency auto-tune).
+
+## Start here (2026-11-17)
 
 - **Latest:** the app was redesigned ("the Garden", `docs/HANDOFF-ui.md`)
   and the service gained **modes** (four built-in profiles), **boost**,
