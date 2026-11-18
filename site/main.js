@@ -205,13 +205,13 @@
 
     const steam =
       steamGets > keepA + 0.05
-        ? `${f(steamGets)} Mbps · ${f(steamGets - keepA)} Mbps of it is spare room`
-        : `${f(steamGets)} Mbps · using its whole slice, wants more`;
+        ? `${f(steamGets)}\u00a0Mbps · ${f(steamGets - keepA)}\u00a0Mbps of it is spare room`
+        : `${f(steamGets)}\u00a0Mbps · using its whole slice, wants more`;
     let video;
-    if (paused) video = `quiet right now · lending ${f(keepB)} Mbps it isn't using`;
-    else if (videoGets < VIDEO_WANTS - 0.05) video = `${f(videoGets)} Mbps · using its whole slice, wants more`;
-    else if (lent > 0.05) video = `${f(videoGets)} Mbps · lending ${f(lent)} Mbps it isn't using`;
-    else video = `${f(videoGets)} Mbps · gets all it asks for`;
+    if (paused) video = `quiet right now · lending ${f(keepB)}\u00a0Mbps it isn't using`;
+    else if (videoGets < VIDEO_WANTS - 0.05) video = `${f(videoGets)}\u00a0Mbps · using its whole slice, wants more`;
+    else if (lent > 0.05) video = `${f(videoGets)}\u00a0Mbps · lending ${f(lent)}\u00a0Mbps it isn't using`;
+    else video = `${f(videoGets)}\u00a0Mbps · gets all it asks for`;
     demo.querySelector('[data-status="a"]').textContent = steam;
     demo.querySelector('[data-status="b"]').textContent = video;
 

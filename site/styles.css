@@ -1709,12 +1709,16 @@ main > section {
   box-shadow: 0 0 0 2px var(--ink-0) inset;
   font-weight: 700;
 }
+/* Name, then what is happening to it underneath, as the app lists slices. */
 .mrow {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  align-items: baseline;
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 10px;
   font-size: 15px;
+}
+.mrow small {
+  grid-column: 2;
 }
 .mrow .sw {
   width: 12px;
@@ -2620,4 +2624,41 @@ main > section {
   .section--cream > .wrap {
     border: 1px solid CanvasText;
   }
+}
+
+/* ---------- Wrapping: no lone words, no split numbers ---------- */
+
+h3,
+.acard__t,
+.conns__title {
+  text-wrap: balance;
+}
+p,
+li,
+dd,
+small,
+.tile__body,
+.atile__body {
+  text-wrap: pretty;
+}
+.nowrap,
+.pill-sm,
+kbd {
+  white-space: nowrap;
+}
+
+/* Privacy: the connections card stands as tall as the words beside it,
+   its four rows spread down it. */
+.section--cream .split {
+  align-items: stretch;
+}
+.section--cream .conns {
+  display: flex;
+  flex-direction: column;
+}
+.section--cream .conns ul {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
 }

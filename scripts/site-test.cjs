@@ -106,8 +106,9 @@ function demo(w) {
     d,
     handle: q("[data-handle]"),
     bar: q("[data-bar]"),
-    steam: () => q('[data-status="a"]').textContent,
-    video: () => q('[data-status="b"]').textContent,
+    // Numbers keep their units on one line (no-break spaces); compare as plain text.
+    steam: () => q('[data-status="a"]').textContent.replace(/\u00a0/g, " "),
+    video: () => q('[data-status="b"]').textContent.replace(/\u00a0/g, " "),
     pct: (k) => [...d.querySelectorAll(`[data-pct="${k}"]`)].map((e) => e.textContent),
     step: (k, dir) => q(`[data-step="${k}"][data-dir="${dir}"]`),
     pause: q("[data-pause]"),
