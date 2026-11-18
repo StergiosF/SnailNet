@@ -112,10 +112,10 @@ with − and +, and Pause.
 
 | Mode | What it does |
 | --- | --- |
-| **Balanced** | Everyone gets a fair share. |
-| **Streaming** | Video and calls first, downloads in the spare room. |
-| **Gaming** | Voice chat first. Video and downloads step back for your game. |
-| **Quiet downloads** | Downloads only use what nobody else wants. |
+| **Balanced** | Every app gets a fair share. |
+| **Streaming** | Videos and calls stay smooth. Downloads wait. |
+| **Gaming** | Your game and voice chat come first. |
+| **Quiet downloads** | Downloads never slow anything else down. |
 
 Press **Ctrl+Alt+S** anywhere to step to the next mode (change the keys
 in Settings → Windows). With *Gaming mode while you play* on, SnailNet
