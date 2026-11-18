@@ -254,6 +254,10 @@ pub trait Rules: Send + Sync + 'static {
     fn blocks(&self, _app: &App) -> bool {
         false
     }
+    /// Processes whose apps go first (High) whatever their class (§11.5).
+    fn focus_pids(&self) -> &[u32] {
+        &[]
+    }
 }
 
 /// A [`Plan`] plus the domain → site matcher for its custom sites.
@@ -294,6 +298,10 @@ impl Rules for PlanRules {
     fn site_of(&self, names: &[String]) -> Option<(&str, &str)> {
         let id = self.sites.site_of_any(names.iter().map(String::as_str))?;
         Some((id, self.sites.name(id).unwrap_or(id)))
+    }
+
+    fn focus_pids(&self) -> &[u32] {
+        &self.plan.focus
     }
 
     fn site_class(&self, site: &str) -> Option<ClassId> {
@@ -470,6 +478,10 @@ pub struct AppClassifier {
     app_class: HashMap<AppId, ClassId>,
     /// Whether each app is blocked; cleared with the rules.
     app_blocked: HashMap<AppId, bool>,
+    /// The families going first (§11.5), from the rules' focus PIDs, and
+    /// whether each app is one of them; both renewed with the rules.
+    focus: Vec<String>,
+    app_focus: HashMap<AppId, bool>,
     pending: Pending,
     sites: Arc<SiteState>,
     /// Site id → stats slot, this thread's copy of [`SiteState::slot`];
@@ -491,6 +503,8 @@ impl Clone for AppClassifier {
             seen: self.seen,
             app_class: self.app_class.clone(),
             app_blocked: self.app_blocked.clone(),
+            focus: self.focus.clone(),
+            app_focus: self.app_focus.clone(),
             pending: self.pending.clone(),
             sites: self.sites.clone(),
             site_slots: self.site_slots.clone(),
@@ -508,9 +522,36 @@ impl AppClassifier {
             self.rules = self.live.load();
             self.app_class.clear();
             self.app_blocked.clear();
+            self.app_focus.clear();
+            // A focus change is rare (alt-tab, debounced): resolving its
+            // few PIDs here is cheap, and cached per process after that.
+            let attribution = &self.attribution;
+            self.focus = self
+                .rules
+                .focus_pids()
+                .iter()
+                .map(|&pid| {
+                    attribution
+                        .app(attribution.owner_of(pid).app)
+                        .family
+                        .clone()
+                })
+                .collect();
             self.site_slots.clear();
             self.seen = g;
         }
+    }
+
+    /// Whether `app` goes first (§11.5).
+    fn focused(&mut self, app: AppId) -> bool {
+        if self.focus.is_empty() {
+            return false;
+        }
+        let (focus, attribution) = (&self.focus, &self.attribution);
+        *self
+            .app_focus
+            .entry(app)
+            .or_insert_with(|| focus.contains(&attribution.app(app).family))
     }
 
     fn class_of(&mut self, app: AppId) -> ClassId {
@@ -606,6 +647,7 @@ impl Classifier for AppClassifier {
         self.refresh();
         let key = FlowKey::from_packet(info, outbound);
         let who = self.who.clone();
+        let mut focused = false;
         let (app_class, tag) = match self.attribution.lookup(&key) {
             Some((owner, source)) => {
                 if self.pending.hit(&key) {
@@ -616,6 +658,7 @@ impl Classifier for AppClassifier {
                     Source::Socket => who.by_socket.fetch_add(1, Relaxed),
                     Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
+                focused = self.focused(owner.app);
                 (self.class_of(owner.app), Some(owner.app))
             }
             None => {
@@ -634,7 +677,11 @@ impl Classifier for AppClassifier {
             (app_class, Site::None)
         };
         let meta = PacketMeta {
-            prio: self.rules.prio_of(class),
+            prio: if focused {
+                Priority::High
+            } else {
+                self.rules.prio_of(class)
+            },
             ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
         };
         (meta, tags::pack(tag, site))
@@ -711,6 +758,8 @@ impl Shaper {
             seen: 0,
             app_class: HashMap::new(),
             app_blocked: HashMap::new(),
+            focus: Vec::new(),
+            app_focus: HashMap::new(),
             pending: Pending::default(),
             sites: sites.clone(),
             site_slots: HashMap::new(),

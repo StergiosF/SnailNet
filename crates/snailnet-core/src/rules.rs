@@ -90,6 +90,9 @@ pub struct Settings {
     pub low_latency: bool,
     /// Leave traffic to the local network alone.
     pub lan_exempt: bool,
+    /// The app in front, and games while they run, go first (High
+    /// priority, never a bigger share; PLAN.md §11.5).
+    pub focus_boost: bool,
 }
 
 impl Default for Settings {
@@ -97,6 +100,7 @@ impl Default for Settings {
         Self {
             low_latency: true,
             lan_exempt: true,
+            focus_boost: true,
         }
     }
 }
@@ -597,6 +601,7 @@ impl Config {
                 blocked: Vec::new(),
                 shape_lan: !self.settings.lan_exempt,
                 custom_sites: self.sites.clone(),
+                focus: Vec::new(),
             };
         }
         let all = self.effective_rules(now);
@@ -644,6 +649,7 @@ impl Config {
             blocked: self.blocked.iter().map(|id| id.to_lowercase()).collect(),
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
+            focus: Vec::new(),
         }
     }
 }
@@ -692,6 +698,10 @@ pub struct Plan {
     pub shape_lan: bool,
     /// For the domain → site matcher, with the shipped packs.
     pub custom_sites: Vec<SiteDef>,
+    /// Processes whose apps go first (High priority) whatever their class:
+    /// the app in front and running games (PLAN.md §11.5). Not from the
+    /// config; the service fills it in.
+    pub focus: Vec<u32>,
 }
 
 impl Plan {

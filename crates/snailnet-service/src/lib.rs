@@ -19,6 +19,7 @@
 
 pub mod autorate;
 pub mod crashguard;
+pub mod focus;
 pub mod hub;
 pub mod install;
 pub mod ipc;

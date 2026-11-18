@@ -366,7 +366,11 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             rev,
         } => ack(hub.set_blocked(&family_id, blocked, rev)),
         Request::RunSpeedTest => ack(hub.request_speedtest()),
-        other @ (Request::FocusChanged { .. } | Request::AnswerPrompt { .. }) => err(
+        Request::FocusChanged { pid, is_game, .. } => {
+            hub.focus_changed(pid, is_game);
+            ack(Ok(hub.rev()))
+        }
+        other @ Request::AnswerPrompt { .. } => err(
             ErrorCode::Unsupported,
             format!("{} isn't available in this version", other.name()),
         ),
@@ -481,10 +485,19 @@ mod tests {
             }) => {}
             r => panic!("{r:?}"),
         }
-        match c.call(Request::FocusChanged {
-            pid: 1,
-            is_game: false,
-            confidence: 0.0,
+        // The window in front is taken (§11.5); it wakes the runner.
+        assert!(matches!(
+            c.call(Request::FocusChanged {
+                pid: std::process::id(),
+                is_game: false,
+                confidence: 0.0,
+            }),
+            Ok(Reply::Ack { rev: 1 })
+        ));
+        assert!(hub.signal().take_reload());
+        match c.call(Request::AnswerPrompt {
+            prompt_id: 1,
+            action: "x".into(),
         }) {
             Err(ClientError::Refused {
                 code: ErrorCode::Unsupported,

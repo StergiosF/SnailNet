@@ -383,6 +383,7 @@ fn supervise<E: Engine>(
                     since_rate += timing.poll;
                     if since_rate >= RATE_EVERY {
                         since_rate = Duration::ZERO;
+                        hub.prune_focus();
                         if let Some(live) = autorate.tick(moved.take()) {
                             let (plan, _) = hub.plan_live(now(), live);
                             if plan.needs_engine() && running.apply(&plan).is_ok() {

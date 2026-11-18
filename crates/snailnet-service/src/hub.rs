@@ -21,6 +21,7 @@ use snailnet_ipc::{
 };
 use tokio::sync::broadcast;
 
+use crate::focus::{Focus, Proc};
 use crate::paths::DataDir;
 use crate::runner::StopSignal;
 use crate::store;
@@ -59,6 +60,8 @@ struct Inner {
     sites: Vec<(String, String)>,
     /// A speed test was asked for and hasn't started yet.
     speedtest: bool,
+    /// What goes first now (§11.5).
+    focus: Focus,
 }
 
 struct Sample {
@@ -84,6 +87,7 @@ impl Hub {
                 apps: Vec::new(),
                 sites: Vec::new(),
                 speedtest: false,
+                focus: Focus::default(),
             }),
         })
     }
@@ -125,10 +129,11 @@ impl Hub {
     /// `None` keeps the typed speed).
     pub fn plan_live(&self, now: u64, live: [Option<f64>; 2]) -> (Plan, String) {
         let i = self.lock();
-        (
-            i.config.plan_live(now, live),
-            i.config.active().name.clone(),
-        )
+        let mut plan = i.config.plan_live(now, live);
+        if i.config.settings.focus_boost && plan.shapes_anything() {
+            plan.focus = i.focus.pids();
+        }
+        (plan, i.config.active().name.clone())
     }
 
     /// The config as it is now.
@@ -439,6 +444,27 @@ impl Hub {
         })
     }
 
+    /// The window in front is `pid`'s (§11.5); a game stays first while it
+    /// runs. Wakes the runner when what goes first changed.
+    pub fn focus_changed(&self, pid: u32, is_game: bool) {
+        let created = snailnet_win::process::created(pid);
+        let changed = self.lock().focus.changed(pid, is_game, created);
+        if changed {
+            self.signal.request_reload();
+        }
+    }
+
+    /// Forget games that have exited; wakes the runner if any did.
+    pub fn prune_focus(&self) {
+        if !self.lock().focus.has_games() {
+            return;
+        }
+        let alive = |p: Proc| snailnet_win::process::created(p.pid) == Some(p.created);
+        if self.lock().focus.prune(alive) {
+            self.signal.request_reload();
+        }
+    }
+
     /// The PC is on `net` now (§10.3): the line speed becomes that
     /// network's (unknown: none yet), and the one left is kept.
     pub fn network_seen(&self, net: Network, now: u64) -> Result<Switch, Refusal> {
@@ -680,6 +706,32 @@ mod tests {
 
         let (_t, hub) = hub();
         assert_eq!(hub.snapshot().sites, known_sites(&Config::default()));
+    }
+
+    #[test]
+    fn the_app_in_front_goes_into_the_plan_while_shaping() {
+        let (_t, hub) = hub();
+        let me = std::process::id();
+        hub.focus_changed(me, true);
+        assert!(hub.signal().take_reload());
+        assert!(
+            hub.plan(0).0.focus.is_empty(),
+            "nothing shaped, nothing first"
+        );
+        let line = Line {
+            down_mbps: Some(25.0),
+            ..Line::default()
+        };
+        hub.set_line(line, hub.rev()).unwrap();
+        assert_eq!(hub.plan(0).0.focus, vec![me]);
+        hub.prune_focus();
+        assert_eq!(hub.plan(0).0.focus, vec![me], "this test is still running");
+        hub.change(hub.rev(), |c| {
+            c.settings.focus_boost = false;
+            Ok(())
+        })
+        .unwrap();
+        assert!(hub.plan(0).0.focus.is_empty(), "switched off");
     }
 
     #[test]
