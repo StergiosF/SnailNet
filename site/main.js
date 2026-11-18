@@ -46,7 +46,6 @@
         l.textContent = "No release yet. Watch the repository on GitHub to hear when the first one is out.";
         l.hidden = false;
       });
-      document.querySelectorAll(".smartscreen").forEach((s) => (s.hidden = true));
       return;
     }
     if (c.kind === "release") {
