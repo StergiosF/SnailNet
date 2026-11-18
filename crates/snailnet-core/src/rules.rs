@@ -56,6 +56,13 @@ pub struct Config {
     pub settings: Settings,
     #[serde(default)]
     pub line: Line,
+    /// The network `line` belongs to (PLAN.md §10.3); absent until the
+    /// service first sees one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<Network>,
+    /// The speeds of the other networks seen, kept for when they're back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub networks: Vec<SavedNetwork>,
     /// One app or site going first for a while, in every mode (PLAN.md
     /// §11.5 "Boost").
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -134,7 +141,48 @@ impl Line {
     pub fn is_pinned(&self) -> bool {
         self.pinned == Some(true)
     }
+
+    fn validate(&self, at: &str) -> Result<(), String> {
+        for (name, v) in [("down_mbps", self.down_mbps), ("up_mbps", self.up_mbps)] {
+            if let Some(v) = v
+                && !LINE_MBPS.contains(&v)
+            {
+                return Err(format!("{at}.{name} = {v} is outside 0.1–10000 Mbps"));
+            }
+        }
+        if let Some(f) = self.factor
+            && !FACTOR.contains(&f)
+        {
+            return Err(format!("{at}.factor = {f} is outside 0.5–1.0"));
+        }
+        Ok(())
+    }
 }
+
+/// A network, as the service tells them apart (PLAN.md §10.3): `id` is
+/// the router's hardware address, so one line is one id whether reached by
+/// Wi-Fi or cable; `name` is the Wi-Fi name or the adapter's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Network {
+    pub id: String,
+    pub name: String,
+}
+
+/// Another network's line, kept while away from it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SavedNetwork {
+    pub id: String,
+    pub name: String,
+    /// When it was left, Unix seconds.
+    pub left: u64,
+    #[serde(default)]
+    pub line: Line,
+}
+
+/// How many other networks' speeds are kept; the longest-gone goes first.
+pub const MAX_SAVED_NETWORKS: usize = 20;
 
 /// A boost: `target` goes first (High) with at least
 /// [`BOOST_SHARE_BP`] and no ceiling, until `until` (Unix seconds) or until
@@ -358,6 +406,8 @@ impl Default for Config {
             active_profile: "balanced".into(),
             settings: Settings::default(),
             line: Line::default(),
+            network: None,
+            networks: Vec::new(),
             boost: None,
             pause: None,
             blocked: Vec::new(),
@@ -398,20 +448,11 @@ impl Config {
         if self.version != CONFIG_VERSION {
             return Err(RulesError::BadVersion(self.version.into()));
         }
-        for (name, v) in [
-            ("down_mbps", self.line.down_mbps),
-            ("up_mbps", self.line.up_mbps),
-        ] {
-            if let Some(v) = v
-                && !LINE_MBPS.contains(&v)
-            {
-                return bad(format!("line.{name} = {v} is outside 0.1–10000 Mbps"));
-            }
-        }
-        if let Some(f) = self.line.factor
-            && !FACTOR.contains(&f)
-        {
-            return bad(format!("line.factor = {f} is outside 0.5–1.0"));
+        self.line.validate("line").map_err(RulesError::Invalid)?;
+        for n in &self.networks {
+            n.line
+                .validate(&format!("networks {:?} line", n.name))
+                .map_err(RulesError::Invalid)?;
         }
         if self.profiles.is_empty() {
             return bad("there are no profiles".into());

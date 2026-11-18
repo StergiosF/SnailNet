@@ -21,6 +21,7 @@ export function noticeOf(
   actions: NoticeActions,
   now: number,
   online = true,
+  newNetwork: string | null = null,
 ): Notice | null {
   switch (link.kind) {
     case "connecting":
@@ -51,8 +52,8 @@ export function noticeOf(
     case "unshaped":
       return {
         severity: "info",
-        title: t("state.unshaped.title"),
-        message: t("state.unshaped.body"),
+        title: newNetwork === null ? t("state.unshaped.title") : t("network.new.title", { network: newNetwork }),
+        message: newNetwork === null ? t("state.unshaped.body") : t("network.new.body"),
         action: { label: t("state.unshaped.action"), onclick: actions.setSpeed },
       };
     case "paused": {

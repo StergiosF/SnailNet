@@ -63,6 +63,20 @@ export interface Line {
   measured?: Measured;
 }
 
+/** A network as the service tells them apart: `id` is the router's
+ *  hardware address; `name` the Wi-Fi name or the adapter's. */
+export interface Network {
+  id: string;
+  name: string;
+}
+
+/** Another network's line, kept while away from it. */
+export interface SavedNetwork extends Network {
+  /** When it was left, Unix seconds. */
+  left: number;
+  line: Line;
+}
+
 /** What a speed test found (snailnet-core `Measured`). */
 export interface Measured {
   /** Unix seconds. */
@@ -87,6 +101,10 @@ export interface Config {
   active_profile: string;
   settings: { low_latency: boolean; lan_exempt: boolean };
   line: Line;
+  /** The network `line` belongs to (PLAN.md §10.3). */
+  network?: Network;
+  /** The other networks seen, with their own speeds. */
+  networks?: SavedNetwork[];
   boost?: Boost;
   /** Paused until `until` (Unix seconds), or until resumed. */
   pause?: { until?: number };

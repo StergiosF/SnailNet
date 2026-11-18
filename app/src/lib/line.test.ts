@@ -7,12 +7,13 @@ import {
   firstRunDismissed,
   forgetFirstRun,
   needsFirstRun,
+  newNetworkName,
   noSpeed,
   parseSpeed,
   speedText,
   withSpeeds,
 } from "./line";
-import type { Line, Link, Snapshot } from "./types";
+import type { Config, Line, Link, Snapshot } from "./types";
 
 describe("parseSpeed", () => {
   it("reads plain, decimal and comma-decimal numbers", () => {
@@ -143,5 +144,23 @@ describe("split hint", () => {
   it("shows again when storage throws", () => {
     const broken = { getItem: () => { throw new Error("no storage"); } };
     expect(coachSeen(broken)).toBe(false);
+  });
+});
+
+describe("newNetworkName", () => {
+  const base = { version: 1, active_profile: "balanced", settings: { low_latency: true, lan_exempt: true }, profiles: [] };
+  const home = { id: "gw-a", name: "Home", left: 1, line: { down_mbps: 25 } };
+  const phone = { id: "gw-b", name: "Phone" };
+
+  it("names a network with no speed yet while another has one", () => {
+    const c: Config = { ...base, line: {}, network: phone, networks: [home] };
+    expect(newNetworkName(c)).toBe("Phone");
+  });
+
+  it("stays quiet once the network has a speed, or when none has", () => {
+    expect(newNetworkName({ ...base, line: { down_mbps: 8 }, network: phone, networks: [home] })).toBeNull();
+    expect(newNetworkName({ ...base, line: {}, network: phone })).toBeNull();
+    expect(newNetworkName({ ...base, line: {} })).toBeNull();
+    expect(newNetworkName(undefined)).toBeNull();
   });
 });

@@ -11,7 +11,8 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::modes;
-use snailnet_core::rules::{Boost, Config, Line, Measured, Pause, Plan, Rule, Target};
+use snailnet_core::networks::Switch;
+use snailnet_core::rules::{Boost, Config, Line, Measured, Network, Pause, Plan, Rule, Target};
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
@@ -438,6 +439,17 @@ impl Hub {
         })
     }
 
+    /// The PC is on `net` now (§10.3): the line speed becomes that
+    /// network's (unknown: none yet), and the one left is kept.
+    pub fn network_seen(&self, net: Network, now: u64) -> Result<Switch, Refusal> {
+        let mut switch = Switch::Same;
+        self.change(self.rev(), |c| {
+            switch = c.switch_network(net, now);
+            Ok(())
+        })?;
+        Ok(switch)
+    }
+
     pub fn set_line(&self, line: Line, rev: u64) -> Result<u64, Refusal> {
         self.change(rev, |c| {
             c.line = line;
@@ -485,7 +497,7 @@ impl Hub {
             i.rev += 1;
             i.rev
         };
-        tracing::info!("config changed by a client; now revision {new_rev}");
+        tracing::info!("config changed; now revision {new_rev}");
         self.signal.request_reload();
         let _ = self.events.send(Event::ConfigChanged { rev: new_rev });
         Ok(new_rev)
@@ -668,6 +680,30 @@ mod tests {
 
         let (_t, hub) = hub();
         assert_eq!(hub.snapshot().sites, known_sites(&Config::default()));
+    }
+
+    #[test]
+    fn each_network_keeps_its_line_speed_on_disk() {
+        let (_t, hub) = hub();
+        let net = |id: &str| Network {
+            id: id.into(),
+            name: id.to_uppercase(),
+        };
+        let line = Line {
+            down_mbps: Some(25.0),
+            ..Line::default()
+        };
+        hub.set_line(line, hub.rev()).unwrap();
+        assert_eq!(hub.network_seen(net("home"), 10), Ok(Switch::Adopted));
+        assert_eq!(hub.network_seen(net("home"), 11), Ok(Switch::Same));
+        assert_eq!(hub.network_seen(net("phone"), 12), Ok(Switch::New));
+        assert_eq!(hub.config().line.down_mbps, None, "not shaping yet");
+        assert!(hub.signal().take_reload(), "the runner follows");
+        assert_eq!(hub.network_seen(net("home"), 13), Ok(Switch::Known));
+        let saved = store::load(hub.dir()).unwrap().config;
+        assert_eq!(saved.line.down_mbps, Some(25.0));
+        assert_eq!(saved.network, Some(net("home")));
+        assert_eq!(saved.networks[0].id, "phone");
     }
 
     #[test]

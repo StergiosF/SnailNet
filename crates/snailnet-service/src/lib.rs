@@ -23,6 +23,7 @@ pub mod hub;
 pub mod install;
 pub mod ipc;
 pub mod logging;
+pub mod netwatch;
 pub mod paths;
 pub mod runner;
 pub mod shaper;

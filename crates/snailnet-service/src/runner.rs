@@ -159,6 +159,9 @@ pub struct Timing {
     /// Adapt the line speed live (ping probe + estimator, §10.2). Off in
     /// tests, which must not ping anything.
     pub autorate: bool,
+    /// Watch which network the PC is on and keep a line speed per network
+    /// (§10.3). Off in tests, which must not change with the real network.
+    pub watch_network: bool,
 }
 
 impl Default for Timing {
@@ -168,6 +171,7 @@ impl Default for Timing {
             report_every: Duration::from_secs(60),
             retry_after: Duration::from_secs(10),
             autorate: true,
+            watch_network: true,
         }
     }
 }
@@ -251,7 +255,14 @@ pub fn run<E: Engine>(
     if crashed {
         warn!("the previous run ended without a clean stop (crash, kill or power loss)");
     }
-    let ended = supervise(hub, guard, engine, timing, now);
+    let ended = std::thread::scope(|s| {
+        if timing.watch_network {
+            let _ = std::thread::Builder::new()
+                .name("snailnet-netwatch".into())
+                .spawn_scoped(s, || crate::netwatch::watch(hub));
+        }
+        supervise(hub, guard, engine, timing, now)
+    });
     info!("SnailNet service stopped");
     ended
 }
@@ -596,6 +607,7 @@ mod tests {
             report_every: Duration::from_millis(5),
             retry_after: Duration::from_millis(1),
             autorate: false,
+            watch_network: false,
         }
     }
 

@@ -138,6 +138,15 @@ impl Probe {
         }
     }
 
+    /// Drop every host's baseline: another network's pings say nothing
+    /// about this one's.
+    fn forget(&self) {
+        self.hosts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+
     /// The larger ping rise of the hosts, ms.
     fn rise_ms(&self) -> Option<f64> {
         let now = Instant::now();
@@ -165,6 +174,8 @@ struct Basis {
     mbps: [Option<f64>; 2],
     factors: [Option<f64>; 2],
     pinned: bool,
+    /// The network's id (§10.3): another network's pings start over.
+    network: Option<String>,
 }
 
 impl Basis {
@@ -177,6 +188,7 @@ impl Basis {
                 factor(LOW_LATENCY_FACTOR_UP),
             ],
             pinned: c.line.is_pinned(),
+            network: c.network.as_ref().map(|n| n.id.clone()),
         }
     }
 }
@@ -209,6 +221,14 @@ impl Autorate {
         let basis = Basis::of(c);
         if self.basis.as_ref() == Some(&basis) {
             return;
+        }
+        if self
+            .basis
+            .as_ref()
+            .is_some_and(|b| b.network != basis.network)
+            && let Some(p) = &self.probe
+        {
+            p.forget();
         }
         let source = if basis.pinned {
             Source::Fixed

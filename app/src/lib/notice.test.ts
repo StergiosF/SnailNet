@@ -32,4 +32,12 @@ describe("measuring", () => {
     const n = noticeOf({ kind: "connected", service_version: "0.1.0" }, "Measuring", actions, 0);
     expect(n?.title).toBe("Measuring your connection");
   });
+
+  it("names a new network when it's only watching there", () => {
+    const n = noticeOf(connected, "Unshaped", actions, 0, true, "Phone");
+    expect(n?.title).toBe("New network: Phone");
+    n?.action?.onclick();
+    expect(actions.setSpeed).toHaveBeenCalled();
+    expect(noticeOf(connected, "Unshaped", actions, 0, true)?.title).toBe("Watching only");
+  });
 });

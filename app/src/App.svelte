@@ -17,7 +17,7 @@
   import { targetLabel } from "./lib/format";
   import { t } from "./lib/i18n";
   import { glance, ledger } from "./lib/ledger";
-  import { needsFirstRun } from "./lib/line";
+  import { needsFirstRun, newNetworkName } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
   import { resume, startService } from "./lib/actions";
   import { noticeOf } from "./lib/notice";
@@ -67,6 +67,7 @@
       { setSpeed: () => lineDialog.show(), resume: () => void resume(), startService: () => void startService() },
       ui.now,
       ui.online,
+      newNetworkName(service.snapshot?.config),
     ),
   );
 </script>

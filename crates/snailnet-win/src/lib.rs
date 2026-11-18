@@ -5,6 +5,7 @@
 
 pub mod fs;
 pub mod http;
+pub mod network;
 pub mod ping;
 pub mod pipe;
 pub mod ports;

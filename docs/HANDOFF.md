@@ -37,6 +37,15 @@ the decision in PLAN.md, commit and push each verified step.
   - App: "Measure my connection" in first run; Settings → Connection has
     Measure, last result, "Ping while downloading", "Follow the line
     automatically" (off = pinned); a Measuring notice.
+  - **Speeds per network (§10.3), built later on 2026-11-18:** network =
+    the router's MAC (`snailnet-win::network`), name = Wi-Fi SSID or
+    adapter; `[network]` + `[[networks]]` in config
+    (`snailnet-core::networks::switch_network`); `snailnet-service::netwatch`
+    checks the route every 5 s and swaps the line; a new network is
+    watching-only ("New network: {name}" notice) until measured or typed;
+    Settings → Connection shows "On {network}" and the other networks.
+    Decisions in PLAN.md §10.3. Metered flag not done. Not yet seen in
+    the real service or a real window.
 - **Nothing of Phase 4 has run inside the real service yet.** The dev
   service in `target\debug` was running all session with the user's
   real config (shaping at 23 Mbps), which locks the exe, so it has the
@@ -50,19 +59,17 @@ the decision in PLAN.md, commit and push each verified step.
 2. Look at the new screens (user's eyes; no browser automation by
    default): Settings → Connection, the Start button (stop the service
    to see it), the split hint, the hidden-traffic line.
-3. Click Measure; then start a big download and watch the log for
+3. Check the log for `network: on "…"` at start (the existing speeds
+   are adopted for this network); Settings → Connection shows "On …".
+   Joining a phone hotspot should log `new here` and show the New
+   network notice; coming back restores the home speed.
+4. Click Measure; then start a big download and watch the log for
    `line speed:` steps and the ping staying low. Tune the estimator's
    constants if it oscillates.
 
 ### Next work, in order (no user needed)
 
-1. **Speeds per network (PLAN.md §10.3).** Key by the network identity
-   (NLM network GUID, or Wi-Fi SSID + gateway MAC via `GetIpNetTable2`);
-   store `[[networks]]` in config (id, name, down/up, measured, pinned);
-   on a network change the runner switches `line` to that network's
-   (unknown network: keep watching only, or the last speed, and offer
-   Measure). Show the network name in Settings → Connection; Windows'
-   "metered" flag as a note.
+1. ~~Speeds per network~~ (built; see above). Left: the metered flag.
 2. **Focus boost (PLAN.md §11, Phase 4):** foreground hook in the app
    (`SetWinEventHook` EVENT_SYSTEM_FOREGROUND) → `FocusChanged` (already
    in the IPC, answered Unsupported); game detection (fullscreen,

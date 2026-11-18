@@ -451,7 +451,7 @@ Dragging the split bar sends new weights over IPC (debounced 50 ms). The schedul
 
 At first run (with clear consent text): a ~10 s speed test.
 
-- **Built (2026-11-18):** `RunSpeedTest` queues it; the runner stops shaping (state `Measuring`), runs `speedtest.rs` (WinHTTP, `snailnet-win::http`: 6 download / 4 upload connections × 8 s, the 90th percentile of 1 s rates after 2 s warm-up, ping to 1.1.1.1 idle and during the download) and saves the result as the line speed with `[line.measured]`. About 20 s in all. The app offers it in first run ("Measure my connection", the consent being the button and the Cloudflare line above it) and Settings → Connection (Measure; last result; "Ping while downloading"). CLI: `snailnet speedtest`. The reply is an Ack, not the progress/result messages sketched in §12; the result arrives as a config change. Not yet: results per network (§10.3).
+- **Built (2026-11-18):** `RunSpeedTest` queues it; the runner stops shaping (state `Measuring`), runs `speedtest.rs` (WinHTTP, `snailnet-win::http`: 6 download / 4 upload connections × 8 s, the 90th percentile of 1 s rates after 2 s warm-up, ping to 1.1.1.1 idle and during the download) and saves the result as the line speed with `[line.measured]`. About 20 s in all. The app offers it in first run ("Measure my connection", the consent being the button and the Cloudflare line above it) and Settings → Connection (Measure; last result; "Ping while downloading"). CLI: `snailnet speedtest`. The reply is an Ack, not the progress/result messages sketched in §12; the result arrives as a config change. Results are per network since §10.3 was built: a test's speeds are the current network's.
 
 - Endpoints: configurable list; default **Cloudflare** (`speed.cloudflare.com`, `__down?bytes=` / `__up`), the user's choice 2026-11-18. Run with 4–8 parallel connections, take the 90th-percentile throughput of the last 6 s.
 - The test flows are excluded from shaping.
@@ -470,6 +470,15 @@ Continuous, cheap, no extra traffic:
 ### 10.3 Per-network profiles
 
 Capacity is stored per network identity (`NLM` network GUID / Wi-Fi SSID + gateway MAC). Home Wi-Fi, phone hotspot and office keep separate speeds. A metered connection (Windows "metered" flag) is shown in the UI.
+
+- **Built (2026-11-18), decisions taken:**
+  - **Identity = the router's MAC** (`snailnet-win::network`: `GetBestRoute` to 1.1.1.1 → gateway + adapter, `SendARP` for the MAC; id `gw-xx:…`). Not SSID + MAC: one line reached by Wi-Fi or cable is one line (the estimator absorbs a slower Wi-Fi hop). If ARP fails, `if-{adapter GUID}-{gateway}`. Name = the Wi-Fi SSID (`WlanQueryInterface`), else the adapter alias ("Ethernet"). No COM/NLM, no new crates.
+  - **Config:** `[line]` stays the current network's line (all code and the app's `SetLine` unchanged); `[network]` (id, name) says whose it is; `[[networks]]` (id, name, left, line) keeps the others, the 20 most recently left. `Config::switch_network` (`snailnet-core::networks`) does the swap; the factor override comes along, the pin and last test stay with their network.
+  - **First network seen adopts the speeds already set** (upgrade path: existing configs keep shaping).
+  - **Unknown network = watching only** until measured or typed, not "the last speed": a hotspot's 8 Mbps carried home would cap a fast line (the estimator raises at most 10%/min and 3× the reference), and a home speed carried to a hotspot shapes nothing. The app's notice then says "New network: {name}" with Set speed.
+  - **Watcher** (`snailnet-service::netwatch`): looks at the route every 5 s (cheap, sends nothing), identifies only when gateway/adapter change, and tells the hub (`Hub::network_seen`), which saves and wakes the runner. Offline changes nothing. A new network also clears the ping probe's baselines.
+  - The app shows "On {network}" under Connection speed and lists the other networks with their speeds in Settings → Connection.
+  - **Not yet:** the metered flag (needs `INetworkCostManager`/WinRT `ConnectionCost`; later, with the note in the UI).
 
 ### 10.4 Low-latency mode (D5, Smart)
 

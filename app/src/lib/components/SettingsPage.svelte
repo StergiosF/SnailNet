@@ -45,6 +45,13 @@
   const fig = (v: number | undefined) => (v === undefined ? "–" : String(Math.round(v * 10) / 10));
   const hasLine = $derived(line.down_mbps !== undefined || line.up_mbps !== undefined);
   const measured = $derived(line.measured);
+  const network = $derived(service.snapshot?.config.network);
+  // Other networks with a speed, most recently left first.
+  const others = $derived(
+    (service.snapshot?.config.networks ?? [])
+      .filter((n) => n.line.down_mbps !== undefined || n.line.up_mbps !== undefined)
+      .sort((a, b) => b.left - a.left),
+  );
   const measuring = $derived(service.state !== null && stateKind(service.state) === "measuring");
   const measuredOn = $derived(
     measured ? new Date(measured.at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "",
@@ -81,6 +88,9 @@
     <div class="item">
       <div class="words">
         <b>{t("settings.line")}</b>
+        {#if network}
+          <span class="net">{t("settings.line.network", { network: network.name })}</span>
+        {/if}
         <span
           >{hasLine
             ? t("settings.line.value", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
@@ -113,6 +123,22 @@
           </div>
         </div>
       {/if}
+    {/if}
+    {#if others.length > 0}
+      <div class="item">
+        <div class="words">
+          <b>{t("settings.networks")}</b>
+          <span>{t("settings.networks.body")}</span>
+          <ul class="nets">
+            {#each others as n (n.id)}
+              <li>
+                <span class="net">{n.name}</span>
+                <span class="num">{t("settings.line.value", { down: fig(n.line.down_mbps), up: fig(n.line.up_mbps) })}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </div>
     {/if}
     <label class="item">
       <div class="words">
@@ -249,6 +275,28 @@
     font-size: 14px;
     line-height: 1.4;
     color: var(--text-secondary);
+  }
+  .words .net {
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nets {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .nets li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .nets .num {
+    flex: none;
   }
   .switch {
     appearance: none;

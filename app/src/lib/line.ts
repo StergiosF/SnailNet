@@ -1,7 +1,7 @@
 // The line speed as people type it (PLAN.md §10, §14.5, §14.6 Connection),
 // and when the first-run guide shows. Pure functions; vitest in line.test.ts.
 
-import type { Line, Link, Snapshot } from "./types";
+import type { Config, Line, Link, Snapshot } from "./types";
 
 /** What snailnet-core accepts for a direction (rules.rs `LINE_MBPS`). */
 export const MIN_MBPS = 0.1;
@@ -39,6 +39,13 @@ export function withSpeeds(line: Line, down: number | null, up: number | null): 
 /** True when neither direction has a speed, so nothing is shaped. */
 export function noSpeed(line: Line | undefined): boolean {
   return line?.down_mbps === undefined && line?.up_mbps === undefined;
+}
+
+/** The current network's name when SnailNet moved to it with no speed for
+ *  it yet (§10.3), while other networks have theirs; otherwise null. */
+export function newNetworkName(config: Config | undefined): string | null {
+  if (config?.network === undefined || !noSpeed(config.line)) return null;
+  return (config.networks ?? []).some((n) => !noSpeed(n.line)) ? config.network.name : null;
 }
 
 /** First run (§14.5) shows once the service is reachable, while no speed

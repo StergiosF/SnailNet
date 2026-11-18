@@ -12,6 +12,7 @@
   import { glance, ledger, parts, statusText } from "../ledger";
   import { pause, resume, startService, switchMode } from "../actions";
   import { availableModes } from "../modes";
+  import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
   import { QUIET_BPS } from "../ledger";
   import { canStep, stepShare } from "../rules";
@@ -43,6 +44,7 @@
       { setSpeed: () => void openMain(), resume: () => void resume(), startService: () => void startService() },
       ui.now,
       ui.online,
+      newNetworkName(service.snapshot?.config),
     ),
   );
   const strip = $derived(book ? parts(book) : []);
