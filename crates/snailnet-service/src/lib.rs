@@ -1,6 +1,7 @@
 //! The SnailNet service (PLAN.md §4, §13, §17): everything that needs admin
 //! rights and must keep running.
 //!
+//! - [`autorate`]: the live line speed (estimator + ping probe, §10.2).
 //! - [`paths`]: where the service keeps its files (`C:\ProgramData\SnailNet`).
 //! - [`store`]: `config.toml` load/save, atomic, with a `.bak` fallback.
 //! - [`crashguard`]: crash-loop detection → Safe mode (§6.4).
@@ -15,6 +16,7 @@
 //! - [`svc`], [`install`]: the Windows service itself.
 #![cfg(windows)]
 
+pub mod autorate;
 pub mod crashguard;
 pub mod hub;
 pub mod install;

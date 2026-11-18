@@ -473,6 +473,7 @@ mod tests {
                     down_mbps: Some(25.0),
                     up_mbps: None,
                     factor: None,
+                    pinned: None,
                 },
                 rev: 1,
             },

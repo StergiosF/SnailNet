@@ -55,6 +55,8 @@ export interface Line {
   down_mbps?: number;
   up_mbps?: number;
   factor?: number;
+  /** Keep the typed speeds; the estimator doesn't adapt them. */
+  pinned?: boolean;
 }
 
 /** One app or site going first for a while (snailnet-core `Boost`). */

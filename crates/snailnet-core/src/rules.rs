@@ -105,6 +105,16 @@ pub struct Line {
     /// Overrides Low-latency mode's factors for both directions (0.5–1.0).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub factor: Option<f64>,
+    /// Keep the typed speeds as they are: the estimator (§10.2) doesn't
+    /// adapt them. Absent = adapt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
+}
+
+impl Line {
+    pub fn is_pinned(&self) -> bool {
+        self.pinned == Some(true)
+    }
 }
 
 /// A boost: `target` goes first (High) with at least
@@ -511,6 +521,13 @@ impl Config {
     /// (Unix seconds; it decides whether the boost and the pause are still
     /// on). While paused: nothing at all.
     pub fn plan(&self, now: u64) -> Plan {
+        self.plan_live(now, [None, None])
+    }
+
+    /// [`Config::plan`], with each shaped direction's rate replaced by the
+    /// estimator's (`[down, up]`, bits per second, Low-latency factor
+    /// already applied). Percentage speed limits follow the new rate.
+    pub fn plan_live(&self, now: u64, live: [Option<f64>; 2]) -> Plan {
         if self.pause_at(now).is_some() {
             return Plan {
                 down: None,
@@ -533,7 +550,9 @@ impl Config {
             })
         };
         let direction = |mbps: Option<f64>, factor: f64, down: bool| {
-            let rate = (mbps? * factor * 1e6 / 8.0) as u64;
+            let typed = mbps? * factor * 1e6;
+            let bps = live[usize::from(!down)].filter(|b| b.is_finite() && *b > 0.0);
+            let rate = (bps.unwrap_or(typed) / 8.0) as u64;
             let mut classes: Vec<ClassConfig> = rules
                 .iter()
                 .zip(&bp)
@@ -794,6 +813,28 @@ name = "Gaming"
             (25e6 * 0.85 / 8.0) as u64
         );
         assert_eq!(p.up.unwrap().rate_bytes_per_sec, (10e6 * 0.85 / 8.0) as u64);
+    }
+
+    #[test]
+    fn a_live_rate_replaces_the_typed_one_only_where_shaped() {
+        let mut c = Config::parse(SAMPLE).unwrap();
+        c.line.up_mbps = None;
+        let p = c.plan_live(0, [Some(30e6), Some(5e6)]);
+        assert_eq!(p.down.unwrap().rate_bytes_per_sec, (30e6 / 8.0) as u64);
+        assert!(p.up.is_none(), "an unshaped direction stays unshaped");
+        // Nonsense estimates are ignored.
+        let typed = c.plan(0).down.unwrap().rate_bytes_per_sec;
+        let p = c.plan_live(0, [Some(f64::NAN), None]);
+        assert_eq!(p.down.unwrap().rate_bytes_per_sec, typed);
+    }
+
+    #[test]
+    fn pinned_round_trips_and_defaults_to_adapting() {
+        let mut c = Config::parse(SAMPLE).unwrap();
+        assert!(!c.line.is_pinned());
+        c.line.pinned = Some(true);
+        let back = Config::parse(&c.to_toml()).unwrap();
+        assert!(back.line.is_pinned());
     }
 
     #[test]

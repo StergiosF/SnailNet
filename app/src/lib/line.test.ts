@@ -56,6 +56,9 @@ describe("withSpeeds", () => {
     const line: Line = { down_mbps: 25, up_mbps: 40, factor: 0.85 };
     expect(withSpeeds(line, 50, null)).toEqual({ down_mbps: 50, factor: 0.85 });
   });
+  it("keeps the pin", () => {
+    expect(withSpeeds({ down_mbps: 25, pinned: true }, 30, null)).toEqual({ down_mbps: 30, pinned: true });
+  });
   it("adds no factor that wasn't there", () => {
     expect(withSpeeds({}, 25, 40)).toEqual({ down_mbps: 25, up_mbps: 40 });
   });

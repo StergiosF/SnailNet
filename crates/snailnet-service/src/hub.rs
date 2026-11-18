@@ -114,8 +114,35 @@ impl Hub {
 
     /// The plan at `now` (Unix seconds) and the active profile's name.
     pub fn plan(&self, now: u64) -> (Plan, String) {
+        self.plan_live(now, [None, None])
+    }
+
+    /// [`Hub::plan`] at the estimator's live rates (`[down, up]`, bps;
+    /// `None` keeps the typed speed).
+    pub fn plan_live(&self, now: u64, live: [Option<f64>; 2]) -> (Plan, String) {
         let i = self.lock();
-        (i.config.plan(now), i.config.active().name.clone())
+        (
+            i.config.plan_live(now, live),
+            i.config.active().name.clone(),
+        )
+    }
+
+    /// The config as it is now.
+    pub fn config(&self) -> Config {
+        self.lock().config.clone()
+    }
+
+    /// What each direction moved in the latest stats tick, bps (`[down, up]`;
+    /// `None` where that direction isn't shaped or there's no tick yet).
+    pub fn moved_bps(&self) -> [Option<f64>; 2] {
+        let i = self.lock();
+        let sum = |d: Option<&snailnet_ipc::DirStats>| {
+            d.map(|d| d.classes.iter().map(|c| c.bps as f64).sum::<f64>())
+        };
+        match &i.tick {
+            Some(t) => [sum(t.down.as_ref()), sum(t.up.as_ref())],
+            None => [None, None],
+        }
     }
 
     /// The pause, if it's on at `now`.

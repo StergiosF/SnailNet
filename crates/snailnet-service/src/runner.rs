@@ -36,6 +36,7 @@ use snailnet_engine::fastpath::Snapshot;
 use snailnet_ipc::ServiceState;
 use tracing::{error, info, warn};
 
+use crate::autorate::{self, Autorate};
 use crate::crashguard::{self, CrashGuard};
 use crate::hub::{Hub, Seen};
 use crate::store::{self, Source};
@@ -153,6 +154,9 @@ pub struct Timing {
     pub report_every: Duration,
     /// Wait this long after a fail-open before trying again.
     pub retry_after: Duration,
+    /// Adapt the line speed live (ping probe + estimator, §10.2). Off in
+    /// tests, which must not ping anything.
+    pub autorate: bool,
 }
 
 impl Default for Timing {
@@ -161,7 +165,35 @@ impl Default for Timing {
             poll: Duration::from_millis(250),
             report_every: Duration::from_secs(60),
             retry_after: Duration::from_secs(10),
+            autorate: true,
         }
+    }
+}
+
+/// How often the live line speed takes a step (the estimator's 1 s tick).
+const RATE_EVERY: Duration = Duration::from_secs(1);
+
+/// The stats polls of one second, averaged per direction.
+#[derive(Default)]
+struct Moved {
+    sum: [f64; 2],
+    n: [u32; 2],
+}
+
+impl Moved {
+    fn add(&mut self, bps: [Option<f64>; 2]) {
+        for (i, b) in bps.into_iter().enumerate() {
+            if let Some(b) = b {
+                self.sum[i] += b;
+                self.n[i] += 1;
+            }
+        }
+    }
+
+    fn take(&mut self) -> [Option<f64>; 2] {
+        let out = [0, 1].map(|i| (self.n[i] > 0).then(|| self.sum[i] / f64::from(self.n[i])));
+        *self = Self::default();
+        out
     }
 }
 
@@ -290,11 +322,17 @@ fn supervise<E: Engine>(
                 });
                 log_plan(&plan, &profile);
                 let mut since_report = Duration::ZERO;
+                // The live line speed for this session (§10.2).
+                let mut autorate = Autorate::new(timing.autorate);
+                autorate.follow(&hub.config());
+                let mut since_rate = Duration::ZERO;
+                let mut moved = Moved::default();
                 let outcome = loop {
                     match stop.wait_any(timing.poll) {
                         Wake::Stop => break Outcome::Stop,
                         Wake::Reload => {
-                            let (plan, profile) = hub.plan(now());
+                            autorate.follow(&hub.config());
+                            let (plan, profile) = hub.plan_live(now(), autorate.live());
                             if !plan.needs_engine() {
                                 break Outcome::Reload;
                             }
@@ -319,6 +357,17 @@ fn supervise<E: Engine>(
                     }
                     if let Some(s) = running.sample() {
                         hub.publish(&s, Some(running.seen()));
+                        moved.add(hub.moved_bps());
+                    }
+                    since_rate += timing.poll;
+                    if since_rate >= RATE_EVERY {
+                        since_rate = Duration::ZERO;
+                        if let Some(live) = autorate.tick(moved.take()) {
+                            let (plan, _) = hub.plan_live(now(), live);
+                            if plan.needs_engine() && running.apply(&plan).is_ok() {
+                                autorate::log_live(live);
+                            }
+                        }
                     }
                     since_report += timing.poll;
                     if since_report >= timing.report_every {
@@ -496,6 +545,7 @@ mod tests {
             poll: Duration::from_millis(1),
             report_every: Duration::from_millis(5),
             retry_after: Duration::from_millis(1),
+            autorate: false,
         }
     }
 

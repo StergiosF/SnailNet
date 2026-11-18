@@ -42,6 +42,9 @@ pub const RAISE_PER_MIN: f64 = 0.10;
 pub const CUT: f64 = 0.05;
 /// Never below this share of the reference speed.
 pub const FLOOR: f64 = 0.30;
+/// Never above this many times the reference speed (a misreading probe
+/// can't run the rate away).
+pub const CEILING: f64 = 3.0;
 /// Traffic at this share of the rate or more is "busy".
 pub const BUSY: f64 = 0.80;
 /// Traffic at this share of the rate or more presses on it.
@@ -171,7 +174,8 @@ impl Direction {
             let floor = FLOOR * self.reference.unwrap_or(self.peak.max(cap));
             self.capacity = Some((cap * (1.0 - CUT)).max(floor));
         } else if rise < CALM_MS && sustained >= PRESSING * rate {
-            self.capacity = Some(cap * (1.0 + RAISE_PER_MIN / 60.0));
+            let ceiling = self.reference.map_or(f64::INFINITY, |r| CEILING * r);
+            self.capacity = Some((cap * (1.0 + RAISE_PER_MIN / 60.0)).min(ceiling.max(cap)));
         }
 
         if rise > TUNE_DOWN_MS {
@@ -259,6 +263,13 @@ mod tests {
         let cap = d.capacity_bps().unwrap();
         assert!(cap > 25.0 * MBPS);
         assert!(cap <= 25.0 * MBPS * 1.106, "bounded: {cap}");
+    }
+
+    #[test]
+    fn capacity_stops_at_three_times_the_reference() {
+        let mut d = Direction::new(Some(10.0 * MBPS), Source::Typed, None);
+        press(&mut d, 3600, 1.0, 1.0);
+        assert!(close(d.capacity_bps().unwrap(), 30.0 * MBPS));
     }
 
     #[test]
