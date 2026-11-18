@@ -1,0 +1,71 @@
+name: Release
+
+# Builds the signed-for-updates installer with scripts/build-installer.ps1
+# (the same script as a local release) and puts it, its .sig and latest.json
+# on a DRAFT GitHub release v<version> (PLAN.md §17.2). Publishing the draft
+# is the manual go-live: the app's updater reads
+# releases/latest/download/latest.json, which ignores drafts.
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY (the contents of
+# %USERPROFILE%\.tauri\snailnet-updater.key). Authenticode signing is not
+# done yet (§17.3).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  installer:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: npm ci
+        working-directory: app
+        run: npm ci
+      - name: Build the installer
+        shell: pwsh
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if (-not $env:KEY) { throw 'The TAURI_SIGNING_PRIVATE_KEY secret is not set.' }
+          $key = Join-Path $env:RUNNER_TEMP 'snailnet-updater.key'
+          Set-Content -Path $key -Value $env:KEY -NoNewline
+          ./scripts/build-installer.ps1 -KeyPath $key -Notes "See the release notes on GitHub."
+          Remove-Item $key
+      - name: Draft the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content app/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "Tag $env:GITHUB_REF_NAME does not match the app version $version."
+          }
+          $files = Get-ChildItem target/release/bundle/nsis -File |
+            Where-Object { $_.Name -like "*_${version}_x64-setup.exe*" -or $_.Name -eq 'latest.json' } |
+            ForEach-Object { $_.FullName }
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @files --clobber
+          } else {
+            gh release create $tag @files --draft --title "SnailNet $version" --notes "SnailNet $version for Windows 10 and 11 (x64)."
+          }

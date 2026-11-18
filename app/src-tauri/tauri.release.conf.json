@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "mainBinaryName": "SnailNet",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "publisher": "SnailNet",
+    "copyright": "SnailNet",
+    "shortDescription": "Share your internet between apps",
+    "resources": {
+      "../../target/release/snailnet-service.exe": "snailnet-service.exe",
+      "../../third_party/windivert/x64/WinDivert.dll": "WinDivert.dll",
+      "../../third_party/windivert/x64/WinDivert64.sys": "WinDivert64.sys",
+      "../../third_party/windivert/LICENSE": "licenses/WinDivert-LICENSE.txt"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "./windows/hooks.nsh",
+        "installerIcon": "icons/icon.ico"
+      }
+    }
+  }
+}

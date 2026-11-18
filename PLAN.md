@@ -799,16 +799,32 @@ Pin exact versions at project setup after checking current docs (Context7 / crat
 
 WinDivert installs its own kernel driver service on first `WinDivertOpen` and unloads it when the last handle closes. **Uninstall:** stop the service → (WinDivert unloads) → `snailnet-service.exe uninstall` → remove files; ask whether to keep config.
 
+- **Built (2026-11-18), decisions taken:**
+  - **Release-only bundle config.** `app/src-tauri/tauri.release.conf.json` is merged in with `tauri build --config …`; it turns the bundle on (NSIS only, `perMachine` → `C:\Program Files\SnailNet\`), adds the files and the hooks. It stays out of `tauri.conf.json` because `tauri-build` copies `bundle.resources` on every cargo build, and `target\release\snailnet-service.exe` doesn't exist in a plain `cargo clippy`/`test`.
+  - **Names:** `mainBinaryName: "SnailNet"` makes the installed app `SnailNet.exe` (cargo's binary stays `snailnet-app.exe`); fixed before the first release because the uninstaller and updates key on it.
+  - **Files** (`bundle.resources`, landing next to the app exe, where `WinDivertLib::load` already looks): `snailnet-service.exe` (from `target\release`), `WinDivert.dll` + `WinDivert64.sys` (the pinned 2.2.2 in `third_party/windivert/x64`), `licenses\WinDivert-LICENSE.txt`.
+  - **Hooks** (`app/src-tauri/windows/hooks.nsh`): *pre-install* `net stop SnailNet` (an upgrade or update must free the exe and DLL; `net` waits for the stop, `sc` doesn't); *post-install* `snailnet-service.exe install` (re-registers in place on upgrades, creates `C:\ProgramData\SnailNet` with its ACLs) then `net start SnailNet`; a failed install says so in a message box (not in silent mode) and goes on. *Pre-uninstall*: in update mode only stop; otherwise ask "Keep your SnailNet settings?" (Yes by default; silent and passive uninstalls keep them) and run `uninstall` or `uninstall --remove-data`. No new service subcommands were needed.
+  - **Autostart (step 5)** stays with the app: the installer runs elevated, so HKCU would be the wrong user's; the finish page launches the app as the user and its first run turns "Start with Windows" on (`autostart.rs`). The template's uninstaller removes the Run value.
+  - **One script for a release:** `scripts/build-installer.ps1` builds the service, then the app through the bundler, and writes `latest.json` next to the installer and its `.sig` in `target\release\bundle\nsis\`. `-TargetDir` builds elsewhere when a dev service locks `target\`.
+
 ### 17.2 Updates (D18)
 
 - `tauri-plugin-updater` reads `latest.json` from **GitHub Releases**; update packages are **signed with the Tauri updater key** (minisign-style; free, not an Authenticode certificate). Keep the private key offline and back it up.
 - Update flow: the app downloads → the NSIS updater stops the `SnailNet` service → replaces files → restarts the service → relaunches the app. Shaping gap: ~2–3 s, fail-open.
 - Channels: stable / beta (separate manifest).
 - Site packs and game packs can update **independently** (small signed JSON/TOML from the same release feed) without a full app update.
+- **Built (2026-11-18), decisions taken:**
+  - `tauri-plugin-updater` =2.14.1 (Windows TLS via `native-tls`, no zip), feed `https://github.com/StergiosF/SnailNet/releases/latest/download/latest.json`, Windows `installMode: passive` (a progress bar; the per-machine installer asks UAC once per update). The NSIS hooks above do the service stop/re-register/start, so an update is the installer run with `/UPDATE`.
+  - **Key:** generated with `tauri signer generate`, no password; the private key is `%USERPROFILE%\.tauri\snailnet-updater.key` on the dev PC, never in the repo; only the public key is in `tauri.conf.json`. Back it up offline: losing it strands installed copies on their version.
+  - **App side:** Rust commands `check_update` / `install_update` (`app/src-tauri/src/updates.rs`, no JS plugin package or capability needed); Settings → About → **Updates** (`UpdateRow.svelte`): "Check for updates" → "SnailNet x.y is out" → Install. Manual only for now: no check on start, nothing installs without the click. A quiet check on start can come with a notice later.
+  - **Pipeline:** `.github/workflows/release.yml` runs the same script on a `v*` tag (or by hand) with the secret `TAURI_SIGNING_PRIVATE_KEY` and puts installer, `.sig` and `latest.json` on a **draft** release; publishing the draft is the go-live (`releases/latest` skips drafts).
+  - **Open:** the repository is private, so the feed URL answers 404 to the app until the repo (or a separate public releases repo) is public. Channels (beta) and the site/game pack feed are not built.
 
 ### 17.3 Code signing (deferred, D1)
 
 Without Authenticode, SmartScreen will show "Windows protected your PC" on first install. That's acceptable for personal use. Before going public: Azure Trusted Signing or an OV/EV certificate; sign `SnailNet.exe`, `snailnet-service.exe` and the installer.
+
+- **Notes (2026-11-18), still deferred:** the updater signature (§17.2) only proves an update came from us; it does nothing for SmartScreen. When a certificate exists: Tauri signs the app exe and the installer through `bundle.windows.signCommand` (Azure Trusted Signing: `trusted-signing-cli`; a certificate: `signtool sign /fd sha256 /tr <timestamp> …`) or `certificateThumbprint`; `snailnet-service.exe` is a resource, not built by Tauri, so `scripts/build-installer.ps1` must sign it with the same command between its cargo build and `tauri build`. In CI the certificate goes in as a secret (Trusted Signing: Azure credentials). `WinDivert.dll` stays as upstream ships it (unsigned); `WinDivert64.sys` keeps its own upstream signature.
 
 ---
 
