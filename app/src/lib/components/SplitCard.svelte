@@ -2,7 +2,9 @@
   // The split in short (PLAN.md §14.2): one bar of the mode's shares in
   // their inks, a line per slice (what it moves against what its share
   // keeps for it), how many take only what's free, and the ways on:
-  // Fine-tune (the Split page) and Reset split.
+  // Fine-tune (the Split page) and Reset split. Until put away, a one-time
+  // hint says how shares change and that unused share is never wasted
+  // (§14.5 step 4; − / + replaced dragging, §14.3).
   import { resetSplit } from "../actions";
   import { mbps, percent } from "../format";
   import { t } from "../i18n";
@@ -13,6 +15,11 @@
   let { ledger, canEdit }: { ledger: Ledger | null; canEdit: boolean } = $props();
 
   const s = $derived(ledger ? summary(ledger) : null);
+
+  function fineTune() {
+    ui.dismissCoach();
+    ui.page = "split";
+  }
   const ink = (x: Slice) => (x.ink >= 0 ? `var(--ink-${x.ink})` : "var(--stone-0)");
   const use = (x: Slice) =>
     x.kept === null ? `${mbps(x.bps)} ${t("line.unit")}` : `${mbps(x.bps)} / ${mbps(x.kept)} ${t("line.unit")}`;
@@ -44,8 +51,17 @@
   {:else}
     <div class="bar skeleton" aria-hidden="true"></div>
   {/if}
+  {#if ui.coach && s && canEdit}
+    <div class="coach" role="note" aria-labelledby="coach-title">
+      <p>
+        <b id="coach-title">{t("coach.title")}</b>
+        {t("coach.body")}
+      </p>
+      <button type="button" class="btn btn-quiet" onclick={() => ui.dismissCoach()}>{t("coach.ok")}</button>
+    </div>
+  {/if}
   <div class="actions">
-    <button type="button" class="btn" onclick={() => (ui.page = "split")}>
+    <button type="button" class="btn" onclick={fineTune}>
       {t("card.finetune")}<i class="icon" aria-hidden="true">&#xE72A;</i>
     </button>
     <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => void resetSplit()}>
@@ -123,6 +139,31 @@
     font-size: 13px;
     color: var(--text-secondary);
   }
+  .coach {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 12px 12px 12px 14px;
+    border-radius: 12px;
+    background: var(--shell-soft);
+    animation: rise-in 420ms var(--ease-out) 600ms backwards;
+  }
+  .coach p {
+    flex: 1;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+  }
+  .coach b {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+  .coach .btn {
+    flex: none;
+  }
   .actions {
     display: flex;
     gap: 8px;
@@ -133,6 +174,9 @@
     font-size: 11px;
   }
   @media (forced-colors: active) {
+    .coach {
+      border: 1px solid CanvasText;
+    }
     .bar i,
     .sw {
       forced-color-adjust: none;

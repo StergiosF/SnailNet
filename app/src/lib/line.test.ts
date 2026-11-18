@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  coachSeen,
+  forgetCoach,
+  markCoachSeen,
   dismissFirstRun,
   firstRunDismissed,
   forgetFirstRun,
@@ -116,5 +119,26 @@ describe("first run", () => {
     dismissFirstRun(storage);
     forgetFirstRun(storage);
     expect(firstRunDismissed(storage)).toBe(false);
+  });
+});
+
+describe("split hint", () => {
+  it("is remembered once put away, and forgotten on reset", () => {
+    const m = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+    expect(coachSeen(store)).toBe(false);
+    markCoachSeen(store);
+    expect(coachSeen(store)).toBe(true);
+    forgetCoach(store);
+    expect(coachSeen(store)).toBe(false);
+  });
+
+  it("shows again when storage throws", () => {
+    const broken = { getItem: () => { throw new Error("no storage"); } };
+    expect(coachSeen(broken)).toBe(false);
   });
 });

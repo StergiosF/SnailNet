@@ -73,3 +73,31 @@ export function forgetFirstRun(storage?: Pick<Storage, "removeItem">): void {
     // Nothing remembered to forget.
   }
 }
+
+const COACH_KEY = "snailnet.coach.split";
+
+/** Whether the one-time hint on "The split" (§14.5 step 4) was put away. */
+export function coachSeen(storage?: Pick<Storage, "getItem">): boolean {
+  try {
+    return (storage ?? globalThis.localStorage)?.getItem(COACH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markCoachSeen(storage?: Pick<Storage, "setItem">): void {
+  try {
+    (storage ?? globalThis.localStorage)?.setItem(COACH_KEY, "1");
+  } catch {
+    // Not remembered; the hint may show once more.
+  }
+}
+
+/** After "Reset SnailNet": the hint shows again with first run. */
+export function forgetCoach(storage?: Pick<Storage, "removeItem">): void {
+  try {
+    (storage ?? globalThis.localStorage)?.removeItem(COACH_KEY);
+  } catch {
+    // Nothing remembered to forget.
+  }
+}
