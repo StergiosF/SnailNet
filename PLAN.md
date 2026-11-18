@@ -998,6 +998,8 @@ Estimates assume one developer working with Claude Code, part-time-to-steady pac
 
 - NSIS installer with service + driver, uninstall, updater + GitHub Releases pipeline, signed site/game pack feed.
 - README with the "help, my internet broke" section, licences, privacy statement.
+  - **Done (2026-11-18):** `README.md` (what it is, four escalating ways out: Pause, stop the service, uninstall, restart; privacy: what is read, kept, and the only connections made, checked against the code: updates only on click, speed test only on Measure, pings to the router and 1.1.1.1 while shaping, pinned or not; licences). **Third-party notices:** `scripts/third-party-notices.ps1` follows the normal dependencies of `snailnet-app` and `snailnet-service` for Windows x64 (`cargo metadata`) plus the two bundled npm packages, and writes each one's licence and notice files (authors as the copyright line where a crate ships none) to `target\THIRD-PARTY-NOTICES.txt`; `build-installer.ps1` runs it after `npm ci` and the installer ships it as `licenses\THIRD-PARTY-NOTICES.txt` next to WinDivert's. Not committed (~3 MB, 324 packages, changes with every bump). WinDivert: LGPLv3, unmodified, loaded at run time, source link in both files.
+  - **Needs the user:** SnailNet's own licence (the README says "not chosen yet; all rights reserved"); it matters before the repo goes public for the update feed.
 - Final perf run against §20; bug bash.
 - **Exit:** a clean install on a fresh Windows 10 and a fresh Windows 11 VM works end-to-end; tag `v1.0.0`.
 
