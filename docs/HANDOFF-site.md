@@ -32,12 +32,17 @@ was built from, kept for its research and its "why v1 looked bad".
   screen because the stacked content needs it (the phone hero grows so all
   of the app window stays in view).
 - **Tests:** `scripts/site-test.cjs` (jsdom from a temp install; usage in
-  its header) covers the download buttons and the demo: 11 tests.
+  its header) covers the download buttons, the demo and the feature tabs: 12 tests.
 - **First release, v0.0.1, published 2026-11-18** (tag pushed, Release
   workflow built and drafted it, then published with notes). The site's
   buttons now link `releases/latest/download/SnailNet-setup.exe` and show
   "Version 0.0.1 · 4.4 MB" (checked live). The section "Where things
   stand" below predates it.
+- **v0.0.2, published 2026-11-19:** plainer mode words (app, README,
+  site) and drawn, centred stepper buttons. Same path: version bumped
+  everywhere (the crates pin each other at an exact 0.0.x, so those pins
+  move too), tag pushed, Release drafted it, published with notes;
+  `releases/latest/download/latest.json` answers 0.0.2.
 - **The snail** was also fixed the same day: its eye stalks now grow from
   the head (app icon set, tray, Snail.svelte, README pictures, favicons,
   og.png).
