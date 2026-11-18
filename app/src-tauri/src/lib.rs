@@ -24,6 +24,7 @@ pub mod service_start;
 pub mod toast;
 pub mod tray;
 pub mod tray_icon;
+pub mod updates;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -150,6 +151,7 @@ pub fn run() {
         }))
         .plugin(autostart::plugin())
         .plugin(hotkey::plugin())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(shared.clone())
         .manage(icon::Icons::default())
         .setup(move |app| {
@@ -201,7 +203,9 @@ pub fn run() {
             metered::network_metered,
             hotkey::hotkey_enabled,
             hotkey::set_hotkey,
-            service_start::start_service
+            service_start::start_service,
+            updates::check_update,
+            updates::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running the SnailNet app");

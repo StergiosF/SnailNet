@@ -17,6 +17,7 @@
   import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import UpdateRow from "./UpdateRow.svelte";
 
   let { canEdit }: { canEdit: boolean } = $props();
 
@@ -346,6 +347,7 @@
         {#if serviceVersion}<span>{t("settings.about.service", { version: serviceVersion })}</span>{/if}
       </div>
     </div>
+    <UpdateRow />
   </div>
 </section>
 
