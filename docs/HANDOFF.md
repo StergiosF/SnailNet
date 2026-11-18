@@ -2,7 +2,66 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (updated 2026-11-18, end of session)
+## Start here (2026-11-18, late; newest)
+
+Everything is committed and pushed on `main`. The user leaves decisions
+to Claude: pick the next step, decide, record it in PLAN.md, commit and
+push each verified step.
+
+### Done this session (details and decisions in PLAN.md)
+
+- **Speeds per network (§10.3):** router MAC = network id, SSID/adapter
+  = name (`snailnet-win::network`); `[network]` + `[[networks]]` in
+  config (`snailnet-core::networks`); `snailnet-service::netwatch`
+  swaps the line on a change (route checked every 5 s); a new network
+  is watching-only with a "New network: {name}" notice; Settings →
+  Connection shows "On {network}" and the other networks.
+- **Focus boost (§11.5):** the app polls the window in front
+  (`app/src-tauri/src/focus.rs`, 300 ms, debounced, repeated every
+  60 s) → `FocusChanged`; game = exclusive fullscreen or an exe in a
+  launcher library (`snailnet-core::games`). The service
+  (`snailnet-service::focus`) puts those PIDs in `Plan.focus`; the
+  shaper gives their families High *flow* priority (no share change).
+  Games stay first until they exit.
+- **Gaming mode while playing:** off by default; plans with Gaming while
+  a game runs, the picked mode stays saved.
+- New IPC `SetSettings`; Settings → Connection has the switches "Put
+  what you're using first" (on) and "Gaming mode while you play" (off).
+
+### Not tested for real (user's call, 2026-11-18)
+
+The user ticked the real-service test as seen and chose to move on.
+**Nothing of Phase 4 has run inside the real service or been seen in a
+real window.** Every automated check passes (cargo clippy/fmt/test,
+app check/lint/vitest/build, Tauri clippy/test). The old dev service
+(elevated, PID from 2026-11-17) still locks `target\debugsnailnet-service.exe`, so `cargo build -p snailnet-service` fails with
+"Access is denied" until it's stopped (Ctrl+C in its console, or an
+elevated `Stop-Process`). The test steps are under "First thing next
+session" below; do them whenever the user wants.
+
+### Next work, in order (no user needed)
+
+1. **Show the Gaming switch-over in the app:** while Gaming-while-playing
+   applies, the mode picker/header should say so (the service needs to
+   tell: e.g. a `playing: bool` or the effective profile in the
+   snapshot).
+2. **Per-app overrides (§11.5):** "This is a game", "Never boost",
+   "Always High" on the app rows / rule editor; stored in config
+   (e.g. `[focus] games = [...]`, `never = [...]`) and honoured by the
+   app's `is_game` and the service's focus list.
+3. **Metered network note (§10.3):** `INetworkCostManager` / WinRT
+   `ConnectionCost`; a note in Settings → Connection.
+4. Then Phase 5 (profiles/hotkey, new-app notifications, §11.4), Phase 6
+   (installer, updater).
+
+### Still owed (need the user)
+
+Phase 4 exit check (ping under load within +10 ms; games boosted
+automatically), Phase 3 exit test (someone new, mouse only, < 15 s),
+Phase 2 exit check (YouTube 45% in three browsers), Phase 1 soak run 3,
+the anti-cheat test.
+
+## Start here (earlier 2026-11-18)
 
 Everything below is committed and pushed on `main` (last: 5df79b0).
 The user leaves decisions to Claude: pick the next step, decide, record

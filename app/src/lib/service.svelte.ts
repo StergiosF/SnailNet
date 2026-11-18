@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { withSpeeds } from "./line";
 import { withBar } from "./rules";
-import type { Latest, Link, Rule, SaveError, ServiceState, Snapshot, StatsTick, Target } from "./types";
+import type { Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
 
 const notConnected: SaveError = { kind: "failed", message: "not connected" };
 
@@ -115,11 +115,12 @@ class Service {
     return this.#change("set_line", { line: next });
   }
 
-  /** Put the app in front, and games, first (§11.5), or not. */
-  async setFocusBoost(on: boolean): Promise<number> {
+  /** Change some general settings (§11.5: focus boost, Gaming mode while
+   *  playing), keeping the rest. */
+  async setSettings(change: Partial<Settings>): Promise<number> {
     const settings = this.snapshot?.config.settings;
     if (!settings) throw notConnected;
-    return this.#change("set_settings", { settings: { ...settings, focus_boost: on } });
+    return this.#change("set_settings", { settings: { ...settings, ...change } });
   }
 
   /** Save the line speed (PLAN.md §12.2 `SetLine`); null = don't shape

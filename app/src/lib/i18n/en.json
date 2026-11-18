@@ -209,6 +209,8 @@
   "adapt.body": "SnailNet watches your ping and follows your line when it gets faster or slower. Turn off to keep the speed exactly as set.",
   "focus.title": "Put what you're using first",
   "focus.body": "The app in front gets its traffic out first, and a game keeps that for as long as it runs. It never takes a bigger share of your connection.",
+  "gaming.title": "Gaming mode while you play",
+  "gaming.body": "When a game starts, SnailNet shares your connection the Gaming way, and goes back to your mode when it ends.",
   "state.measuring.title": "Measuring your connection",
   "state.measuring.body": "Sharing is off for about 20 seconds so the test can use the whole line.",
   "settings.windows": "Windows",

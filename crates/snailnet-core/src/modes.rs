@@ -9,6 +9,9 @@
 use crate::rules::{Config, Profile, Rule, Target};
 use crate::scheduler::Priority;
 
+/// The Gaming mode's id.
+pub const GAMING: &str = "gaming";
+
 /// (id, name) of each mode, in the order the app shows them.
 pub const MODES: [(&str, &str); 4] = [
     ("balanced", "Balanced"),

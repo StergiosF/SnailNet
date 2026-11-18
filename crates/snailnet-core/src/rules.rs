@@ -93,6 +93,9 @@ pub struct Settings {
     /// The app in front, and games while they run, go first (High
     /// priority, never a bigger share; PLAN.md §11.5).
     pub focus_boost: bool,
+    /// Use the Gaming mode while a game runs, then go back (PLAN.md §11.5
+    /// "Optional automation"). Off by default.
+    pub gaming_while_playing: bool,
 }
 
 impl Default for Settings {
@@ -101,6 +104,7 @@ impl Default for Settings {
             low_latency: true,
             lan_exempt: true,
             focus_boost: true,
+            gaming_while_playing: false,
         }
     }
 }

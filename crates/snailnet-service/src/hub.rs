@@ -131,11 +131,25 @@ impl Hub {
     /// `None` keeps the typed speed).
     pub fn plan_live(&self, now: u64, live: [Option<f64>; 2]) -> (Plan, String) {
         let i = self.lock();
-        let mut plan = i.config.plan_live(now, live);
+        let gaming = i.config.settings.gaming_while_playing
+            && i.focus.has_games()
+            && i.config.profiles.iter().any(|p| p.id == modes::GAMING);
+        let mut plan;
+        let name;
+        if gaming {
+            // The mode the user picked stays saved; only the plan changes.
+            let mut c = i.config.clone();
+            c.active_profile = modes::GAMING.into();
+            plan = c.plan_live(now, live);
+            name = c.active().name.clone();
+        } else {
+            plan = i.config.plan_live(now, live);
+            name = i.config.active().name.clone();
+        }
         if i.config.settings.focus_boost && plan.shapes_anything() {
             plan.focus = i.focus.pids();
         }
-        (plan, i.config.active().name.clone())
+        (plan, name)
     }
 
     /// The config as it is now.
@@ -735,6 +749,13 @@ mod tests {
         assert_eq!(hub.plan(0).0.focus, vec![me]);
         hub.prune_focus();
         assert_eq!(hub.plan(0).0.focus, vec![me], "this test is still running");
+        hub.change(hub.rev(), |c| {
+            c.settings.gaming_while_playing = true;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(hub.plan(0).1, "Gaming", "a game runs: Gaming mode");
+        assert_eq!(hub.config().active_profile, "balanced", "the pick is kept");
         hub.change(hub.rev(), |c| {
             c.settings.focus_boost = false;
             Ok(())

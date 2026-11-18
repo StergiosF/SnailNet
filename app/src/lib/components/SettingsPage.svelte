@@ -14,6 +14,7 @@
   import { lineDialog } from "../lineDialog.svelte";
   import { modeName } from "../modes";
   import { service } from "../service.svelte";
+  import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
 
@@ -59,11 +60,12 @@
   let pinning = $state(false);
   let focusing = $state(false);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
+  const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
 
-  async function setFocusBoost(on: boolean) {
+  async function setSetting(change: Partial<Settings>) {
     focusing = true;
     try {
-      await service.setFocusBoost(on);
+      await service.setSettings(change);
     } catch {
       // The switch shows the saved value again from the next snapshot.
     } finally {
@@ -178,7 +180,21 @@
         class="switch"
         checked={focusBoost}
         disabled={!canEdit || focusing}
-        onchange={(e) => void setFocusBoost(e.currentTarget.checked)}
+        onchange={(e) => void setSetting({ focus_boost: e.currentTarget.checked })}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("gaming.title")}</b>
+        <span>{t("gaming.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={gamingWhilePlaying}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setSetting({ gaming_while_playing: e.currentTarget.checked })}
       />
     </label>
   </div>

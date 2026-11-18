@@ -102,6 +102,8 @@ export interface Settings {
   lan_exempt: boolean;
   /** The app in front, and games while they run, go first. */
   focus_boost: boolean;
+  /** Use the Gaming mode while a game runs. */
+  gaming_while_playing: boolean;
 }
 
 export interface Config {
