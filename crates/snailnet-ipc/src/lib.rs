@@ -33,6 +33,9 @@ pub const PROTOCOL: u32 = 1;
 pub const MIN_PROTOCOL: u32 = 1;
 /// Largest frame either side sends or accepts.
 pub const MAX_FRAME: usize = 1 << 20;
+/// A client that lists this in Hello's `ui_capabilities` gets
+/// [`Event::NewApp`] (older clients can't decode it).
+pub const CAP_NEW_APPS: &str = "new-apps";
 
 /// The pipe's DACL. NETWORK denied (listed first, so it wins); SYSTEM,
 /// Administrators and the pipe's owner (`OW`: whoever created it — the
@@ -132,6 +135,8 @@ pub enum Request {
         rev: u64,
     },
     RunSpeedTest,
+    /// The user answered a [`NewApp`] prompt: `action` is one of
+    /// [`PromptAction`]'s names (`fine`, `slice`, `block`).
     AnswerPrompt {
         prompt_id: u64,
         action: String,
@@ -261,6 +266,50 @@ pub struct Snapshot {
     /// sorted by name. Missing from older services.
     #[serde(default)]
     pub sites: Vec<SiteInfo>,
+    /// New apps not answered yet (PLAN.md §11.4), oldest first. Missing
+    /// from older services.
+    #[serde(default)]
+    pub prompts: Vec<NewApp>,
+}
+
+/// An app went online for the first time (PLAN.md §11.4). It is already
+/// allowed (it joins Everything else); the user may answer with
+/// [`Request::AnswerPrompt`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NewApp {
+    pub prompt_id: u64,
+    /// What a family rule names.
+    pub family: String,
+    pub name: String,
+    /// Lowercase exe file name.
+    pub exe: String,
+}
+
+/// The answers to a [`NewApp`] prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptAction {
+    /// Leave it in Everything else.
+    Fine,
+    /// The user will give it a share of its own (the app opens the split).
+    Slice,
+    /// Block its internet.
+    Block,
+}
+
+impl PromptAction {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Fine => "fine",
+            Self::Slice => "slice",
+            Self::Block => "block",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        [Self::Fine, Self::Slice, Self::Block]
+            .into_iter()
+            .find(|a| a.name() == s)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -394,6 +443,8 @@ pub enum Event {
     ConfigChanged {
         rev: u64,
     },
+    /// Only to clients with [`CAP_NEW_APPS`].
+    NewApp(NewApp),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -558,6 +609,12 @@ mod tests {
                         id: "youtube".into(),
                         name: "YouTube".into(),
                     }],
+                    prompts: vec![NewApp {
+                        prompt_id: 9,
+                        family: "hades".into(),
+                        name: "Hades".into(),
+                        exe: "hades.exe".into(),
+                    }],
                 })),
             },
             ServerMsg::Reply {
@@ -602,6 +659,12 @@ mod tests {
                 playing: true,
             }),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
+            ServerMsg::Event(Event::NewApp(NewApp {
+                prompt_id: 1,
+                family: "steam".into(),
+                name: "Steam".into(),
+                exe: "steam.exe".into(),
+            })),
         ] {
             roundtrip(msg);
         }
@@ -693,6 +756,14 @@ mod tests {
             }
         );
         assert_eq!(d.unidentified(), 3);
+    }
+
+    #[test]
+    fn prompt_actions_have_stable_names() {
+        for a in [PromptAction::Fine, PromptAction::Slice, PromptAction::Block] {
+            assert_eq!(PromptAction::parse(a.name()), Some(a));
+        }
+        assert_eq!(PromptAction::parse("later"), None);
     }
 
     #[test]

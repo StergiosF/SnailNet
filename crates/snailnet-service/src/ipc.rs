@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use snailnet_ipc::{
-    ClientMsg, ErrorCode, FrameError, MIN_PROTOCOL, PIPE_SDDL, PROTOCOL, Reply, Request, ServerMsg,
-    decode, encode, frame_len, parse_len,
+    CAP_NEW_APPS, ClientMsg, ErrorCode, Event, FrameError, MIN_PROTOCOL, PIPE_SDDL, PROTOCOL,
+    Reply, Request, ServerMsg, decode, encode, frame_len, parse_len,
 };
 use snailnet_win::fs::SecurityAttributes;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -228,6 +228,8 @@ async fn next_tick(t: &mut Option<Interval>) {
 struct Session {
     hello: bool,
     ticker: Option<Interval>,
+    /// Said in Hello that it understands [`Event::NewApp`].
+    new_apps: bool,
 }
 
 async fn serve(
@@ -251,6 +253,7 @@ async fn serve(
     let mut s = Session {
         hello: false,
         ticker: None,
+        new_apps: false,
     };
     let result = loop {
         tokio::select! {
@@ -275,6 +278,7 @@ async fn serve(
                 }
             }
             ev = events.recv() => match ev {
+                Ok(Event::NewApp(_)) if !s.new_apps => {}
                 Ok(ev) if s.hello => {
                     if let Err(e) = write_msg(&mut wr, &ServerMsg::Event(ev)).await {
                         break Err(e);
@@ -313,7 +317,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
         Request::Hello {
             protocol,
             client_version,
-            ..
+            ui_capabilities,
         } => {
             if !(MIN_PROTOCOL..=PROTOCOL).contains(&protocol) {
                 return err(
@@ -325,6 +329,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             }
             debug!("IPC: hello from client {client_version}");
             s.hello = true;
+            s.new_apps = ui_capabilities.iter().any(|c| c == CAP_NEW_APPS);
             Reply::Welcome {
                 service_version: env!("CARGO_PKG_VERSION").into(),
                 protocol: PROTOCOL,
@@ -374,10 +379,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             hub.focus_changed(pid, is_game);
             ack(Ok(hub.rev()))
         }
-        other @ Request::AnswerPrompt { .. } => err(
-            ErrorCode::Unsupported,
-            format!("{} isn't available in this version", other.name()),
-        ),
+        Request::AnswerPrompt { prompt_id, action } => ack(hub.answer_prompt(prompt_id, &action)),
     }
 }
 
@@ -504,7 +506,7 @@ mod tests {
             action: "x".into(),
         }) {
             Err(ClientError::Refused {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::Invalid,
                 ..
             }) => {}
             r => panic!("{r:?}"),

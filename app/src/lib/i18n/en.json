@@ -149,6 +149,8 @@
   "settings.hotkey": "Ctrl+Alt+S switches mode",
   "settings.hotkey.body": "Press it anywhere to move to the next mode; the tray panel opens to show which one is on.",
   "settings.hotkey.taken": "Another program already uses Ctrl+Alt+S, so SnailNet can't.",
+  "settings.newapps": "Tell me when an app goes online for the first time",
+  "settings.newapps.body": "A notification with Fine, Give it a slice and Block. The app isn't held back while you decide. Not while you play fullscreen: those wait for one summary afterwards.",
   "settings.metered": "Windows marks this network as metered. Measuring sends and receives for about 20 seconds, which counts against its data.",
   "first.game": "It's a game",
   "first.never": "Never put it first",

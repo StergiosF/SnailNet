@@ -28,6 +28,11 @@ impl DataDir {
         &self.root
     }
 
+    /// The apps SnailNet has met (PLAN.md §11.4).
+    pub fn known_apps(&self) -> PathBuf {
+        self.root.join("known-apps.txt")
+    }
+
     pub fn config(&self) -> PathBuf {
         self.root.join("config.toml")
     }

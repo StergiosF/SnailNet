@@ -3,6 +3,7 @@
   // pages (Now, Split, Settings) and the line; beside it the title bar's
   // caption buttons, a state that needs attention if there is one, and
   // the open page. First run takes the whole window until it's done.
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import AddSlice from "./lib/components/AddSlice.svelte";
   import FirstRun from "./lib/components/FirstRun.svelte";
@@ -29,7 +30,13 @@
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
-    return ui.tick();
+    // "Give it a slice" on a new-app notification (§11.4).
+    const unlisten = listen<{ family: string }>("give-slice", (e) => ui.giveSlice(e.payload.family));
+    const stopTick = ui.tick();
+    return () => {
+      stopTick();
+      void unlisten.then((u) => u());
+    };
   });
 
   // First run (§14.5): once the service answers with no speed set; it

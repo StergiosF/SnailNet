@@ -104,6 +104,20 @@ pub struct Settings {
     /// counted as a game.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub never_first: Vec<String>,
+    /// What happens the first time an app goes online (PLAN.md §11.4).
+    pub new_apps: NewApps,
+}
+
+/// What SnailNet does when an app it hasn't seen before goes online
+/// (PLAN.md §11.4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NewApps {
+    /// Let it go online and say so in a notification.
+    #[default]
+    Notify,
+    /// Say nothing.
+    Off,
 }
 
 impl Default for Settings {
@@ -115,6 +129,7 @@ impl Default for Settings {
             gaming_while_playing: false,
             games: Vec::new(),
             never_first: Vec::new(),
+            new_apps: NewApps::Notify,
         }
     }
 }

@@ -108,6 +108,9 @@ export interface Settings {
   games?: string[];
   /** Families the user says never go first (missing when none). */
   never_first?: string[];
+  /** The first time an app goes online: a notification, or nothing
+   *  (missing from older services: notify). */
+  new_apps?: "notify" | "off";
 }
 
 export interface Config {
@@ -140,6 +143,16 @@ export interface Snapshot {
   apps: AppInfo[];
   /** Every site a rule may name (missing from older services). */
   sites?: SiteInfo[];
+  /** New apps not answered yet (§11.4; missing from older services). */
+  prompts?: NewApp[];
+}
+
+/** An app went online for the first time (§11.4). */
+export interface NewApp {
+  prompt_id: number;
+  family: string;
+  name: string;
+  exe: string;
 }
 
 export interface ClassTick {

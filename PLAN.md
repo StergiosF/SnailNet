@@ -530,6 +530,16 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 - **Strict mode** (setting): hold the app's new connections (SOCKET layer blocks with retry semantics; NETWORK layer holds the SYN up to 20 s) until answered; on timeout, apply the default action.
 - Quiet hours: suppress toasts while fullscreen (games) and batch them into one summary toast afterwards.
 - Windows' own components (signed by Microsoft, in System32) never prompt.
+- **Notify mode, built (2026-11-18), decisions taken:**
+  - **The service decides what is new** (`snailnet-service::newapps`). Every family the shaper sees is checked once against `known-apps.txt` in the data folder (one family id per line, plus `since <unix>`: when SnailNet first looked). It's a file of its own, not part of `config.toml`, so meeting an app doesn't bump the config revision or reload the plan.
+  - **Quiet (known silently, no prompt):** everything met in the first **10 minutes** after SnailNet first looked (a fresh install doesn't greet every running program); parts of Windows (System, Unknown, services, any exe under the Windows folder, `pkg:Microsoft.Windows…` packages; "in System32" is the test, not the signature, which is slow to read); and apps the user already said something about (a rule in *any* mode, shipped mode templates included, a block, a boost, "It's a game", "Never put it first").
+  - Apps are seen only while the engine runs (shaping or blocking). With no line speed nothing is diverted, so nothing is new; accepted.
+  - **IPC:** `Event::NewApp { prompt_id, family, name, exe }`, only to clients that list `new-apps` in Hello's `ui_capabilities` (an older app can't decode it); `Snapshot.prompts` lists the open ones (≤ 20, oldest dropped, in memory), so an app started later still shows them. `AnswerPrompt { action: fine | slice | block }`: block blocks the family in every mode (§11.3); fine and slice only close the question; an answered or unknown id is refused.
+  - `Settings.new_apps = notify | off` (default notify); switch in Settings → Windows ("Tell me when an app goes online for the first time"). Off still learns apps (turning it back on doesn't flood) and drops the open questions.
+  - **App:** `app/src-tauri/src/toast.rs` shows WinRT toasts directly (the `windows` crate already in the tree; `tauri-plugin-notification` has no action buttons on desktop) under the AppUserModelID `net.snailnet.app`, registered in HKCU at start. One toast per app per app run: "{app} went online · It shares Everything else for now." with **Fine · Give it a slice · Block**. "Give it a slice" answers the service and opens the window on the split with a 20% slice for the app (webview event `give-slice`).
+  - **Quiet hours:** while a game, a presentation or another fullscreen program is in front (`SHQueryUserNotificationState`), toasts wait; afterwards one summary ("3 apps went online while you played: A, B and C"), or the normal toast if only one waited.
+  - Button clicks reach the app through the toast's `Activated` event while the app runs (it lives in the tray). A toast clicked later from Action Center after the app quit does nothing (no COM activator); accepted for v1.
+  - **Not yet:** seen in a real window or the real service; strict mode (the bullet above).
 
 ### 11.5 Focus boost (Smart)
 

@@ -917,10 +917,8 @@ impl runner::Running for Running {
     }
 
     fn seen(&self) -> Seen {
-        let apps = self
-            .shaper
-            .attribution()
-            .apps()
+        let all = self.shaper.attribution().apps();
+        let apps = all
             .iter()
             .map(|a| snailnet_ipc::AppInfo {
                 family: a.family.clone(),
@@ -928,10 +926,17 @@ impl runner::Running for Running {
                 exe: a.exe.clone(),
             })
             .collect();
+        let win = windows_dir();
+        let windows = all
+            .iter()
+            .filter(|a| crate::newapps::windows_part(a, &win))
+            .map(|a| a.family.clone())
+            .collect();
         Seen {
             apps,
             sites: self.shaper.site_slots(),
             names: Some(self.shaper.who().names()),
+            windows,
         }
     }
 

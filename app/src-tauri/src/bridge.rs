@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use serde::Serialize;
 use snailnet_ipc::{
-    Client, ClientError, Event, Reply, Request, ServerMsg, ServiceState, Snapshot, StatsTick,
+    Client, ClientError, Event, NewApp, Reply, Request, ServerMsg, ServiceState, Snapshot,
+    StatsTick,
 };
 
 /// Stats rate the UI asks for (PLAN.md §12.2).
@@ -91,6 +92,8 @@ pub trait Sink {
     fn snapshot(&self, snap: &Snapshot);
     fn state(&self, state: &ServiceState);
     fn stats(&self, tick: &StatsTick);
+    /// An app went online for the first time (PLAN.md §11.4).
+    fn new_app(&self, prompt: &NewApp);
 }
 
 fn fetch_snapshot<C: Conn, S: Sink>(conn: &mut C, sink: &S) -> Result<(), ClientError> {
@@ -118,6 +121,7 @@ pub fn session<C: Conn, S: Sink>(conn: &mut C, sink: &S, stop: &AtomicBool) -> C
         match conn.recv() {
             Ok(ServerMsg::Stats(t)) => sink.stats(&t),
             Ok(ServerMsg::Event(Event::StateChanged(s))) => sink.state(&s),
+            Ok(ServerMsg::Event(Event::NewApp(p))) => sink.new_app(&p),
             Ok(ServerMsg::Event(Event::ConfigChanged { .. })) => {
                 if let Err(e) = fetch_snapshot(conn, sink) {
                     return e;
@@ -196,6 +200,11 @@ mod tests {
         fn stats(&self, tick: &StatsTick) {
             self.0.borrow_mut().push(format!("stats {}", tick.t_ms));
         }
+        fn new_app(&self, prompt: &NewApp) {
+            self.0
+                .borrow_mut()
+                .push(format!("new app {}", prompt.family));
+        }
     }
 
     fn snapshot(rev: u64) -> Snapshot {
@@ -205,6 +214,7 @@ mod tests {
             config: Default::default(),
             apps: Vec::new(),
             sites: Vec::new(),
+            prompts: Vec::new(),
         }
     }
 
@@ -255,6 +265,12 @@ mod tests {
                 ServerMsg::Stats(tick(250)),
                 ServerMsg::Event(Event::ConfigChanged { rev: 4 }),
                 ServerMsg::Event(Event::StateChanged(ServiceState::Unshaped)),
+                ServerMsg::Event(Event::NewApp(NewApp {
+                    prompt_id: 1,
+                    family: "hades".into(),
+                    name: "Hades".into(),
+                    exe: "hades.exe".into(),
+                })),
                 ServerMsg::Stats(tick(500)),
             ]),
             calls: Vec::new(),
@@ -271,6 +287,7 @@ mod tests {
                 "stats 250",
                 "snapshot rev 4",
                 "state Unshaped",
+                "new app hades",
                 "stats 500",
             ]
         );

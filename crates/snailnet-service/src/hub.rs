@@ -5,7 +5,7 @@
 //! validate, save `config.toml` (atomically, old file → `.bak`), bump
 //! `rev`, then ask the runner to reload and tell every client.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -14,20 +14,21 @@ use snailnet_core::classify::{Pack, Resolver};
 use snailnet_core::modes;
 use snailnet_core::networks::Switch;
 use snailnet_core::rules::{
-    Boost, Config, Line, Measured, Network, Pause, Plan, Rule, Settings, Target,
+    Boost, Config, Line, Measured, Network, NewApps, Pause, Plan, Rule, Settings, Target,
 };
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
-    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, ServiceState, SiteInfo,
-    SiteTick, Snapshot, StatsTick,
+    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, PromptAction,
+    ServiceState, SiteInfo, SiteTick, Snapshot, StatsTick,
 };
 use snailnet_win::process::{WinProcesses, windows_dir};
 use tokio::sync::broadcast;
 
 use crate::focus::{Focus, Proc};
+use crate::newapps::Newcomers;
 use crate::paths::DataDir;
-use crate::runner::StopSignal;
+use crate::runner::{StopSignal, unix_now};
 use crate::store;
 use crate::tags::{self, Site};
 
@@ -43,6 +44,8 @@ pub struct Seen {
     pub sites: Vec<(String, String)>,
     /// Naming counters so far (they only grow while shaping runs).
     pub names: Option<NameTick>,
+    /// Families in `apps` that are parts of Windows (never "new", §11.4).
+    pub windows: HashSet<String>,
 }
 
 /// A process's app family (`None`: unknown), for the focus overrides.
@@ -87,6 +90,8 @@ struct Inner {
     speedtest: bool,
     /// What goes first now (§11.5).
     focus: Focus,
+    /// The apps met so far and the open new-app questions (§11.4).
+    newcomers: Newcomers,
 }
 
 impl Inner {
@@ -109,7 +114,7 @@ struct Sample {
 impl Hub {
     pub fn new(dir: DataDir, signal: StopSignal) -> Arc<Self> {
         Arc::new(Self {
-            dir,
+            dir: dir.clone(),
             signal,
             started: Instant::now(),
             events: broadcast::channel(64).0,
@@ -123,6 +128,10 @@ impl Hub {
                 sites: Vec::new(),
                 speedtest: false,
                 focus: Focus::default(),
+                newcomers: Newcomers::load(&dir.known_apps()).unwrap_or_else(|e| {
+                    tracing::warn!("could not read the list of known apps: {e}");
+                    Newcomers::default()
+                }),
             }),
             family_of: Mutex::new(family_of_process()),
         })
@@ -280,6 +289,7 @@ impl Hub {
             config: i.config.clone(),
             apps: i.apps.clone(),
             sites: known_sites(&i.config),
+            prompts: i.newcomers.pending().to_vec(),
         }
     }
 
@@ -315,6 +325,7 @@ impl Hub {
             i.apps = seen.apps;
             i.sites = seen.sites;
             names = seen.names;
+            self.meet_apps(&mut i, &seen.windows);
         }
         if i.last.as_ref().is_some_and(|l| at <= l.at) {
             return;
@@ -343,6 +354,45 @@ impl Hub {
             up: snap.up.clone(),
             names,
         });
+    }
+
+    /// Check the apps seen for newcomers (§11.4): remember them, and ask
+    /// about them if the user wants that.
+    fn meet_apps(&self, i: &mut Inner, windows: &HashSet<String>) {
+        let notify = i.rev > 0 && i.config.settings.new_apps == NewApps::Notify;
+        let Inner {
+            newcomers,
+            apps,
+            config,
+            ..
+        } = i;
+        let (prompts, changed) = newcomers.observe(apps, windows, config, notify, unix_now());
+        if changed && let Err(e) = newcomers.save(&self.dir.known_apps()) {
+            tracing::warn!("could not save the list of known apps: {e}");
+        }
+        for p in prompts {
+            tracing::info!("new app online: {} ({})", p.name, p.family);
+            let _ = self.events.send(Event::NewApp(p));
+        }
+    }
+
+    /// The user answered new-app question `prompt_id` (§11.4). `block`
+    /// blocks the app; `fine` and `slice` only close the question (the app
+    /// opens the split for a slice).
+    pub fn answer_prompt(&self, prompt_id: u64, action: &str) -> Result<u64, Refusal> {
+        let action = PromptAction::parse(action)
+            .ok_or_else(|| (ErrorCode::Invalid, format!("{action:?} isn't an answer")))?;
+        let prompt = self.lock().newcomers.answer(prompt_id).ok_or_else(|| {
+            (
+                ErrorCode::Invalid,
+                "that question was answered already".to_owned(),
+            )
+        })?;
+        tracing::info!("new app {}: {}", prompt.family, action.name());
+        match action {
+            PromptAction::Block => self.set_blocked(&prompt.family, true, self.rev()),
+            PromptAction::Fine | PromptAction::Slice => Ok(self.rev()),
+        }
     }
 
     /// Shaping stopped: its counters are gone, and so are its rates.
@@ -555,10 +605,15 @@ impl Hub {
     }
 
     pub fn set_settings(&self, settings: Settings, rev: u64) -> Result<u64, Refusal> {
-        self.change(rev, |c| {
+        let quiet = settings.new_apps == NewApps::Off;
+        let r = self.change(rev, |c| {
             c.settings = settings;
             Ok(())
-        })
+        });
+        if r.is_ok() && quiet {
+            self.lock().newcomers.clear_pending();
+        }
+        r
     }
 
     pub fn set_line(&self, line: Line, rev: u64) -> Result<u64, Refusal> {
@@ -761,6 +816,47 @@ mod tests {
         let hub = Hub::new(d, StopSignal::new());
         hub.set_loaded(Config::default());
         (t, hub)
+    }
+
+    #[test]
+    fn a_new_app_is_asked_about_and_can_be_blocked() {
+        let t = tempfile::tempdir().unwrap();
+        let d = DataDir::new(t.path());
+        d.create().unwrap();
+        // SnailNet has been looking for a while: no quiet learning.
+        std::fs::write(d.known_apps(), "since 0\nbrave\n").unwrap();
+        let hub = Hub::new(d.clone(), StopSignal::new());
+        hub.set_loaded(Config::default());
+        let mut events = hub.subscribe();
+        let app = |family: &str| AppInfo {
+            family: family.into(),
+            name: family.to_uppercase(),
+            exe: format!("{family}.exe"),
+        };
+        let seen = Seen {
+            apps: vec![app("brave"), app("hades"), app(r"c:\windows\x.exe")],
+            windows: [r"c:\windows\x.exe".to_owned()].into(),
+            ..Seen::default()
+        };
+        hub.publish(&EngineSnapshot::default(), Some(seen.clone()));
+        let Ok(Event::NewApp(p)) = events.try_recv() else {
+            panic!("no prompt");
+        };
+        assert_eq!(p.family, "hades");
+        assert!(events.try_recv().is_err(), "brave is known, x is Windows");
+        assert_eq!(hub.snapshot().prompts, vec![p.clone()]);
+        let known = std::fs::read_to_string(d.known_apps()).unwrap();
+        assert!(known.contains("hades"));
+        // Seen again: no second question.
+        hub.publish(&EngineSnapshot::default(), Some(seen));
+        assert!(events.try_recv().is_err());
+
+        assert!(hub.answer_prompt(p.prompt_id, "maybe").is_err());
+        let rev = hub.answer_prompt(p.prompt_id, "block").unwrap();
+        assert_eq!(rev, 2);
+        assert_eq!(hub.config().blocked, ["hades"]);
+        assert!(hub.snapshot().prompts.is_empty());
+        assert!(hub.answer_prompt(p.prompt_id, "fine").is_err(), "answered");
     }
 
     fn rule(id: &str, share: u32) -> Rule {
@@ -1076,6 +1172,7 @@ mod tests {
                     ("twitch".into(), "Twitch".into()),
                 ],
                 names: Some(names),
+                ..Seen::default()
             })
         };
         let (brave, discord) = (Some(0), Some(1));

@@ -25,6 +25,7 @@ pub mod install;
 pub mod ipc;
 pub mod logging;
 pub mod netwatch;
+pub mod newapps;
 pub mod paths;
 pub mod runner;
 pub mod shaper;

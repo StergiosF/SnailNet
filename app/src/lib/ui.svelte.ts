@@ -5,6 +5,7 @@
 // save waits for the previous one to come back, so they never race.
 
 import { t } from "./i18n";
+import { addRule } from "./rules";
 import { coachSeen, dismissFirstRun, firstRunDismissed, forgetCoach, forgetFirstRun, markCoachSeen } from "./line";
 import { service } from "./service.svelte";
 import type { Rule, SaveError } from "./types";
@@ -112,6 +113,18 @@ class Ui {
         this.#settle();
       });
     });
+  }
+
+  /** "Give it a slice" on a new-app notification (§11.4): the split, with
+   *  the app added (or its row opened if it has one already). */
+  giveSlice(family: string) {
+    const id = family.toLowerCase();
+    const key = `family:${id}`;
+    this.page = "split";
+    this.adding = false;
+    const has = this.rules.some((r) => r.target.kind === "family" && r.target.id.toLowerCase() === id);
+    if (!has) this.change(addRule(this.rules, { kind: "family", id: family }));
+    this.open = key;
   }
 
   toggle(key: string) {

@@ -89,6 +89,7 @@
   let focusing = $state(false);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
+  const notifyNewApps = $derived(service.snapshot?.config.settings.new_apps !== "off");
   // The apps the user marked from their Boost menu (§11.5 overrides).
   const choices = $derived.by(() => {
     const s = service.snapshot?.config.settings;
@@ -293,6 +294,20 @@
         checked={hotkey === true}
         disabled={hotkey === null}
         onchange={(e) => void setHotkey(e.currentTarget.checked)}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("settings.newapps")}</b>
+        <span>{t("settings.newapps.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={notifyNewApps}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "notify" : "off" })}
       />
     </label>
   </div>

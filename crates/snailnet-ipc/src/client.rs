@@ -49,6 +49,16 @@ pub struct Client {
 impl Client {
     /// Connect to `pipe` (normally [`crate::PIPE_NAME`]) and say Hello.
     pub fn connect(pipe: &str, client_version: &str) -> Result<Self, ClientError> {
+        Self::connect_with(pipe, client_version, &[])
+    }
+
+    /// [`Client::connect`], announcing `capabilities` (e.g.
+    /// [`crate::CAP_NEW_APPS`]) in Hello.
+    pub fn connect_with(
+        pipe: &str,
+        client_version: &str,
+        capabilities: &[&str],
+    ) -> Result<Self, ClientError> {
         let deadline = Instant::now() + Duration::from_secs(2);
         let file = loop {
             match OpenOptions::new().access_mode(CLIENT_ACCESS).open(pipe) {
@@ -84,7 +94,7 @@ impl Client {
         let hello = c.call(Request::Hello {
             client_version: client_version.into(),
             protocol: PROTOCOL,
-            ui_capabilities: Vec::new(),
+            ui_capabilities: capabilities.iter().map(|c| (*c).to_owned()).collect(),
         });
         // The service hangs up on clients it doesn't accept.
         let hello = match hello {
