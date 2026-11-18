@@ -11,8 +11,14 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   App: "Wait for my answer first" switch, held toast text. Not seen in a
   real window or service.
 
-Next: **C** (SOCKET-layer refusal + tray counter), **D** family
-split/merge, **E** small. "Needs the user" below still stands.
+- **C, SOCKET refusal + tray counter (§11.3), done:** `refuse.rs`
+  (DROP-mode SOCKET handle listing blocked apps' PIDs, internet connects
+  only, rebuilt every 0.5 s, fails open), `Attribution::processes`,
+  `WinDivertLib::check_filter`; tray badge + tooltip count. Never run
+  against the real driver.
+
+Next: **D** family split/merge (§11.6), then **E** small. "Needs the
+user" below still stands.
 
 ## Start here (2026-11-18, night)
 

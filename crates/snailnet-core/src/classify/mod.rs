@@ -81,7 +81,14 @@ pub struct Attribution<S> {
     table: RwLock<FlowTable>,
     slow: Mutex<Slow<S>>,
     apps: RwLock<Apps>,
+    /// Every process resolved so far and its app (PID → key, app), for
+    /// refusing a blocked app's connects by PID (PLAN.md §11.3).
+    procs: Mutex<HashMap<u32, (ProcessKey, AppId)>>,
 }
+
+/// Processes remembered at most; past it the list starts afresh (each
+/// process is added back at its next socket event).
+const MAX_PROCS: usize = 4096;
 
 impl<S: ProcessSource> Attribution<S> {
     pub fn new(resolver: Resolver, source: S) -> Self {
@@ -89,17 +96,25 @@ impl<S: ProcessSource> Attribution<S> {
             table: RwLock::new(FlowTable::default()),
             slow: Mutex::new(Slow { resolver, source }),
             apps: RwLock::new(Apps::default()),
+            procs: Mutex::new(HashMap::new()),
         }
     }
 
     /// Resolve a PID to its app (cached per process) and intern it.
     pub fn owner_of(&self, pid: u32) -> Owner {
-        let app = {
+        let resolved = {
             let mut slow = self.slow.lock().unwrap();
             let Slow { resolver, source } = &mut *slow;
-            resolver.resolve(pid, source).app
+            resolver.resolve(pid, source)
         };
-        let app = self.apps.write().unwrap().intern(app);
+        let app = self.apps.write().unwrap().intern(resolved.app);
+        if let Some(key) = resolved.process {
+            let mut procs = self.procs.lock().unwrap();
+            if procs.len() >= MAX_PROCS && !procs.contains_key(&pid) {
+                procs.clear();
+            }
+            procs.insert(pid, (key, app));
+        }
         Owner { pid, app }
     }
 
@@ -164,6 +179,12 @@ impl<S: ProcessSource> Attribution<S> {
 
     pub fn app_count(&self) -> usize {
         self.apps.read().unwrap().list.len()
+    }
+
+    /// The processes resolved so far with their apps. Some may have exited
+    /// (check the key's creation time before trusting a PID).
+    pub fn processes(&self) -> Vec<(ProcessKey, AppId)> {
+        self.procs.lock().unwrap().values().copied().collect()
     }
 
     /// Every app seen so far, in the order first seen.
@@ -321,6 +342,24 @@ mod tests {
             key: key(5000, 443),
         });
         assert_eq!(a.sizes(), (1, 0, 0, 0));
+    }
+
+    #[test]
+    fn resolved_processes_are_remembered_with_their_app() {
+        let a = attribution();
+        a.owner_of(10);
+        a.owner_of(20);
+        a.owner_of(99); // gone already: nothing to remember
+        let mut p = a.processes();
+        p.sort_by_key(|(k, _)| k.pid);
+        let got: Vec<_> = p
+            .iter()
+            .map(|(k, id)| (k.pid, k.created, a.app(*id).family.clone()))
+            .collect();
+        assert_eq!(
+            got,
+            [(10, 1, "steam".to_owned()), (20, 3, "brave".to_owned())]
+        );
     }
 
     #[test]

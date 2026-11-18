@@ -76,11 +76,15 @@ impl TauriSink {
 
     /// Bring the tray icon in line with the latest link and state.
     fn refresh_tray(&self) {
-        let (link, state) = {
+        let (link, state, blocked) = {
             let l = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-            (l.link.clone(), l.snapshot.as_ref().map(|s| s.state.clone()))
+            (
+                l.link.clone(),
+                l.snapshot.as_ref().map(|s| s.state.clone()),
+                l.snapshot.as_ref().map_or(0, |s| s.config.blocked.len()),
+            )
         };
-        tray_icon::update(&self.app, &link, state.as_ref());
+        tray_icon::update(&self.app, &link, state.as_ref(), blocked);
     }
 }
 

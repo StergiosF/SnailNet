@@ -517,11 +517,19 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 
 ### 11.3 Block per app (Control)
 
-- **Built (2026-11-17), first cut:** `Config.blocked` (family ids, every mode); the fast path drops a blocked app's internet packets in both directions (`Classifier::blocked`), LAN traffic passes, and blocking alone runs the engine without a line speed. In the app: "Block its internet" in an app's Boost menu (with Undo), blocked apps listed under "Using your internet" with Unblock. Not yet: the SOCKET-layer `connect` refusal below and the tray counter.
+- **Built (2026-11-17), first cut:** `Config.blocked` (family ids, every mode); the fast path drops a blocked app's internet packets in both directions (`Classifier::blocked`), LAN traffic passes, and blocking alone runs the engine without a line speed. In the app: "Block its internet" in an app's Boost menu (with Undo), blocked apps listed under "Using your internet" with Unblock. The SOCKET-layer refusal and the tray counter followed the same day (below).
 
 - A toggle on each app row ("Online / Blocked").
 - Implementation: SOCKET layer blocks `connect`/`bind`/`listen` for that family (clean, the app gets a normal network error) **and** NETWORK layer drops packets of already-open flows.
 - Blocked apps show a muted row with a lock glyph; the tray shows a counter when ≥ 1 app is blocked.
+- **SOCKET refusal and tray counter, built (2026-11-18), decisions taken:**
+  - **`connect` only, internet only.** A WinDivert SOCKET handle in DROP mode (`snailnet-service::refuse`) refuses `connect()` of a blocked app's processes to any non-LAN address, so the app gets a normal, immediate network error. `bind`/`listen` aren't refused: blocking leaves the LAN alone, and refusing a bind would break that (and UDP `sendto` without connect is still dropped at the NETWORK layer).
+  - **By PID.** WinDivert filters can't name an app, so the filter lists the blocked apps' process ids (≤ 150; the rest are still dropped at the NETWORK layer), from the processes attribution has resolved (`Attribution::processes`, PID + creation time). Checked every 0.5 s; on a change a new handle opens before the old one closes. A reused PID is never refused: the creation time must still match.
+  - It sits at priority −100, below the sniffing handles, so they see every connect first: a new process of a blocked app is attributed by its first connect (which gets through and is then dropped at the NETWORK layer) and refused from its next one on.
+  - **Fails open:** if the handle won't open, a warning and packet dropping only; when the service stops or dies, the handle closes and nothing is refused. Runs only while the engine runs in blocking mode (an app blocked, or strict mode).
+  - WinDivert's filter language has no `!(…)`: each LAN range is written `(remoteAddr < lo or remoteAddr > hi)`. A unit test compiles the longest filter with `WinDivertHelperCompileFilter` (no admin needed).
+  - **Tray:** a near-black badge with a white figure in the top-right corner (1–9, then "+"; the warning dot keeps bottom-right) and "· N apps blocked" in the tooltip, while connected and not paused. Not seen at real tray size.
+  - **Not yet:** run against the real driver (refusal is untested beyond the filter compiling).
 
 ### 11.4 New-app notification (Control)
 

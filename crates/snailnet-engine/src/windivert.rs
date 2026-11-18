@@ -4,7 +4,7 @@
 //! The DLL is loaded at runtime so the rest of the CLI works without it and
 //! a missing or blocked driver gives a clear error instead of a loader crash.
 
-use std::ffi::{CString, c_char, c_void};
+use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -39,6 +39,10 @@ type SendExFn = unsafe extern "C" fn(
 type ShutdownFn = unsafe extern "C" fn(Handle, i32) -> i32;
 type CloseFn = unsafe extern "C" fn(Handle) -> i32;
 type GetParamFn = unsafe extern "C" fn(Handle, i32, *mut u64) -> i32;
+/// `WinDivertHelperCompileFilter(filter, layer, object, objLen, errorStr,
+/// errorPos)`.
+type CompileFn =
+    unsafe extern "C" fn(*const c_char, i32, *mut c_char, u32, *mut *const c_char, *mut u32) -> i32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
@@ -83,6 +87,7 @@ pub struct WinDivertLib {
     shutdown: ShutdownFn,
     close: CloseFn,
     get_param: GetParamFn,
+    compile: CompileFn,
     _lib: Library,
 }
 
@@ -141,6 +146,9 @@ impl WinDivertLib {
                 shutdown: *lib.get::<ShutdownFn>(c"WinDivertShutdown").map_err(err)?,
                 close: *lib.get::<CloseFn>(c"WinDivertClose").map_err(err)?,
                 get_param: *lib.get::<GetParamFn>(c"WinDivertGetParam").map_err(err)?,
+                compile: *lib
+                    .get::<CompileFn>(c"WinDivertHelperCompileFilter")
+                    .map_err(err)?,
                 _lib: lib,
             })
         }
@@ -148,6 +156,38 @@ impl WinDivertLib {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Check `filter` for `layer` without opening a handle (no admin
+    /// rights or driver needed). `Err`: WinDivert's message and position.
+    pub fn check_filter(&self, filter: &str, layer: Layer) -> Result<(), String> {
+        let c = CString::new(filter).map_err(|_| "the filter contains a NUL byte".to_owned())?;
+        let mut msg: *const c_char = std::ptr::null();
+        let mut pos: u32 = 0;
+        // SAFETY: `c` lives across the call; a null object buffer only
+        // checks the filter; `msg` is set to a static string on failure.
+        let ok = unsafe {
+            (self.compile)(
+                c.as_ptr(),
+                layer as i32,
+                std::ptr::null_mut(),
+                0,
+                &mut msg,
+                &mut pos,
+            )
+        };
+        if ok != 0 {
+            return Ok(());
+        }
+        let msg = if msg.is_null() {
+            "invalid filter".to_owned()
+        } else {
+            // SAFETY: WinDivert returns a NUL-terminated static string.
+            unsafe { CStr::from_ptr(msg) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        Err(format!("{msg} (at {pos})"))
     }
 }
 
@@ -316,5 +356,15 @@ mod tests {
         // WinDivertOpen (which installs the driver) does.
         let lib = WinDivertLib::load().expect("third_party/windivert/x64/WinDivert.dll");
         assert!(lib.path().ends_with("WinDivert.dll"));
+    }
+
+    #[test]
+    fn checks_filters_without_admin() {
+        let lib = WinDivertLib::load().unwrap();
+        assert_eq!(
+            lib.check_filter("tcp and remotePort == 443", Layer::Network),
+            Ok(())
+        );
+        assert!(lib.check_filter("tcp and", Layer::Network).is_err());
     }
 }

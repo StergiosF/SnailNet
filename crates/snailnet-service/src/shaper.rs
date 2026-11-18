@@ -1,13 +1,14 @@
 //! WinDivert + classification + the fast path, wired together.
 //!
 //! - **Event threads** (PLAN.md §4: `flow-sniffer`, `socket-sniffer`,
-//!   sniff-only for now; SOCKET blocking arrives with Block per app in
-//!   Phase 5) keep the shared [`WinAttribution`] current:
+//!   sniff-only) keep the shared [`WinAttribution`] current:
 //!   - `flow-sniffer`: FLOW established/deleted (exact 5-tuple → PID),
 //!   - `socket-sniffer`: SOCKET connect/accept/bind/listen/close, which
 //!     usually arrive *before* the flow's first packet,
 //!   - `port-table`: the IP Helper snapshot once a second, for connections
 //!     that were already open when SnailNet started.
+//! - **`socket-refuser`** ([`crate::refuse`]), while apps may be blocked:
+//!   refuses their internet connects (PLAN.md §11.3).
 //! - **[`AppClassifier`]**: packet → app → class, for the rx threads.
 //! - **[`Shaper`]**: opens everything in the right order and closes it again;
 //!   used by the service ([`WinEngine`]) and by `snailnet spike`.
@@ -43,6 +44,7 @@ use snailnet_win::process::{WinProcesses, windows_dir};
 use snailnet_win::timer::HighResTimer;
 
 use crate::hub::Seen;
+use crate::refuse::Refuser;
 use crate::runner;
 use crate::tags::{self, MAX_SITES, Site};
 
@@ -436,7 +438,7 @@ impl WhoCounters {
 /// The rules every rx thread classifies by, swappable while shaping. The
 /// generation tells an rx thread to reload them and drop its cache; the
 /// lock is only taken then, never per packet.
-struct LiveRules {
+pub(crate) struct LiveRules {
     current: Mutex<Arc<dyn Rules>>,
     generation: AtomicU64,
 }
@@ -449,7 +451,7 @@ impl LiveRules {
         }
     }
 
-    fn load(&self) -> Arc<dyn Rules> {
+    pub(crate) fn load(&self) -> Arc<dyn Rules> {
         self.current
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -720,6 +722,8 @@ pub struct Shaper {
     who: Arc<WhoCounters>,
     attribution: Arc<WinAttribution>,
     rules: Arc<LiveRules>,
+    /// While apps may be blocked; `None` if it couldn't start.
+    refuser: Option<Refuser>,
 }
 
 impl Shaper {
@@ -750,6 +754,13 @@ impl Shaper {
         );
         let who = Arc::new(WhoCounters::default());
         let rules = Arc::new(LiveRules::new(spec.rules));
+        let refuser = if spec.blocking {
+            Refuser::start(lib.clone(), attribution.clone(), rules.clone())
+                .inspect_err(|e| tracing::warn!("blocked apps' connects aren't refused: {e}"))
+                .ok()
+        } else {
+            None
+        };
         let classifier = AppClassifier {
             attribution: attribution.clone(),
             who: who.clone(),
@@ -788,6 +799,7 @@ impl Shaper {
             who,
             attribution,
             rules,
+            refuser,
         })
     }
 
@@ -848,6 +860,7 @@ impl Shaper {
     }
 
     fn halt(&mut self) -> Option<String> {
+        drop(self.refuser.take());
         let failure = self.fast_path.take().and_then(FastPath::stop);
         drop(self.dns.take());
         drop(self.sniffers.take());

@@ -27,6 +27,7 @@ pub mod logging;
 pub mod netwatch;
 pub mod newapps;
 pub mod paths;
+pub mod refuse;
 pub mod runner;
 pub mod shaper;
 pub mod speedtest;
