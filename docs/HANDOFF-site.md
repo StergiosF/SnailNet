@@ -27,6 +27,11 @@ was built from, kept for its research and its "why v1 looked bad".
   of the demo stays reachable).
 - **Tests:** `scripts/site-test.cjs` (jsdom from a temp install; usage in
   its header) covers the download buttons and the demo: 11 tests.
+- **First release, v0.0.1, published 2026-11-18** (tag pushed, Release
+  workflow built and drafted it, then published with notes). The site's
+  buttons now link `releases/latest/download/SnailNet-setup.exe` and show
+  "Version 0.0.1 · 4.4 MB" (checked live). The section "Where things
+  stand" below predates it.
 - **The snail** was also fixed the same day: its eye stalks now grow from
   the head (app icon set, tray, Snail.svelte, README pictures, favicons,
   og.png).

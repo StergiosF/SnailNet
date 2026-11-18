@@ -65,10 +65,10 @@ nothing sent anywhere.
 
 ## Download and install
 
-1. **Download `SnailNet-setup.exe`** from the
-   [latest release](https://github.com/StergiosF/SnailNet/releases/latest).
-   No release is out yet: watch this repository (Watch → Custom →
-   Releases) to hear when the first one is.
+1. **Download [`SnailNet-setup.exe`](https://github.com/StergiosF/SnailNet/releases/latest/download/SnailNet-setup.exe)**
+   from the [latest release](https://github.com/StergiosF/SnailNet/releases/latest).
+   To hear about new ones, watch this repository (Watch → Custom →
+   Releases).
 2. **Run it.** The installer isn't code-signed yet, so Windows may show
    *"Windows protected your PC"*. Choose **More info**, then **Run
    anyway**. Windows asks for administrator permission once, to install
