@@ -49,8 +49,9 @@ session" below; do them whenever the user wants.
    resolves the focused PID's family); Boost menu items + "Your choices"
    in Settings. "Always High" = a High-priority rule (exists). Not seen
    in a real window.
-3. **Metered network note (§10.3):** `INetworkCostManager` / WinRT
-   `ConnectionCost`; a note in Settings → Connection.
+3. ~~**Metered network note (§10.3)**~~ **Done (2026-11-18):** app
+   command `network_metered` (WinRT `ConnectionCost`), a note under the
+   line speed in Settings → Connection. Not seen in a real window.
 4. Then Phase 5 (profiles/hotkey, new-app notifications, §11.4), Phase 6
    (installer, updater).
 

@@ -17,6 +17,7 @@ pub mod bridge;
 pub mod changes;
 pub mod focus;
 pub mod icon;
+pub mod metered;
 pub mod service_start;
 pub mod tray;
 pub mod tray_icon;
@@ -180,6 +181,7 @@ pub fn run() {
             changes::set_settings,
             autostart::autostart_enabled,
             autostart::set_autostart,
+            metered::network_metered,
             service_start::start_service
         ])
         .run(tauri::generate_context!())

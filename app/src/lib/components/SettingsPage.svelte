@@ -53,6 +53,17 @@
       .filter((n) => n.line.down_mbps !== undefined || n.line.up_mbps !== undefined)
       .sort((a, b) => b.left - a.left),
   );
+  // Windows' metered flag (§10.3), read again whenever the network changes.
+  let metered = $state(false);
+  $effect(() => {
+    void network?.id;
+    void ui.online;
+    let live = true;
+    invoke<boolean>("network_metered")
+      .then((m) => live && (metered = m))
+      .catch(() => live && (metered = false));
+    return () => (live = false);
+  });
   const measuring = $derived(service.state !== null && stateKind(service.state) === "measuring");
   const measuredOn = $derived(
     measured ? new Date(measured.at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "",
@@ -121,6 +132,9 @@
             ? t("settings.line.value", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
             : t("sidebar.line.none")}</span
         >
+        {#if metered}
+          <span class="metered"><i class="icon" aria-hidden="true">&#xE7BA;</i>{t("settings.metered")}</span>
+        {/if}
       </div>
       <div class="pair">
         <button type="button" class="btn" disabled={!canEdit || measuring} onclick={() => void measureLine()}>
@@ -373,6 +387,17 @@
   }
   .nets .num {
     flex: none;
+  }
+  .metered {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    margin-top: 4px;
+  }
+  .metered .icon {
+    flex: none;
+    font-size: 12px;
+    color: var(--caution);
   }
   .choices li {
     align-items: center;

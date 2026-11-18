@@ -478,7 +478,7 @@ Capacity is stored per network identity (`NLM` network GUID / Wi-Fi SSID + gatew
   - **Unknown network = watching only** until measured or typed, not "the last speed": a hotspot's 8 Mbps carried home would cap a fast line (the estimator raises at most 10%/min and 3× the reference), and a home speed carried to a hotspot shapes nothing. The app's notice then says "New network: {name}" with Set speed.
   - **Watcher** (`snailnet-service::netwatch`): looks at the route every 5 s (cheap, sends nothing), identifies only when gateway/adapter change, and tells the hub (`Hub::network_seen`), which saves and wakes the runner. Offline changes nothing. A new network also clears the ping probe's baselines.
   - The app shows "On {network}" under Connection speed and lists the other networks with their speeds in Settings → Connection.
-  - **Not yet:** the metered flag (needs `INetworkCostManager`/WinRT `ConnectionCost`; later, with the note in the UI).
+  - **Metered flag, built (2026-11-18):** read by the **app**, not the service, since only the UI uses it: WinRT `NetworkInformation::GetInternetConnectionProfile().GetConnectionCost()` in `app/src-tauri/src/metered.rs` (command `network_metered`); metered = Fixed or Variable cost, roaming, or over the data limit; unknown counts as not metered. Settings → Connection re-reads it when the network or online state changes and shows a note under the line speed: measuring sends and receives for about 20 s, which counts against the data. Nothing is throttled or skipped on a metered network (monthly caps and metered awareness stay in v1.1, "Insight & automation").
 
 ### 10.4 Low-latency mode (D5, Smart)
 
