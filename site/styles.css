@@ -2164,7 +2164,7 @@ main > section {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
   gap: 32px var(--gap);
-  margin-top: 64px;
+  margin-top: 112px;
 }
 .foot__brand p {
   max-width: 36ch;
@@ -2258,7 +2258,7 @@ main > section {
     height: 22px;
   }
   .foot {
-    margin-top: 48px;
+    margin-top: 72px;
   }
 }
 
