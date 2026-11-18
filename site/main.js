@@ -159,6 +159,39 @@
     });
   }
 
+  // ---------- Features: one at a time ----------
+  // A tab list (arrow keys, Home and End move between them). Without the
+  // script every picture shows, one under another.
+
+  const fx = document.querySelector("[data-fx]");
+  if (fx) {
+    const tabs = [...fx.querySelectorAll('[role="tab"]')];
+    const show = (tab, focus) => {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      });
+      if (focus) tab.focus();
+    };
+    const keys = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+    tabs.forEach((t, i) => {
+      t.addEventListener("click", () => show(t, false));
+      t.addEventListener("keydown", (e) => {
+        let to;
+        if (e.key in keys) to = (i + keys[e.key] + tabs.length) % tabs.length;
+        else if (e.key === "Home") to = 0;
+        else if (e.key === "End") to = tabs.length - 1;
+        else return;
+        e.preventDefault();
+        show(tabs[to], true);
+      });
+    });
+    fx.dataset.fx = "on";
+    show(tabs.find((t) => t.getAttribute("aria-selected") === "true") || tabs[0], false);
+  }
+
   // ---------- The split demo ----------
   // A 20 Mbps line (5% is 1 Mbps) between a Steam download (wants all it can get) and
   // YouTube (a stream wanting about 9 Mbps). Each slice is a guarantee when

@@ -70,7 +70,6 @@
 <!-- Hero: the tagline, one plain sentence, two actions, then the app itself, its Now page. -->
 <section class="hero" id="top" aria-labelledby="hero-h">
   <div class="wrap hero__in">
-    <p class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-window"/></svg>Free and open source · Windows&nbsp;10 and&nbsp;11</p>
     <h1 id="hero-h">Put the bandwidth hogs in the <span class="hl">slow lane</span>.</h1>
     <p class="lead">Split your PC's internet between apps by percentage, so a download never wrecks your game, stream or call.</p>
     <div class="actions">
@@ -181,9 +180,9 @@
         <h3>Give each app a slice</h3>
         <p>Steam 40%, YouTube 60%. Everything else never drops under 5%.</p>
         <div class="panel" data-ui aria-hidden="true">
-          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><b>Steam</b><span class="srow__step"><i>−</i>40%<i>+</i></span></span>
-          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><b>YouTube</b><span class="srow__step"><i>−</i>60%<i>+</i></span></span>
-          <span class="srow srow--rest"><span class="ico ico--stone"></span><b>Everything else</b><span class="srow__step">5%</span></span>
+          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><b>Steam</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>40%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
+          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><b>YouTube</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>60%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
+          <span class="srow srow--rest"><span class="ico ico--stone"><svg viewBox="0 0 20 20"><use href="#g-rest"/></svg></span><b>Everything else</b><span class="srow__step">5%</span></span>
         </div>
       </article>
       <article class="card stepcard">
@@ -257,68 +256,73 @@
 <!-- Four features, each with the piece of the app it is. -->
 <section class="section" id="features" aria-labelledby="features-h">
   <div class="wrap">
-    <div class="g2__a">
     <div class="head">
       <h2 id="features-h">SnailNet features for games, streams and calls</h2>
     </div>
-    <div class="grid features">
-      <article class="card feat">
-        <h3>Gives websites their own slice</h3>
-        <p>Rules for YouTube, Twitch or Netflix work in every browser.</p>
-        <div class="panel" data-ui aria-hidden="true">
-          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
-          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
-          <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/netflix.svg" alt=""></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">When the line is free</span></span>
-          <span class="frow frow--add"><span class="ico ico--add"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></span><span class="frow__nm"><b>Add a website</b><small>Type a name, like twitch.tv</small></span></span>
-        </div>
-      </article>
 
-      <article class="card feat">
-        <h3>Lets games and calls go first</h3>
-        <p>The app in front goes first. Boost any app for an hour, or until you stop it.</p>
-        <div class="panel panel--boost" data-ui aria-hidden="true">
-          <span class="frow frow--boosted frow--btn"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52&nbsp;min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg>Boost</span><i class="frow__left" style="--left: 87"></i></span>
-          <span class="menu menu--from">
-            <b>Let Discord go first</b>
-            <small>It gets at least half your line, then everything goes back by itself.</small>
-            <span class="menu__item is-on">For 1&nbsp;hour</span>
-            <span class="menu__item">For 4&nbsp;hours</span>
-            <span class="menu__item">Until I stop it</span>
-          </span>
-        </div>
-      </article>
-    </div>
-    </div>
-    <div class="grid features g2__b">
-      <article class="card feat">
-        <h3>Switches whole setups in one click</h3>
-        <p>Four modes switch the whole split. Pick one in the tray, or press <span class="nowrap"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></span>.</p>
-        <fieldset class="panel tiles" data-ui>
-          <legend class="visually-hidden">Try a mode</legend>
-          <label class="tile"><input type="radio" name="mode" value="balanced"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Everyone gets a fair share.</span></label>
-          <label class="tile"><input type="radio" name="mode" value="streaming"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="tile__body">Video and calls first, downloads in the spare room.</span></label>
-          <label class="tile"><input type="radio" name="mode" value="gaming" checked><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Voice chat first. Video and downloads step back.</span></label>
-          <label class="tile"><input type="radio" name="mode" value="quiet"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="tile__body">Downloads only use what nobody else wants.</span></label>
-        </fieldset>
-      </article>
+    <!-- Four features, one at a time: pick one on the left, see it on the right.
+         Without the script every picture shows, one under another. -->
+    <div class="fx" data-fx>
+      <div class="fx__list" role="tablist" aria-label="Features" aria-orientation="vertical">
+        <button type="button" class="fx__tab" role="tab" id="fx-t-sites" aria-controls="fx-p-sites" aria-selected="true">
+          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-globe"/></svg></span>
+          <span class="fx__txt"><b>Websites get their own slice</b><small>YouTube, Twitch or Netflix, in every browser.</small></span>
+        </button>
+        <button type="button" class="fx__tab" role="tab" id="fx-t-boost" aria-controls="fx-p-boost" aria-selected="false" tabindex="-1">
+          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg></span>
+          <span class="fx__txt"><b>Games and calls go first</b><small>Boost any app for an hour, or until you stop it.</small></span>
+        </button>
+        <button type="button" class="fx__tab" role="tab" id="fx-t-modes" aria-controls="fx-p-modes" aria-selected="false" tabindex="-1">
+          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-busy"/></svg></span>
+          <span class="fx__txt"><b>Whole setups in one click</b><small>Four modes, from the tray or <span class="nowrap"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></span>.</small></span>
+        </button>
+        <button type="button" class="fx__tab" role="tab" id="fx-t-safe" aria-controls="fx-p-safe" aria-selected="false" tabindex="-1">
+          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span>
+          <span class="fx__txt"><b>Never breaks your internet</b><small>If anything fails, traffic flows straight through.</small></span>
+        </button>
+      </div>
 
-      <article class="card feat">
-        <h3>Steps aside instead of breaking things</h3>
-        <p>If anything fails, traffic flows straight through. Pause stops it all in one click.</p>
-        <div class="panel panel--pause" data-ui aria-hidden="true">
-          <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
-          <span class="fbtn fbtn--on"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span>
-          <span class="menu menu--from">
-            <b>Pause SnailNet</b>
-            <small>Nothing is shared out or blocked while it's paused.</small>
-            <span class="menu__item">For 15&nbsp;minutes</span>
-            <span class="menu__item is-on">For 1&nbsp;hour</span>
-            <span class="menu__item">Until I resume</span>
-          </span>
+      <div class="fx__stage">
+        <div class="fx__panel" role="tabpanel" id="fx-p-sites" aria-labelledby="fx-t-sites" data-ui>
+          <div class="fx__show" aria-hidden="true">
+            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
+            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
+            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/netflix.svg" alt=""></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">When the line is free</span></span>
+          </div>
+          <p class="fx__cap">A rule goes by the site's name, so it holds in Chrome, Edge, Firefox or any other.</p>
         </div>
-      </article>
-      <a class="link features__more" href="https://github.com/StergiosF/SnailNet#using-snailnet">Read how to use SnailNet</a>
+
+        <div class="fx__panel" role="tabpanel" id="fx-p-boost" aria-labelledby="fx-t-boost" data-ui>
+          <div class="fx__show" aria-hidden="true">
+            <span class="frow frow--boosted frow--btn"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52&nbsp;min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg>Boost</span><i class="frow__left" style="--left: 87"></i></span>
+            <span class="frow frow--after"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><span class="frow__nm"><b>Steam</b><small>Sends after Discord</small></span><span class="frow__mb">10.2 <small>Mbps</small></span></span>
+            <span class="frow frow--after"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Sends after Discord</small></span><span class="frow__mb">8.9 <small>Mbps</small></span></span>
+          </div>
+          <p class="fx__cap">A boosted app gets at least half your line, then everything goes back by itself.</p>
+        </div>
+
+        <div class="fx__panel" role="tabpanel" id="fx-p-modes" aria-labelledby="fx-t-modes" data-ui>
+          <fieldset class="fx__show tiles">
+            <legend class="visually-hidden">Try a mode</legend>
+            <label class="tile"><input type="radio" name="mode" value="balanced"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Everyone gets a fair share.</span></label>
+            <label class="tile"><input type="radio" name="mode" value="streaming"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="tile__body">Video and calls first.</span></label>
+            <label class="tile"><input type="radio" name="mode" value="gaming" checked><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Voice chat first.</span></label>
+            <label class="tile"><input type="radio" name="mode" value="quiet"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="tile__body">Downloads take what's left.</span></label>
+          </fieldset>
+          <p class="fx__cap">Try one: each mode changes the whole split at once.</p>
+        </div>
+
+        <div class="fx__panel" role="tabpanel" id="fx-p-safe" aria-labelledby="fx-t-safe" data-ui>
+          <div class="fx__show" aria-hidden="true">
+            <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
+            <span class="fx__pause"><span class="fbtn fbtn--on"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span><span class="fx__seg"><i>15 min</i><i class="is-on">1 hour</i><i>Until I resume</i></span></span>
+          </div>
+          <p class="fx__cap">And Pause stops everything in one click, for as long as you choose.</p>
+        </div>
+      </div>
     </div>
+
+    <a class="link features__more" href="https://github.com/StergiosF/SnailNet#using-snailnet">Read how to use SnailNet</a>
   </div>
 </section>
 
@@ -468,6 +472,7 @@
     <symbol id="q-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></g></symbol>
     <symbol id="q-upload" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9m0 0-4.5 4.5M12 9l4.5 4.5M5 4h14"/></g></symbol>
     <symbol id="q-free" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10z"/></g></symbol>
+    <symbol id="g-rest" viewBox="0 0 20 20"><g fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="6" height="6" rx="1.5"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.5"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.5"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.5"/></g></symbol>
     <symbol id="m-balanced" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
     <symbol id="m-streaming" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
     <symbol id="m-gaming" viewBox="0 0 24 24"><path d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2.3 2.3 0 0 1-4 .9L14.5 15h-5l-1.6 2.1a2.3 2.3 0 0 1-4-.9l-.8-3.3A4 4 0 0 1 7 8z" fill="currentColor"/></symbol>

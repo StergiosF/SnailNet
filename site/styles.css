@@ -67,8 +67,8 @@
   /* One content width, the same edges all the way down. */
   --gut: 80px;
   --nav-h: 72px;
-  --pad-t: 120px;
-  --pad-b: 96px;
+  --pad-t: 160px;
+  --pad-b: 136px;
   --gap: 24px;
 }
 @media (max-width: 1279px) {
@@ -80,8 +80,8 @@
   :root {
     --gut: 24px;
     --nav-h: 64px;
-    --pad-t: 96px;
-    --pad-b: 64px;
+    --pad-t: 112px;
+    --pad-b: 80px;
     --gap: 12px;
   }
 }
@@ -89,8 +89,8 @@
 /* Short laptop screens keep each section on its screen. */
 @media (min-width: 640px) and (max-height: 840px) {
   :root {
-    --pad-t: 100px;
-    --pad-b: 64px;
+    --pad-t: 128px;
+    --pad-b: 96px;
   }
 }
 
@@ -458,7 +458,13 @@ main > section {
 .section--band {
   /* Secondary text a step lighter on the band, so body text keeps 7:1 on its cards. */
   --text-secondary: #c8d8d2;
-  background: var(--surface-1);
+  background: linear-gradient(
+    180deg,
+    var(--surface-ground),
+    var(--surface-1) 200px,
+    var(--surface-1) calc(100% - 200px),
+    var(--surface-ground)
+  );
 }
 /* Cream as a panel set on the ground, not a full-width flip. */
 .section--cream > .wrap {
@@ -574,9 +580,7 @@ main > section {
   --h: 1;
   padding: calc(var(--nav-h) + 40px) 0 var(--pad-b);
   overflow: hidden;
-  background:
-    radial-gradient(1000px 520px at 50% 108%, rgb(47 168 142 / 0.2), transparent 70%),
-    var(--surface-ground);
+  background: var(--surface-ground);
 }
 .hero__in {
   display: flex;
@@ -584,24 +588,6 @@ main > section {
   align-items: center;
   height: 100%;
   text-align: center;
-}
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: var(--surface-1);
-  box-shadow: 0 0 0 1px var(--stroke-card) inset;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-.pill svg {
-  width: 18px;
-  height: 18px;
-  color: var(--mint);
 }
 .hero h1 {
   max-width: 15ch;
@@ -1746,37 +1732,12 @@ main > section {
   }
 }
 
-/* ---------- 4. Features, two by two ---------- */
-
-.g2__b {
-  margin-top: var(--gap);
-}
 .features__more {
   grid-column: 1 / -1;
   justify-self: start;
   margin-top: 24px;
 }
 
-.features {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.feat {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 32px 32px 0;
-  overflow: hidden;
-}
-.feat p {
-  max-width: 46ch;
-  color: var(--text-secondary);
-}
-.feat .panel {
-  flex: 1;
-  margin: 22px -32px 0;
-  padding: 24px 32px 28px;
-  min-height: 250px;
-}
 .frow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1828,42 +1789,6 @@ main > section {
 }
 .frow--boosted .frow__nm small {
   color: var(--mint);
-}
-.panel--boost,
-.panel--pause {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: end;
-}
-.panel--boost .frow,
-.panel--pause .notice {
-  justify-self: stretch;
-}
-.menu {
-  display: grid;
-  gap: 2px;
-  width: min(100%, 330px);
-  padding: 14px 8px 8px;
-  border-radius: 14px;
-  background: var(--surface-2);
-  box-shadow: var(--shadow-raised), 0 0 0 1px var(--stroke-card) inset;
-}
-.menu > b,
-.menu > small {
-  padding: 0 10px;
-}
-.menu > small {
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text-secondary);
-}
-.menu__item {
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 15px;
-}
-.menu__item.is-on {
-  background: var(--surface-3);
 }
 .notice {
   display: flex;
@@ -1994,22 +1919,7 @@ main > section {
     color: HighlightText;
   }
 }
-@media (max-width: 1023px) {
-  .features {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .feat .panel {
-    min-height: 0;
-  }
-}
 @media (max-width: 479px) {
-  .feat {
-    padding: 24px 20px 0;
-  }
-  .feat .panel {
-    margin: 18px -20px 0;
-    padding: 20px;
-  }
   .tile__body {
     display: none;
   }
@@ -2355,24 +2265,6 @@ main > section {
 /* ---------- Tablet, held upright: two screens where the stack needs them ---------- */
 
 @media (min-width: 640px) and (max-width: 1023px) {
-  #how,
-  #features {
-    --h: 2;
-  }
-  .features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .feat {
-    padding: 28px 24px 0;
-  }
-  .feat .panel {
-    margin: 20px -24px 0;
-    padding: 20px 24px 24px;
-  }
-  .tile__body,
-  .frow__nm small {
-    display: none;
-  }
   .beats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--gap);
@@ -2582,42 +2474,6 @@ main > section {
   color: var(--on-shell);
   box-shadow: 0 0 0 4px var(--shell-soft);
 }
-.menu--from {
-  position: relative;
-  margin-top: 4px;
-}
-.menu--from::before {
-  content: "";
-  position: absolute;
-  top: -6px;
-  right: 36px;
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  background: var(--surface-2);
-  box-shadow: -1px -1px 0 var(--stroke-card);
-  transform: rotate(45deg);
-}
-.frow--add {
-  background: transparent;
-  border: 1.5px dashed var(--stroke-strong);
-  color: var(--text-secondary);
-}
-.frow--add b {
-  color: var(--text-primary);
-}
-.ico--add {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--stroke-strong);
-}
-.ico--add svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
 @media (forced-colors: active) {
   .faq__item,
   .close-panel,
@@ -2661,4 +2517,254 @@ kbd {
   flex: 1;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* ---------- Features: pick one on the left, see it on the right ---------- */
+
+.fx {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--gap);
+  align-items: stretch;
+}
+.fx__list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.fx__tab {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: var(--r-card);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 200ms linear,
+    box-shadow 200ms linear;
+}
+.fx__tab:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+.fx__tab[aria-selected="true"] {
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
+}
+.fx__ic {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  transition:
+    background-color 200ms linear,
+    color 200ms linear;
+}
+.fx__ic svg {
+  width: 20px;
+  height: 20px;
+}
+.fx__tab[aria-selected="true"] .fx__ic {
+  background: var(--shell);
+  color: var(--on-shell);
+}
+.fx__txt {
+  display: grid;
+  gap: 2px;
+  padding-top: 1px;
+}
+.fx__txt b {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.fx__txt small {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.fx__stage {
+  display: grid;
+  gap: 56px;
+  min-height: 420px;
+  padding: clamp(24px, 4vw, 48px);
+  border-radius: var(--r-frame);
+  background:
+    radial-gradient(70% 80% at 50% 0%, rgb(47 168 142 / 0.2), transparent 72%),
+    var(--surface-1);
+  box-shadow: 0 1px 0 rgb(143 211 191 / 0.18) inset, var(--shadow-card);
+}
+/* With the script, the pictures share one place and the chosen one shows. */
+[data-fx="on"] .fx__panel {
+  grid-area: 1 / 1;
+}
+[data-fx="on"] .fx__panel:not([hidden]) {
+  animation: fx-in 420ms var(--ease-out);
+}
+@keyframes fx-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.fx__panel {
+  display: grid;
+  align-content: center;
+  gap: 22px;
+}
+.fx__panel[hidden] {
+  display: none;
+}
+.fx__show {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 500px);
+  justify-self: center;
+}
+.fx__stage .frow,
+.fx__stage .tile {
+  background: var(--surface-2);
+}
+.fx__stage .tiles {
+  border-top: 0;
+}
+.frow--after {
+  opacity: 0.55;
+}
+.fx__pause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.fx__seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.fx__seg i {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-style: normal;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.fx__seg .is-on {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.fx__cap {
+  justify-self: center;
+  max-width: 44ch;
+  font-size: 15px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.features__more {
+  display: inline-flex;
+  margin-top: 28px;
+}
+@media (max-width: 899px) {
+  .fx {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fx__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fx__tab {
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+  .fx__txt small {
+    display: none;
+  }
+  .fx__txt b {
+    font-size: 16px;
+  }
+  .fx__stage {
+    min-height: 0;
+  }
+}
+@media (max-width: 479px) {
+  .fx__ic {
+    width: 34px;
+    height: 34px;
+  }
+  .fx__txt b {
+    font-size: 15px;
+  }
+}
+@media (forced-colors: active) {
+  .fx__tab[aria-selected="true"] {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* ---------- Steppers: drawn − and +, dead centre ---------- */
+
+.srow__step svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+/* Everything else wears the app's four squares. */
+.ico--stone {
+  display: grid;
+  place-items: center;
+  color: var(--on-ink);
+}
+.ico--stone svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- The hero window, a little taller, its cards filling it ---------- */
+
+@media (min-width: 1024px) {
+  .win.app {
+    min-height: 600px;
+  }
+}
+.app__main {
+  display: flex;
+  flex-direction: column;
+}
+.app__page {
+  flex: 1;
+}
+.app__cols {
+  flex: 1;
+  align-items: stretch;
+}
+.acard__btns {
+  margin-top: auto;
+}
+
+/* ---------- Nav links glide to their section ---------- */
+
+html {
+  scroll-padding-top: calc(var(--nav-h) + 16px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }

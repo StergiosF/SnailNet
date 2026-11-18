@@ -190,6 +190,28 @@ test("pausing the video lends its whole slice to Steam, and says so politely", a
   assert.equal(t.video(), "9.0 Mbps · lending 3.0 Mbps it isn't using");
 });
 
+// ---------- The features, one at a time ----------
+
+test("the features show one picture at a time, chosen by click or arrow keys", async () => {
+  const w = await page(() => json(404, {}));
+  const d = w.document;
+  const tabs = [...d.querySelectorAll("[data-fx] [role=tab]")];
+  const shown = () => [...d.querySelectorAll("[data-fx] [role=tabpanel]")].filter((p) => !p.hidden).map((p) => p.id);
+  assert.equal(tabs.length, 4);
+  assert.deepEqual(shown(), ["fx-p-sites"]);
+  tabs[2].click();
+  assert.deepEqual(shown(), ["fx-p-modes"]);
+  assert.equal(tabs[2].getAttribute("aria-selected"), "true");
+  assert.equal(tabs[0].tabIndex, -1);
+  tabs[2].dispatchEvent(new w.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.deepEqual(shown(), ["fx-p-safe"]);
+  assert.equal(d.activeElement, tabs[3]);
+  tabs[3].dispatchEvent(new w.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.deepEqual(shown(), ["fx-p-sites"]);
+  tabs[0].dispatchEvent(new w.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  assert.deepEqual(shown(), ["fx-p-safe"]);
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

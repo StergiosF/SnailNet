@@ -25,13 +25,13 @@
 
 <span class="stepper" class:compact>
   <button type="button" class="step" disabled={!canLess} aria-label={t("row.less", { name })} onclick={() => onstep(-1)}
-    >−</button
+    ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9" /></svg></button
   >
   <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name, pct })}>
     {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{pct}<small>%</small>{/if}
   </output>
   <button type="button" class="step" disabled={!canMore} aria-label={t("row.more", { name })} onclick={() => onstep(1)}
-    >+</button
+    ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" /></svg></button
   >
 </span>
 
@@ -42,9 +42,13 @@
     align-items: center;
     gap: 6px;
   }
+  /* Drawn, not typed: a font's − and + sit off the middle of the button. */
   .step {
+    display: grid;
+    place-items: center;
     width: 34px;
     height: 34px;
+    padding: 0;
     border: 0;
     border-radius: var(--radius-control);
     background: var(--surface-2);
@@ -52,6 +56,14 @@
     font-size: 18px;
     line-height: 1;
     transition: background-color 120ms linear;
+  }
+  .step svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
   }
   .step:hover:not(:disabled) {
     background: var(--surface-3);
@@ -87,7 +99,10 @@
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    font-size: 16px;
+  }
+  .compact .step svg {
+    width: 12px;
+    height: 12px;
   }
   .compact .n {
     width: 50px;
