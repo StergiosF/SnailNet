@@ -1090,7 +1090,7 @@ main > section {
 /* ---------- The app window and the live split ---------- */
 
 .win {
-  width: min(100%, 1040px);
+  width: min(100%, 1140px);
   margin-inline: auto;
   border-radius: 14px;
   background: var(--surface-ground);
