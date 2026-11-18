@@ -716,20 +716,31 @@ h1 {
 }
 
 /* A feature's mark: its glyph in the feature's ink, on a tint of it. */
+/* The badge sits beside its heading, the text running under both. */
+.feat__text,
+.point {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 14px;
+}
+.feat__text > p,
+.point > p {
+  grid-column: 1 / -1;
+}
 .badge {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 14px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--tone, var(--mint)) 15%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, var(--mint)) 30%, transparent);
   color: var(--tone, var(--mint));
 }
 .badge svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 @media (forced-colors: active) {
   .badge,
