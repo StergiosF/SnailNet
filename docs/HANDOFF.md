@@ -40,8 +40,8 @@ PLAN.md, run the gates, commit + push each verified step. No branches.
 
 ### Needs the user
 
-- Make the repo (or a releases repo) public for the update feed; add the
-  `TAURI_SIGNING_PRIVATE_KEY` secret; back up
+- Make the repo (or a releases repo) public for the update feed (the
+  `TAURI_SIGNING_PRIVATE_KEY` secret is set, 2026-11-18); back up
   `%USERPROFILE%\.tauri\snailnet-updater.key`; bump the version from
   0.0.1.
 - Run the elevated dev service and look at the app (steps further down).
