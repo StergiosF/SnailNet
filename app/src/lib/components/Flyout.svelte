@@ -51,6 +51,7 @@
   const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));
   const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
   const active = $derived(service.snapshot?.config.active_profile ?? "");
+  const picked = $derived(modes.find((m) => m.id === active));
   const paused = $derived.by(() => {
     const p = service.snapshot?.config.pause;
     return p !== undefined && (p.until === undefined || ui.now < p.until);
@@ -109,10 +110,14 @@
           role="radio"
           aria-checked={m.id === active}
           class:on={m.id === active}
+          class:playing={m.id === "gaming" && service.playing}
           onclick={() => void switchMode(m.id)}>{t(m.name)}</button
         >
       {/each}
     </div>
+    {#if service.playing && picked}
+      <p class="detail" role="status">{t("mode.playing.note", { mode: t(picked.name) })}</p>
+    {/if}
   {/if}
 
   {#if book && service.stats}
@@ -223,6 +228,11 @@
   .modes button.on {
     background: var(--accent);
     color: var(--on-accent);
+  }
+  /* Gaming standing in while a game runs (§11.5). */
+  .modes button.playing {
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
   }
   @media (forced-colors: active) {
     .modes button,

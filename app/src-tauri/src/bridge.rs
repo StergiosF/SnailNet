@@ -215,6 +215,7 @@ mod tests {
             down: None,
             up: None,
             names: None,
+            playing: false,
         }
     }
 

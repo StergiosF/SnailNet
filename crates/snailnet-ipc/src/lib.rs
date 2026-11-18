@@ -270,6 +270,11 @@ pub struct StatsTick {
     /// it, or before the second sample.
     #[serde(default)]
     pub names: Option<NameTick>,
+    /// A game is running and "Gaming mode while you play" is on, so the
+    /// service plans with the Gaming mode; the picked mode stays saved
+    /// (PLAN.md §11.5). `false` from a service that doesn't report it.
+    #[serde(default)]
+    pub playing: bool,
 }
 
 /// Packets by how their flow was named (PLAN.md §8.4). Flows are named only
@@ -558,6 +563,7 @@ mod tests {
                     none: 3,
                     naming: 8,
                 }),
+                playing: true,
             }),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
         ] {
@@ -605,12 +611,14 @@ mod tests {
         };
         let new: StatsTick = decode(&encode(&old).unwrap()).unwrap();
         assert_eq!(new.names, None);
+        assert!(!new.playing);
         let d = new.down.as_ref().unwrap();
         assert!(d.sites.is_empty());
         assert_eq!(d.families[0].unidentified_bps, 0);
 
         let mut tick = new;
         tick.names = Some(NameTick::default());
+        tick.playing = true;
         tick.down.as_mut().unwrap().sites.push(SiteTick {
             site: "youtube".into(),
             name: "YouTube".into(),

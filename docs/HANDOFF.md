@@ -41,10 +41,9 @@ session" below; do them whenever the user wants.
 
 ### Next work, in order (no user needed)
 
-1. **Show the Gaming switch-over in the app:** while Gaming-while-playing
-   applies, the mode picker/header should say so (the service needs to
-   tell: e.g. a `playing: bool` or the effective profile in the
-   snapshot).
+1. ~~**Show the Gaming switch-over in the app**~~ **Done (2026-11-18):**
+   `StatsTick.playing`; outlined "Playing" flag on Gaming + a note in the
+   mode tiles and flyout (PLAN.md §11.5). Not seen in a real window.
 2. **Per-app overrides (§11.5):** "This is a game", "Never boost",
    "Always High" on the app rows / rule editor; stored in config
    (e.g. `[focus] games = [...]`, `never = [...]`) and honoured by the

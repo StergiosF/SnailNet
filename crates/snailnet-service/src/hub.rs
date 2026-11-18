@@ -66,6 +66,16 @@ struct Inner {
     focus: Focus,
 }
 
+impl Inner {
+    /// A game runs and "Gaming mode while you play" is on: the plan uses
+    /// the Gaming mode (§11.5).
+    fn playing(&self) -> bool {
+        self.config.settings.gaming_while_playing
+            && self.focus.has_games()
+            && self.config.profiles.iter().any(|p| p.id == modes::GAMING)
+    }
+}
+
 struct Sample {
     at: Instant,
     down: Option<DirectionStats>,
@@ -131,12 +141,9 @@ impl Hub {
     /// `None` keeps the typed speed).
     pub fn plan_live(&self, now: u64, live: [Option<f64>; 2]) -> (Plan, String) {
         let i = self.lock();
-        let gaming = i.config.settings.gaming_while_playing
-            && i.focus.has_games()
-            && i.config.profiles.iter().any(|p| p.id == modes::GAMING);
         let mut plan;
         let name;
-        if gaming {
+        if i.playing() {
             // The mode the user picked stays saved; only the plan changes.
             let mut c = i.config.clone();
             c.active_profile = modes::GAMING.into();
@@ -252,6 +259,7 @@ impl Hub {
         match &i.tick {
             Some(t) => StatsTick {
                 state: i.state.clone(),
+                playing: i.playing(),
                 ..t.clone()
             },
             None => StatsTick {
@@ -260,6 +268,7 @@ impl Hub {
                 down: None,
                 up: None,
                 names: None,
+                playing: i.playing(),
             },
         }
     }
@@ -292,6 +301,7 @@ impl Hub {
                 down: dir_stats(snap.down.as_ref(), last.down.as_ref(), secs, known),
                 up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs, known),
                 names: names.zip(last.names).map(|(n, l)| n.since(&l)),
+                playing: i.playing(),
             }
         });
         if tick.is_some() {
@@ -749,6 +759,7 @@ mod tests {
         assert_eq!(hub.plan(0).0.focus, vec![me]);
         hub.prune_focus();
         assert_eq!(hub.plan(0).0.focus, vec![me], "this test is still running");
+        assert!(!hub.latest_tick().playing, "the switch is off");
         hub.change(hub.rev(), |c| {
             c.settings.gaming_while_playing = true;
             Ok(())
@@ -756,6 +767,7 @@ mod tests {
         .unwrap();
         assert_eq!(hub.plan(0).1, "Gaming", "a game runs: Gaming mode");
         assert_eq!(hub.config().active_profile, "balanced", "the pick is kept");
+        assert!(hub.latest_tick().playing, "clients are told");
         hub.change(hub.rev(), |c| {
             c.settings.focus_boost = false;
             Ok(())

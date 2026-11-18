@@ -180,6 +180,10 @@ export interface StatsTick {
   down: DirStats | null;
   up: DirStats | null;
   names: NameTick | null;
+  /** A game runs and "Gaming mode while you play" is on: the service plans
+   *  with Gaming; the picked mode stays saved (§11.5). Missing from older
+   *  services. */
+  playing?: boolean;
 }
 
 /** Why a change failed (app/src-tauri/src/changes.rs). */

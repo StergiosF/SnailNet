@@ -19,6 +19,14 @@ class Service {
     this.link.kind === "connected" ? (this.stats?.state ?? this.snapshot?.state ?? null) : null,
   );
 
+  /** Gaming mode stands in for the picked mode while a game runs (§11.5);
+   *  false when Gaming is the pick anyway. */
+  playing = $derived(
+    this.link.kind === "connected" &&
+      this.stats?.playing === true &&
+      this.snapshot?.config.active_profile !== "gaming",
+  );
+
   activeProfile = $derived(
     this.snapshot?.config.profiles.find((p) => p.id === this.snapshot?.config.active_profile) ??
       null,

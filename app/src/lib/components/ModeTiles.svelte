@@ -14,6 +14,9 @@
   const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
   const active = $derived(service.snapshot?.config.active_profile ?? "");
   const uid = $props.id();
+  // While a game runs, Gaming stands in for the pick (§11.5); the pick
+  // stays checked, since it's what comes back.
+  const picked = $derived(modes.find((m) => m.id === active));
 </script>
 
 {#snippet glyph(id: ModeId)}
@@ -56,9 +59,16 @@
       <b>{t(m.name)}</b>
       <span class="body">{t(m.body)}</span>
       {#if m.id === active}<span class="flag" aria-hidden="true">{t("mode.on")}</span>{/if}
+      {#if m.id === "gaming" && service.playing}<span class="flag playing" aria-hidden="true"
+          >{t("mode.playing")}</span
+        >{/if}
     </label>
   {/each}
 </div>
+<!-- Always mounted, so screen readers hear it appear; empty, it takes no room. -->
+<p class="note" class:shown={service.playing && picked} role="status">
+  {#if service.playing && picked}{t("mode.playing.note", { mode: t(picked.name) })}{/if}
+</p>
 
 <style>
   .tiles {
@@ -170,6 +180,20 @@
     color: var(--accent);
     font-size: 12px;
     font-weight: 800;
+  }
+  /* Gaming standing in while a game runs: outlined, not the pick's cream. */
+  .flag.playing {
+    background: transparent;
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+  .note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .note.shown {
+    margin-top: 10px;
   }
   @media (max-width: 860px) {
     .tiles {

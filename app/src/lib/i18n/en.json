@@ -146,6 +146,8 @@
   "now.title": "What matters right now?",
   "mode.label": "Mode",
   "mode.on": "On",
+  "mode.playing": "Playing",
+  "mode.playing.note": "Gaming mode while you play. {mode} comes back when the game closes.",
   "mode.balanced": "Balanced",
   "mode.balanced.body": "Everyone gets a fair share.",
   "mode.streaming": "Streaming",
