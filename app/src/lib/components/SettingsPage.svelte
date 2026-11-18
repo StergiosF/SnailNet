@@ -34,22 +34,42 @@
     invoke<boolean>("autostart_enabled")
       .then((on) => (autostart = on))
       .catch(() => (autostart = null));
-    invoke<boolean>("hotkey_enabled")
-      .then((on) => (hotkey = on))
+    invoke<HotkeyInfo>("hotkey_info")
+      .then((info) => (hotkey = info))
       .catch(() => (hotkey = null));
   });
 
-  // Ctrl+Alt+S switches mode (§11.2). Off when turned off, or when another
-  // program holds those keys; the switch says which by refusing to stay on.
-  let hotkey = $state<boolean | null>(null);
-  let hotkeyTaken = $state(false);
+  // A hotkey switches mode (§11.2), Ctrl+Alt+S unless another is picked.
+  // Off when turned off, or when another program holds those keys; the
+  // switch says which by refusing to stay on. Picking keys another program
+  // holds keeps the old ones and says so.
+  type HotkeyInfo = { on: boolean; keys: string; choices: { keys: string; label: string }[] };
+  let hotkey = $state<HotkeyInfo | null>(null);
+  // Why the last change didn't take: the switch's keys, or the picked ones.
+  let hotkeyTaken = $state<{ keys: string; kept?: string } | null>(null);
+  const keysLabel = (keys: string) => hotkey?.choices.find((c) => c.keys === keys)?.label ?? keys;
   async function setHotkey(on: boolean) {
+    if (!hotkey) return;
+    const keys = keysLabel(hotkey.keys);
     try {
-      hotkey = await invoke<boolean>("set_hotkey", { on });
-      hotkeyTaken = on && !hotkey;
+      const now = await invoke<boolean>("set_hotkey", { on });
+      hotkey = { ...hotkey, on: now };
+      hotkeyTaken = on && !now ? { keys } : null;
     } catch {
-      hotkey = !on;
-      hotkeyTaken = on;
+      hotkey = { ...hotkey, on: !on };
+      hotkeyTaken = on ? { keys } : null;
+    }
+  }
+  async function setHotkeyKeys(keys: string) {
+    if (!hotkey) return;
+    const kept = keysLabel(hotkey.keys);
+    try {
+      hotkey = await invoke<HotkeyInfo>("set_hotkey_keys", { keys });
+      hotkeyTaken = null;
+    } catch {
+      hotkeyTaken = { keys: keysLabel(keys), kept };
+      // Put the select back on the keys still in use.
+      hotkey = { ...hotkey };
     }
   }
 
@@ -322,20 +342,42 @@
         onchange={(e) => void setAutostart(e.currentTarget.checked)}
       />
     </label>
-    <label class="item">
+    <div class="item">
       <div class="words">
-        <b>{t("settings.hotkey")}</b>
-        <span>{hotkeyTaken ? t("settings.hotkey.taken") : t("settings.hotkey.body")}</span>
+        <b id="set-hotkey">{t("settings.hotkey", { keys: keysLabel(hotkey?.keys ?? "ctrl+alt+s") })}</b>
+        <span role="status"
+          >{hotkeyTaken?.kept
+            ? t("settings.hotkey.kept", hotkeyTaken)
+            : hotkeyTaken
+              ? t("settings.hotkey.taken", hotkeyTaken)
+              : t("settings.hotkey.body")}</span
+        >
       </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={hotkey === true}
-        disabled={hotkey === null}
-        onchange={(e) => void setHotkey(e.currentTarget.checked)}
-      />
-    </label>
+      <div class="hotkey">
+        {#if hotkey?.on}
+          {#key hotkey}
+            <select
+              aria-label={t("settings.hotkey.pick")}
+              value={hotkey.keys}
+              onchange={(e) => void setHotkeyKeys(e.currentTarget.value)}
+            >
+              {#each hotkey.choices as c (c.keys)}
+                <option value={c.keys}>{c.label}</option>
+              {/each}
+            </select>
+          {/key}
+        {/if}
+        <input
+          type="checkbox"
+          role="switch"
+          class="switch"
+          aria-labelledby="set-hotkey"
+          checked={hotkey?.on === true}
+          disabled={hotkey === null}
+          onchange={(e) => void setHotkey(e.currentTarget.checked)}
+        />
+      </div>
+    </div>
     <label class="item">
       <div class="words">
         <b>{t("settings.newapps")}</b>
@@ -452,6 +494,26 @@
     display: flex;
     flex: none;
     gap: 8px;
+  }
+  .hotkey {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 16px;
+  }
+  .hotkey select {
+    height: 34px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--surface-3);
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+  @media (forced-colors: active) {
+    .hotkey select {
+      border: 1px solid ButtonText;
+    }
   }
   .words {
     display: flex;

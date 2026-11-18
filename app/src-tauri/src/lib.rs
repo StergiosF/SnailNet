@@ -206,8 +206,9 @@ pub fn run() {
             autostart::autostart_enabled,
             autostart::set_autostart,
             metered::network_metered,
-            hotkey::hotkey_enabled,
+            hotkey::hotkey_info,
             hotkey::set_hotkey,
+            hotkey::set_hotkey_keys,
             service_start::start_service,
             updates::check_update,
             updates::install_update

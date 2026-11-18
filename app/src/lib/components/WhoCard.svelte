@@ -11,7 +11,7 @@
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
   import { glide, ms } from "../motion";
-  import { boostLeft, liveBoost, users } from "../modes";
+  import { boostLeft, gameWhy, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -24,6 +24,14 @@
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
   const list = $derived(ledger ? users(ledger, live, label) : []);
+  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
+  // The row's second line: a boost's time left, else why a game goes
+  // first, else what its slice is doing.
+  function sub(u: (typeof list)[number]): string {
+    if (u.boosted && live) return t("who.boosted", { left: boostLeft(live, ui.now) });
+    const why = gameWhy(u.target, service.stats?.games, focusBoost);
+    return why ? t(`who.game.${why}`) : u.status;
+  }
   // Website traffic whose name is hidden (ECH): said, never hidden.
   const hidden = $derived(ledger ? unnamed(service.stats?.down) : null);
   const hiddenApps = $derived(
@@ -61,7 +69,7 @@
           <AppIcon target={u.target} name={u.name} size={22} boxed />
           <span class="nm">
             <b>{u.name}</b>
-            <small>{u.boosted && live ? t("who.boosted", { left: boostLeft(live, ui.now) }) : u.status}</small>
+            <small>{sub(u)}</small>
           </span>
           <span class="mb num">{u.bps > 0 ? mbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
           <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />

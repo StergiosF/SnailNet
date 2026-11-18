@@ -1,11 +1,13 @@
 //! The global hotkey (PLAN.md §11.2): Ctrl+Alt+S switches to the next
 //! mode, wherever you are, and opens the tray flyout so you see which one
-//! is on now. On by default; Settings → Windows turns it off. The choice
-//! is this Windows user's, so the app keeps it: an empty marker file
-//! ([`OFF_MARKER`]) in the app's config directory means off.
+//! is on now. On by default; Settings → Windows turns it off or picks one
+//! of a few other key combinations ([`CHOICES`]). The choice is this
+//! Windows user's, so the app keeps it in its config directory: an empty
+//! marker file ([`OFF_MARKER`]) means off, and [`KEYS_FILE`] holds the
+//! keys when they aren't the default.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use snailnet_core::modes::{MODES, is_mode};
 use snailnet_ipc::Request;
@@ -15,12 +17,54 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::Shared;
 
-/// The keys, as the plugin parses them.
-pub const SHORTCUT: &str = "ctrl+alt+s";
+/// The keys the user may pick (as the plugin parses them, and as shown).
+/// A short list rather than "press any keys": these stay clear of what
+/// programs use every day (Ctrl+Shift+S is Save as), so the hotkey doesn't
+/// take a shortcut away from them.
+pub const CHOICES: [(&str, &str); 4] = [
+    ("ctrl+alt+s", "Ctrl+Alt+S"),
+    ("ctrl+shift+alt+s", "Ctrl+Shift+Alt+S"),
+    ("ctrl+alt+m", "Ctrl+Alt+M"),
+    ("ctrl+alt+n", "Ctrl+Alt+N"),
+];
+/// The default keys.
+pub const SHORTCUT: &str = CHOICES[0].0;
 const OFF_MARKER: &str = "hotkey-off";
+const KEYS_FILE: &str = "hotkey-keys";
+
+/// The keys registered now (or to register when turned on).
+#[derive(Default)]
+pub struct Keys(Mutex<Option<&'static str>>);
+
+impl Keys {
+    fn get(&self) -> &'static str {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .unwrap_or(SHORTCUT)
+    }
+
+    fn set(&self, keys: &'static str) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(keys);
+    }
+}
 
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     tauri_plugin_global_shortcut::Builder::new().build()
+}
+
+/// One of [`CHOICES`], by its keys.
+fn choice(keys: &str) -> Option<&'static str> {
+    let keys = keys.trim();
+    CHOICES.iter().map(|(k, _)| *k).find(|k| *k == keys)
+}
+
+/// The keys saved in `file`; the default when there's none or it isn't
+/// one of the choices (any more).
+fn saved_keys(file: Option<&Path>) -> &'static str {
+    file.and_then(|f| std::fs::read_to_string(f).ok())
+        .and_then(|s| choice(&s))
+        .unwrap_or(SHORTCUT)
 }
 
 /// The mode after `active`: the built-in modes the config has, in the
@@ -45,21 +89,32 @@ fn marker(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join(OFF_MARKER))
 }
 
+fn keys_file(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join(KEYS_FILE))
+}
+
+fn keys(app: &AppHandle) -> &'static str {
+    app.state::<Keys>().get()
+}
+
 fn is_on(marker: Option<&Path>) -> bool {
     !marker.is_some_and(Path::exists)
 }
 
 /// Register the hotkey unless the user turned it off. Another program
-/// may own Ctrl+Alt+S already; then there's simply no hotkey.
+/// may own the keys already; then there's simply no hotkey.
 pub fn setup(app: &AppHandle) {
+    app.manage(Keys::default());
+    app.state::<Keys>()
+        .set(saved_keys(keys_file(app).as_deref()));
     if is_on(marker(app).as_deref()) {
-        let _ = register(app);
+        let _ = register(app, keys(app));
     }
 }
 
-fn register(app: &AppHandle) -> Result<(), String> {
+fn register(app: &AppHandle, keys: &str) -> Result<(), String> {
     app.global_shortcut()
-        .on_shortcut(SHORTCUT, |app, _shortcut, event| {
+        .on_shortcut(keys, |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 cycle(app);
             }
@@ -86,9 +141,65 @@ fn cycle(app: &AppHandle) {
     }
 }
 
+fn enabled(app: &AppHandle) -> bool {
+    is_on(marker(app).as_deref()) && app.global_shortcut().is_registered(keys(app))
+}
+
+/// What Settings shows: on or not, the keys, and the keys to pick from.
+#[derive(serde::Serialize)]
+pub struct HotkeyInfo {
+    on: bool,
+    keys: &'static str,
+    choices: Vec<Choice>,
+}
+
+#[derive(serde::Serialize)]
+struct Choice {
+    keys: &'static str,
+    label: &'static str,
+}
+
 #[tauri::command]
-pub fn hotkey_enabled(app: AppHandle) -> bool {
-    is_on(marker(&app).as_deref()) && app.global_shortcut().is_registered(SHORTCUT)
+pub fn hotkey_info(app: AppHandle) -> HotkeyInfo {
+    HotkeyInfo {
+        on: enabled(&app),
+        keys: keys(&app),
+        choices: CHOICES
+            .iter()
+            .map(|&(keys, label)| Choice { keys, label })
+            .collect(),
+    }
+}
+
+/// Use other keys; returns what Settings shows afterwards. When another
+/// program holds the new keys, the old ones stay (and stay registered).
+#[tauri::command]
+pub fn set_hotkey_keys(app: AppHandle, keys: String) -> Result<HotkeyInfo, String> {
+    let new = choice(&keys).ok_or("not one of the choices")?;
+    let old = self::keys(&app);
+    if new != old {
+        let shortcuts = app.global_shortcut();
+        if is_on(marker(&app).as_deref()) {
+            if shortcuts.is_registered(old) {
+                shortcuts.unregister(old).map_err(|e| e.to_string())?;
+            }
+            if let Err(e) = register(&app, new) {
+                let _ = register(&app, old);
+                return Err(e);
+            }
+        }
+        app.state::<Keys>().set(new);
+        let file = keys_file(&app).ok_or("no app config folder")?;
+        if new == SHORTCUT {
+            let _ = std::fs::remove_file(&file);
+        } else {
+            if let Some(dir) = file.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&file, new).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(hotkey_info(app))
 }
 
 /// Turn the hotkey on or off; returns whether it's on now (it can't be
@@ -96,23 +207,24 @@ pub fn hotkey_enabled(app: AppHandle) -> bool {
 #[tauri::command]
 pub fn set_hotkey(app: AppHandle, on: bool) -> Result<bool, String> {
     let marker = marker(&app).ok_or("no app config folder")?;
+    let keys = keys(&app);
     if on {
         let _ = std::fs::remove_file(&marker);
-        if !app.global_shortcut().is_registered(SHORTCUT) {
-            register(&app)?;
+        if !app.global_shortcut().is_registered(keys) {
+            register(&app, keys)?;
         }
     } else {
         if let Some(dir) = marker.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
         std::fs::write(&marker, b"").map_err(|e| e.to_string())?;
-        if app.global_shortcut().is_registered(SHORTCUT) {
+        if app.global_shortcut().is_registered(keys) {
             app.global_shortcut()
-                .unregister(SHORTCUT)
+                .unregister(keys)
                 .map_err(|e| e.to_string())?;
         }
     }
-    Ok(hotkey_enabled(app))
+    Ok(enabled(&app))
 }
 
 #[cfg(test)]
@@ -159,5 +271,27 @@ mod tests {
         assert!(!is_on(Some(&m)));
         assert!(is_on(None), "no config folder: on");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saved_keys_must_be_a_choice() {
+        let dir = std::env::temp_dir().join(format!("snailnet-hotkey-keys-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join(KEYS_FILE);
+        assert_eq!(saved_keys(Some(&f)), SHORTCUT, "none saved");
+        std::fs::write(&f, "ctrl+alt+m\n").unwrap();
+        assert_eq!(saved_keys(Some(&f)), "ctrl+alt+m");
+        std::fs::write(&f, "alt+f4").unwrap();
+        assert_eq!(saved_keys(Some(&f)), SHORTCUT, "not a choice");
+        assert_eq!(saved_keys(None), SHORTCUT);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_choice_parses() {
+        use tauri_plugin_global_shortcut::Shortcut;
+        for (keys, _) in CHOICES {
+            assert!(keys.parse::<Shortcut>().is_ok(), "{keys}");
+        }
     }
 }

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use snailnet_ipc::{Client, PIPE_NAME, Request};
+use snailnet_ipc::{Client, GameWhy, PIPE_NAME, Request};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
@@ -61,7 +61,7 @@ pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
                 // SnailNet's own window isn't worth putting first.
                 let pid = foreground_pid().filter(|p| *p != own);
                 if let Some(pid) = d.step(pid, Instant::now()) {
-                    tell(pid, is_game(pid));
+                    tell(pid, game_why(pid));
                 }
                 std::thread::sleep(POLL);
             }
@@ -71,12 +71,13 @@ pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
 
 /// Best effort: if the service isn't there, the next change or repeat
 /// tries again.
-fn tell(pid: u32, is_game: bool) {
+fn tell(pid: u32, why: Option<GameWhy>) {
     if let Ok(mut c) = Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION")) {
         let _ = c.call(Request::FocusChanged {
             pid,
-            is_game,
-            confidence: if is_game { 1.0 } else { 0.0 },
+            is_game: why.is_some(),
+            confidence: if why.is_some() { 1.0 } else { 0.0 },
+            why,
         });
     }
 }
@@ -94,13 +95,17 @@ fn foreground_pid() -> Option<u32> {
     }
 }
 
-/// Exclusive fullscreen Direct3D (the window in front is `pid`'s), or an
-/// exe in a game launcher's library.
-fn is_game(pid: u32) -> bool {
+/// Why `pid` (the window in front) is a game, if it is: an exe in a game
+/// launcher's library (what the program is, so it comes first), or
+/// exclusive fullscreen Direct3D.
+fn game_why(pid: u32) -> Option<GameWhy> {
+    if exe_path(pid).is_some_and(|p| snailnet_core::games::in_game_library(&p)) {
+        return Some(GameWhy::Library);
+    }
     // SAFETY: no arguments; the result is checked.
     let fullscreen =
         unsafe { SHQueryUserNotificationState() }.is_ok_and(|s| s == QUNS_RUNNING_D3D_FULL_SCREEN);
-    fullscreen || exe_path(pid).is_some_and(|p| snailnet_core::games::in_game_library(&p))
+    fullscreen.then_some(GameWhy::Fullscreen)
 }
 
 fn exe_path(pid: u32) -> Option<String> {

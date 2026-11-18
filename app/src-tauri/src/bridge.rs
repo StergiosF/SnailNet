@@ -226,6 +226,7 @@ mod tests {
             up: None,
             names: None,
             playing: false,
+            games: Vec::new(),
         }
     }
 

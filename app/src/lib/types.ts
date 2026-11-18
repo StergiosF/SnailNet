@@ -220,6 +220,17 @@ export interface StatsTick {
    *  with Gaming; the picked mode stays saved (§11.5). Missing from older
    *  services. */
   playing?: boolean;
+  /** The games running now and why each counts as one (§11.5). Missing
+   *  when there are none, or from older services. */
+  games?: GameTick[];
+}
+
+/** Why SnailNet counts a program as a game (snailnet-ipc `GameWhy`). */
+export type GameWhy = "fullscreen" | "library" | "marked";
+
+export interface GameTick {
+  family: string;
+  why: GameWhy;
 }
 
 /** Why a change failed (app/src-tauri/src/changes.rs). */

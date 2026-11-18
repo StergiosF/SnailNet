@@ -125,6 +125,10 @@ pub enum Request {
         pid: u32,
         is_game: bool,
         confidence: f32,
+        /// Why the app thinks it's a game (PLAN.md §11.5). Absent from
+        /// older apps.
+        #[serde(default)]
+        why: Option<GameWhy>,
     },
     /// Step aside (no shaping, no blocking) for `minutes`, or until
     /// [`Request::Resume`] (`None`).
@@ -358,6 +362,29 @@ pub struct StatsTick {
     /// (PLAN.md §11.5). `false` from a service that doesn't report it.
     #[serde(default)]
     pub playing: bool,
+    /// The games running now and why each counts as one (PLAN.md §11.5),
+    /// by app family. Empty from a service that doesn't report it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub games: Vec<GameTick>,
+}
+
+/// Why SnailNet counts a program as a game (PLAN.md §11.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GameWhy {
+    /// It ran in exclusive fullscreen (Direct3D).
+    Fullscreen,
+    /// Its program sits in a game launcher's library.
+    Library,
+    /// The user said so ("It's a game").
+    Marked,
+}
+
+/// A game running now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameTick {
+    pub family: String,
+    pub why: GameWhy,
 }
 
 /// Packets by how their flow was named (PLAN.md §8.4). Flows are named only
@@ -682,6 +709,10 @@ mod tests {
                     naming: 8,
                 }),
                 playing: true,
+                games: vec![GameTick {
+                    family: "hades".into(),
+                    why: GameWhy::Library,
+                }],
             }),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
             ServerMsg::Event(Event::NewApp(NewApp {
@@ -737,6 +768,7 @@ mod tests {
         let new: StatsTick = decode(&encode(&old).unwrap()).unwrap();
         assert_eq!(new.names, None);
         assert!(!new.playing);
+        assert!(new.games.is_empty());
         let d = new.down.as_ref().unwrap();
         assert!(d.sites.is_empty());
         assert_eq!(d.families[0].unidentified_bps, 0);
@@ -744,6 +776,10 @@ mod tests {
         let mut tick = new;
         tick.names = Some(NameTick::default());
         tick.playing = true;
+        tick.games.push(GameTick {
+            family: "steam".into(),
+            why: GameWhy::Marked,
+        });
         tick.down.as_mut().unwrap().sites.push(SiteTick {
             site: "youtube".into(),
             name: "YouTube".into(),

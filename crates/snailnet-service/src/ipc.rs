@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use snailnet_ipc::{
-    CAP_NEW_APPS, ClientMsg, ErrorCode, Event, FrameError, MIN_PROTOCOL, PIPE_SDDL, PROTOCOL,
-    Reply, Request, ServerMsg, decode, encode, frame_len, parse_len,
+    CAP_NEW_APPS, ClientMsg, ErrorCode, Event, FrameError, GameWhy, MIN_PROTOCOL, PIPE_SDDL,
+    PROTOCOL, Reply, Request, ServerMsg, decode, encode, frame_len, parse_len,
 };
 use snailnet_win::fs::SecurityAttributes;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -376,8 +376,11 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
         Request::RunSpeedTest => ack(hub.request_speedtest()),
         Request::SetSettings { settings, rev } => ack(hub.set_settings(settings, rev)),
         Request::SetFamilies { families, rev } => ack(hub.set_families(families, rev)),
-        Request::FocusChanged { pid, is_game, .. } => {
-            hub.focus_changed(pid, is_game);
+        Request::FocusChanged {
+            pid, is_game, why, ..
+        } => {
+            // An older app says only whether: count it as fullscreen.
+            hub.focus_changed(pid, is_game.then(|| why.unwrap_or(GameWhy::Fullscreen)));
             ack(Ok(hub.rev()))
         }
         Request::AnswerPrompt { prompt_id, action } => ack(hub.answer_prompt(prompt_id, &action)),
@@ -498,6 +501,7 @@ mod tests {
                 pid: std::process::id(),
                 is_game: false,
                 confidence: 0.0,
+                why: None,
             }),
             Ok(Reply::Ack { rev: 1 })
         ));

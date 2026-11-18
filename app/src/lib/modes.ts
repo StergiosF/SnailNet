@@ -5,7 +5,7 @@
 import { sameTarget } from "./rules";
 import { statusText, QUIET_BPS, type Ledger, type Slice } from "./ledger";
 import { t, type Key } from "./i18n";
-import type { Boost, Profile, Target } from "./types";
+import type { Boost, GameTick, GameWhy, Profile, Target } from "./types";
 
 export type ModeId = "balanced" | "streaming" | "gaming" | "quiet-downloads";
 
@@ -146,6 +146,13 @@ export function users(
     }
   }
   return shown;
+}
+
+/** Why `target` goes first as a game right now (§11.5), or null: not a
+ *  running game, or "Put what you're using first" is off. */
+export function gameWhy(target: Target, games: GameTick[] | undefined, focusBoost: boolean): GameWhy | null {
+  if (!focusBoost || target.kind !== "family") return null;
+  return games?.find((g) => g.family === target.id)?.why ?? null;
 }
 
 /** The split in short: the slices with a share (Everything else last), and

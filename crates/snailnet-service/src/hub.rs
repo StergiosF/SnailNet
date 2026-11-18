@@ -20,8 +20,8 @@ use snailnet_core::rules::{
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
-    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, PromptAction,
-    ServiceState, SiteInfo, SiteTick, Snapshot, StatsTick,
+    AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, GameTick, GameWhy, NameTick,
+    PromptAction, ServiceState, SiteInfo, SiteTick, Snapshot, StatsTick,
 };
 use snailnet_win::process::{WinProcesses, windows_dir};
 use tokio::sync::broadcast;
@@ -99,6 +99,11 @@ struct Inner {
 impl Inner {
     /// A game runs and "Gaming mode while you play" is on: the plan uses
     /// the Gaming mode (§11.5).
+    /// The games running now, for the app (§11.5).
+    fn games(&self) -> Vec<GameTick> {
+        self.focus.games(&self.config.settings)
+    }
+
     fn playing(&self) -> bool {
         self.config.settings.gaming_while_playing
             && self.focus.has_games(&self.config.settings)
@@ -315,6 +320,7 @@ impl Hub {
             Some(t) => StatsTick {
                 state: i.state.clone(),
                 playing: i.playing(),
+                games: i.games(),
                 ..t.clone()
             },
             None => StatsTick {
@@ -324,6 +330,7 @@ impl Hub {
                 up: None,
                 names: None,
                 playing: i.playing(),
+                games: i.games(),
             },
         }
     }
@@ -358,6 +365,7 @@ impl Hub {
                 up: dir_stats(snap.up.as_ref(), last.up.as_ref(), secs, known),
                 names: names.zip(last.names).map(|(n, l)| n.since(&l)),
                 playing: i.playing(),
+                games: i.games(),
             }
         });
         if tick.is_some() {
@@ -601,14 +609,14 @@ impl Hub {
 
     /// The window in front is `pid`'s (§11.5); a game stays first while it
     /// runs. Wakes the runner when what goes first changed.
-    pub fn focus_changed(&self, pid: u32, is_game: bool) {
+    pub fn focus_changed(&self, pid: u32, detected: Option<GameWhy>) {
         let created = snailnet_win::process::created(pid);
         let families = self.lock().config.families.clone();
         let family = (self.family_of.lock().unwrap_or_else(|e| e.into_inner()))(pid, &families);
         let changed = {
             let mut i = self.lock();
             let Inner { focus, config, .. } = &mut *i;
-            focus.changed(pid, is_game, created, family, &config.settings)
+            focus.changed(pid, detected, created, family, &config.settings)
         };
         if changed {
             self.signal.request_reload();
@@ -1015,7 +1023,7 @@ mod tests {
     fn the_app_in_front_goes_into_the_plan_while_shaping() {
         let (_t, hub) = hub();
         let me = std::process::id();
-        hub.focus_changed(me, true);
+        hub.focus_changed(me, Some(GameWhy::Fullscreen));
         assert!(hub.signal().take_reload());
         assert!(
             hub.plan(0).0.focus.is_empty(),
@@ -1076,7 +1084,7 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        hub.focus_changed(me, false);
+        hub.focus_changed(me, None);
         assert_eq!(hub.plan(0).0.focus, vec![me]);
         assert_eq!(hub.plan(0).1, "Gaming", "a game by the user's word");
 

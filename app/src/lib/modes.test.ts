@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, copyName, liveBoost, modeName, summary, users } from "./modes";
+import { availableModes, boostLeft, copyName, gameWhy, liveBoost, modeName, summary, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -106,5 +106,18 @@ describe("summary", () => {
     const s = summary(ledger(rules, busy(), label));
     expect(s.slices.map((x) => x.name)).toEqual(["YouTube", "Brave", "Everything else"]);
     expect(s.free).toBe(1);
+  });
+});
+
+describe("game why", () => {
+  const games = [{ family: "hades", why: "library" as const }];
+  it("says why a running game goes first", () => {
+    expect(gameWhy({ kind: "family", id: "hades" }, games, true)).toBe("library");
+    expect(gameWhy({ kind: "family", id: "obs" }, games, true)).toBeNull();
+    expect(gameWhy({ kind: "site", id: "hades" }, games, true)).toBeNull();
+    expect(gameWhy({ kind: "family", id: "hades" }, undefined, true)).toBeNull();
+  });
+  it("says nothing while focus boost is off", () => {
+    expect(gameWhy({ kind: "family", id: "hades" }, games, false)).toBeNull();
   });
 });
