@@ -2521,11 +2521,21 @@ kbd {
 
 /* ---------- Features: pick one on the left, see it on the right ---------- */
 
+/* The link closes the left column, level with the foot of the picture. */
 .fx {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--gap);
-  align-items: stretch;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "list stage"
+    "more stage";
+  gap: 0 var(--gap);
+}
+.fx__list {
+  grid-area: list;
+}
+.fx__stage {
+  grid-area: stage;
 }
 .fx__list {
   display: grid;
@@ -2674,13 +2684,22 @@ kbd {
   text-align: center;
   color: var(--text-secondary);
 }
-.features__more {
+.fx .features__more {
+  grid-area: more;
+  justify-self: start;
+  align-self: end;
   display: inline-flex;
-  margin-top: 28px;
+  margin: 24px 0 0 20px;
 }
 @media (max-width: 899px) {
   .fx {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "list" "stage" "more";
+    gap: var(--gap) 0;
+  }
+  .fx .features__more {
+    margin: 4px 0 0;
   }
   .fx__list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
