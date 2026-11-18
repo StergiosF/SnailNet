@@ -72,7 +72,7 @@
   <div class="wrap hero__in">
     <p class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-window"/></svg>Free and open source · Windows&nbsp;10 and&nbsp;11</p>
     <h1 id="hero-h">Put the bandwidth hogs in the <span class="hl">slow lane</span>.</h1>
-    <p class="lead">SnailNet shares your PC's internet between apps and websites by percentage, so the game download and YouTube both keep going.</p>
+    <p class="lead">Split your PC's internet between apps by percentage, so a download never wrecks your game, stream or call.</p>
     <div class="actions">
       <a class="btn btn--primary" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
       <a class="btn btn--tonal" href="https://github.com/StergiosF/SnailNet"><img class="ink" src="assets/icons/github.svg" alt="" width="18" height="18">See the code on GitHub</a>
@@ -133,9 +133,9 @@
   <div class="wrap split">
     <div class="split__text">
       <h2 id="why-h">Ping stays low while Steam downloads</h2>
-      <p class="intro">A game download takes the whole line: the video buffers, the call breaks up and ping jumps mid-match. SnailNet keeps every app to its slice.</p>
+      <p class="intro">A big download takes the whole line and ping jumps. SnailNet keeps every app to its slice.</p>
       <ol class="beats">
-        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-download"/></svg></span><b>A game download starts</b><span>Steam takes its slice, plus any room nobody else is using.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-download"/></svg></span><b>A game download starts</b><span>Steam gets its slice, plus any spare room.</span></li>
         <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
         <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
       </ol>
@@ -173,13 +173,13 @@
   <div class="wrap">
     <div class="head">
       <h2 id="how-h">How the split works, in 3 steps</h2>
-      <p class="intro">Each slice is a guarantee when the line is busy, never a cage. On a 20&nbsp;Mbps line:</p>
+      <p class="intro">A slice is a minimum, never a cap. On a 20&nbsp;Mbps line:</p>
     </div>
     <div class="grid steps" data-reveal>
       <article class="card stepcard">
         <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-slice"/></svg><b>1</b></span>
         <h3>Give each app a slice</h3>
-        <p>Steam 40%, YouTube 60%. Apps you haven't named share the rest, never under 5%.</p>
+        <p>Steam 40%, YouTube 60%. Everything else never drops under 5%.</p>
         <div class="panel" data-ui aria-hidden="true">
           <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><b>Steam</b><span class="srow__step"><i>−</i>40%<i>+</i></span></span>
           <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><b>YouTube</b><span class="srow__step"><i>−</i>60%<i>+</i></span></span>
@@ -189,7 +189,7 @@
       <article class="card stepcard">
         <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-busy"/></svg><b>2</b></span>
         <h3>A busy line keeps every slice</h3>
-        <p>While both want more, Steam gets 8&nbsp;Mbps and YouTube 12, however hard Steam pushes.</p>
+        <p>Both want more: Steam gets 8&nbsp;Mbps, YouTube&nbsp;12.</p>
         <div class="panel" data-ui aria-hidden="true">
           <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b" style="--w: 60">60%</i></span>
           <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>8.0&nbsp;Mbps · using its whole slice, wants more</small></span>
@@ -199,7 +199,7 @@
       <article class="card stepcard">
         <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-spare"/></svg><b>3</b></span>
         <h3>Spare room goes where it's needed</h3>
-        <p>Pause the video and Steam gets the whole line. Press play and YouTube's slice comes straight back.</p>
+        <p>Pause the video and Steam gets it all. Press play and YouTube's slice comes back.</p>
         <div class="panel" data-ui aria-hidden="true">
           <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b mbar__b--lent" style="--w: 60">lent</i></span>
           <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>20.0&nbsp;Mbps · 12.0&nbsp;Mbps of it is spare room</small></span>
@@ -264,7 +264,7 @@
     <div class="grid features">
       <article class="card feat">
         <h3>Gives websites their own slice</h3>
-        <p>A rule for YouTube, Twitch or Netflix works in every browser, ahead of the browser's own slice.</p>
+        <p>Rules for YouTube, Twitch or Netflix work in every browser.</p>
         <div class="panel" data-ui aria-hidden="true">
           <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
           <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
@@ -275,7 +275,7 @@
 
       <article class="card feat">
         <h3>Lets games and calls go first</h3>
-        <p>The app in front sends first. Boost lets one app go first for an hour, four hours or until you stop it.</p>
+        <p>The app in front goes first. Boost any app for an hour, or until you stop it.</p>
         <div class="panel panel--boost" data-ui aria-hidden="true">
           <span class="frow frow--boosted frow--btn"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52&nbsp;min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg>Boost</span><i class="frow__left" style="--left: 87"></i></span>
           <span class="menu menu--from">
@@ -292,7 +292,7 @@
     <div class="grid features g2__b">
       <article class="card feat">
         <h3>Switches whole setups in one click</h3>
-        <p>Four modes change the whole split at once. Pick one in the tray, or press <span class="nowrap"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></span>.</p>
+        <p>Four modes switch the whole split. Pick one in the tray, or press <span class="nowrap"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></span>.</p>
         <fieldset class="panel tiles" data-ui>
           <legend class="visually-hidden">Try a mode</legend>
           <label class="tile"><input type="radio" name="mode" value="balanced"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Everyone gets a fair share.</span></label>
@@ -304,7 +304,7 @@
 
       <article class="card feat">
         <h3>Steps aside instead of breaking things</h3>
-        <p>If anything goes wrong, your traffic flows straight through. Pause stops everything in one click.</p>
+        <p>If anything fails, traffic flows straight through. Pause stops it all in one click.</p>
         <div class="panel panel--pause" data-ui aria-hidden="true">
           <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
           <span class="fbtn fbtn--on"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span>
@@ -327,10 +327,10 @@
   <div class="wrap split">
     <div class="split__text">
       <h2 id="privacy-h">Nothing about you leaves your PC</h2>
-      <p class="intro">No account, no telemetry, no analytics, and uninstalling can delete everything it kept.</p>
+      <p class="intro">No account, no telemetry, no analytics.</p>
       <dl class="reads">
-        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye"/></svg>Reads, on your PC only</dt><dd>Which program owns each connection, and the website's name as it connects.</dd></div>
-        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye-off"/></svg>Never reads</dt><dd>What you send or receive. Your settings and logs stay on your PC.</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye"/></svg>Reads, on your PC only</dt><dd>Which app owns each connection, and the site it goes to.</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye-off"/></svg>Never reads</dt><dd>What you send or receive.</dd></div>
       </dl>
       <a class="link" href="https://github.com/StergiosF/SnailNet#privacy">Read the full privacy notes</a>
     </div>
@@ -351,33 +351,33 @@
   <div class="wrap">
     <div class="head head--row">
       <h2 id="questions-h">Questions</h2>
-      <p class="intro">What people ask before they install it. If your internet ever breaks, the help on GitHub takes you through it step by step.</p>
+      <p class="intro">Internet broken? The help on GitHub walks you through it.</p>
       <a class="link" href="https://github.com/StergiosF/SnailNet#help-my-internet-broke">Read the help for a broken connection</a>
     </div>
     <div class="faq">
       <div class="faq__item">
         <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-service"/></svg></span><h3>If I close the window, does it stop?</h3>
-        <p>No. A Windows service does the work, so your rules keep working with the app closed. Use Pause to stop shaping.</p>
+        <p>No. A Windows service keeps your rules running. Use Pause to stop.</p>
       </div>
       <div class="faq__item">
         <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-speed"/></svg></span><h3>Will it make my internet slower?</h3>
-        <p>It sends slightly below your line speed on purpose, which keeps ping low while something big downloads. The cost is a sliver of top speed.</p>
+        <p>Only a sliver. It stays just under your line speed, which keeps ping low.</p>
       </div>
       <div class="faq__item">
         <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-globe"/></svg></span><h3>Does it work in every browser?</h3>
-        <p>Yes. Website rules go by the site's name. A few sites hide their names; their traffic still counts toward the browser's slice.</p>
+        <p>Yes, any browser. Sites that hide their name count toward the browser's slice.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span><h3>Does it work with my game's anti-cheat?</h3>
-        <p>It hasn't been tested with anti-cheat systems yet. If a game complains, pause SnailNet and please open an issue on GitHub.</p>
+        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span><h3>Does it work with my game's anti&#8209;cheat?</h3>
+        <p>Not tested yet. If a game complains, pause SnailNet and open an issue.</p>
       </div>
       <div class="faq__item">
         <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-upload"/></svg></span><h3>Does it shape uploads too?</h3>
-        <p>Yes, when you give it an upload speed. Leave a speed empty and SnailNet leaves that direction alone.</p>
+        <p>Yes, once you set an upload speed. Leave it empty to skip uploads.</p>
       </div>
       <div class="faq__item">
         <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-free"/></svg></span><h3>Does it cost anything?</h3>
-        <p>No. SnailNet is free and open source under the GPL-3.0, with no account and no telemetry.</p>
+        <p>No. It's free and open source (GPL&#8209;3.0).</p>
       </div>
     </div>
   </div>
@@ -391,7 +391,7 @@
     <div class="close-panel">
       <div class="close">
         <h2 id="close-h">Download SnailNet for Windows</h2>
-        <p class="close__line">Free and open source, with no account. Windows&nbsp;10 and&nbsp;11, 64-bit.</p>
+        <p class="close__line">Free, no account. Windows&nbsp;10 and&nbsp;11, 64&#8209;bit.</p>
         <a class="btn btn--primary btn--xl" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
         <p class="release" data-release hidden></p>
       </div>
@@ -400,9 +400,9 @@
         <use href="#snail-dark" x="200" y="20" width="320" height="320"/>
       </svg>
       <ol class="install">
-        <li><span class="install__n" aria-hidden="true">1</span><span><b>Run the installer</b><small>Windows asks for permission once, to add the SnailNet service.</small></span></li>
-        <li><span class="install__n" aria-hidden="true">2</span><span><b>Choose More info, then Run anyway</b><small>It isn't code-signed yet, so Windows may say it protected your PC.</small></span></li>
-        <li><span class="install__n" aria-hidden="true">3</span><span><b>Tell it your speed</b><small>It measures your line in about 20&nbsp;seconds, or you type it.</small></span></li>
+        <li><span class="install__n" aria-hidden="true">1</span><span><b>Run the installer</b><small>Allow it once, to add the service.</small></span></li>
+        <li><span class="install__n" aria-hidden="true">2</span><span><b>Choose More info, then Run anyway</b><small>It isn't signed yet, so Windows may warn you.</small></span></li>
+        <li><span class="install__n" aria-hidden="true">3</span><span><b>Tell it your speed</b><small>It measures it in 20&nbsp;seconds, or you type it.</small></span></li>
       </ol>
     </div>
 
