@@ -8,7 +8,8 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import { measureLine, resetAll, resetSplit, setFirstChoice } from "../actions";
+  import { measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
+  import { groupings } from "../families";
   import { stateKind } from "../format";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
@@ -102,6 +103,9 @@
       ...(s?.never_first ?? []).map((id) => ({ id, name: name(id), kind: t("first.list.never") })),
     ];
   });
+
+  // Programs split out and apps merged (§11.6), each with its undo.
+  const grouped = $derived(groupings(service.snapshot?.config.families, service.snapshot?.apps ?? []));
 
   async function setSetting(change: Partial<Settings>) {
     focusing = true;
@@ -258,6 +262,40 @@
                   aria-label={t("first.list.remove.label", { name: c.name })}
                   onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
                 >
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </div>
+    {/if}
+    {#if grouped.length > 0}
+      <div class="item">
+        <div class="words">
+          <b>{t("group.list.title")}</b>
+          <span>{t("group.list.body")}</span>
+          <ul class="nets choices">
+            {#each grouped as g (g.key)}
+              <li>
+                <span class="net">{g.name}</span>
+                {#if g.kind === "split"}
+                  <span>{t("group.list.split")}</span>
+                  <button
+                    type="button"
+                    class="btn btn-quiet"
+                    disabled={!canEdit}
+                    aria-label={t("group.list.back.label", { name: g.name })}
+                    onclick={() => void putBack(g.exe)}>{t("group.list.back")}</button
+                  >
+                {:else}
+                  <span>{t("group.list.merge", { into: g.into })}</span>
+                  <button
+                    type="button"
+                    class="btn btn-quiet"
+                    disabled={!canEdit}
+                    aria-label={t("group.list.separate.label", { name: g.name })}
+                    onclick={() => void separate(g.from, g.name)}>{t("group.list.separate")}</button
+                  >
+                {/if}
               </li>
             {/each}
           </ul>

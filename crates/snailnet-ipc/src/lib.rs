@@ -18,6 +18,7 @@
 use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use snailnet_core::families::Families;
 use snailnet_core::rules::{Config, Line, Rule, Settings, Target};
 
 #[cfg(windows)]
@@ -160,6 +161,12 @@ pub enum Request {
         id: String,
         rev: u64,
     },
+    /// Replace how apps are grouped: programs split out, families merged
+    /// (§11.6).
+    SetFamilies {
+        families: Families,
+        rev: u64,
+    },
 }
 
 impl Request {
@@ -187,6 +194,7 @@ impl Request {
             Self::CopyProfile { .. } => "CopyProfile",
             Self::RenameProfile { .. } => "RenameProfile",
             Self::DeleteProfile { .. } => "DeleteProfile",
+            Self::SetFamilies { .. } => "SetFamilies",
         }
     }
 }
@@ -567,6 +575,18 @@ mod tests {
             Request::DeleteProfile {
                 id: "mine".into(),
                 rev: 5,
+            },
+            Request::SetFamilies {
+                families: snailnet_core::families::Families {
+                    split: vec!["steamwebhelper.exe".into()],
+                    merge: vec![snailnet_core::families::Merge {
+                        from: r"c:\tools\sync.exe".into(),
+                        from_name: "Sync".into(),
+                        into: "dropbox".into(),
+                        name: "Dropbox".into(),
+                    }],
+                },
+                rev: 6,
             },
             Request::SetRules {
                 profile_id: "gaming".into(),

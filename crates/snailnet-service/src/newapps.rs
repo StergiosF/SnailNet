@@ -227,6 +227,9 @@ fn chosen(config: &Config, app: &AppInfo) -> bool {
         || config.blocked.iter().any(|b| fam(b))
         || config.settings.games.iter().any(|g| fam(g))
         || config.settings.never_first.iter().any(|g| fam(g))
+        // Split out or merged by the user: they've met it.
+        || app.family.starts_with(snailnet_core::families::SPLIT_PREFIX)
+        || config.families.merge.iter().any(|m| fam(&m.into))
 }
 
 #[cfg(test)]

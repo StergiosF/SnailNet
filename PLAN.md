@@ -581,6 +581,15 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
 
 As specified in §7.2. In the UI, an expandable row shows member processes; "Split out" / "Merge into…" actions.
 
+- **Built (2026-11-18), decisions taken:**
+  - **Stored in `config.toml`** as `[families]`: `split = ["steamwebhelper.exe"]` (lowercase program file names) and `[[families.merge]] from / from_name / into / name` (`snailnet-core::families`). IPC `SetFamilies { families, rev }`.
+  - **Split out** works by program (exe name), in whichever family it shows up: it becomes the family `split:<exe>`, named "{app} ({exe})". **Merge** works by whole family. Split first, then merge, so moving one program into another app is split + merge. Merges don't chain (the target can't itself be merged away); merging a family that others were merged into moves those along.
+  - **Applied in the attribution's view of its apps** (`Attribution::set_families`): app ids stay what the resolver made, so open flows keep their app and change group at once; per-app caches drop with the rules. The hub's own PID → family lookup (focus overrides) applies them too. Rules, blocks and "It's a game" name the grouped family.
+  - A split-out program or a merge target never counts as a new app (§11.4).
+  - Not an expandable row: the app's Boost menu has "Split out {exe}" (up to 4 programs, shown only when the app has more than one), "Put it back into its app" on a split-out one, and "Count it as part of [app ▾]" (a select over the apps seen). Each says what it did with Undo. Settings → Connection lists "How apps are grouped" with Put back / Separate.
+  - Found on the way: blocking (and "It's a game" / "Never first") refused every family id with a `:` in it, so apps known by their path (`c:\…\x.exe`) or Store package (`pkg:…`) couldn't be blocked, a new-app "Block" on them included. Now only rule-target strings (`family:`, `exe:`, `site:`) are refused (`families::is_family_id`).
+  - **Not yet:** seen in a real window or the real service; impeccable's full audit of the menu and the settings list.
+
 ### 11.7 Live view (core)
 
 - The app list shows ↓/↑ current speed per family/site (1 s smoothed, UI updates at 4 Hz), connection count, and a 60 s micro-sparkline on hover (no persistent graphs in v1).

@@ -17,7 +17,14 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   `WinDivertLib::check_filter`; tray badge + tooltip count. Never run
   against the real driver.
 
-Next: **D** family split/merge (§11.6), then **E** small. "Needs the
+- **D, family split/merge (§11.6), done:** `snailnet-core::families`
+  (`[families]` split by exe / merge by family), `Attribution::set_families`
+  (ids kept, view regrouped), IPC `SetFamilies`; Boost menu items + a
+  Settings list with undo. Fixed: blocking path/`pkg:` families was
+  refused by validation. Not seen in a real window.
+
+Next: **E** small (game-detection confidence in the UI §11.5, another
+hotkey §11.2); impeccable audit of today's UI is still owed. "Needs the
 user" below still stands.
 
 ## Start here (2026-11-18, night)

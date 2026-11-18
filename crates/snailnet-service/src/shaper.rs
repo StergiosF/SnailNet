@@ -27,6 +27,7 @@ use snailnet_core::classify::{
     App, AppId, Attribution, Event, FlowKey, Miss, Pack, Pending, Resolver, Source,
 };
 use snailnet_core::clock::{Clock, MonotonicClock};
+use snailnet_core::families::Families;
 use snailnet_core::parse::dns;
 use snailnet_core::parse::ip::{self, PROTO_TCP, PROTO_UDP, PacketInfo};
 use snailnet_core::rules::Plan;
@@ -709,6 +710,8 @@ pub struct Spec {
     pub blocking: bool,
     /// 1 or 2. 2 can reorder packets within a flow.
     pub rx_threads: usize,
+    /// How the user groups apps (PLAN.md §11.6).
+    pub families: Families,
 }
 
 /// Running shaping. Dropping it (or [`Shaper::stop`]) closes every handle,
@@ -742,6 +745,7 @@ impl Shaper {
         // Sniffers first, so no new flow is missed. If anything below fails,
         // dropping them closes their handles.
         let attribution = Arc::new(new_attribution());
+        attribution.set_families(&spec.families);
         let sniffers = Sniffers::start(&lib, attribution.clone())?;
         let clock = Arc::new(MonotonicClock::new());
         let sites = Arc::new(SiteState::new(clock.clone()));
@@ -890,6 +894,7 @@ impl runner::Engine for WinEngine {
 
     fn start(&mut self, plan: &Plan) -> Result<Running> {
         let shaper = Shaper::start(Spec {
+            families: plan.families.clone(),
             down: plan.down.clone(),
             up: plan.up.clone(),
             rules: Arc::new(PlanRules::new(plan.clone())),
@@ -960,6 +965,8 @@ impl runner::Running for Running {
         if plan.blocking() && !self.blocking {
             anyhow::bail!("an app is blocked now");
         }
+        // Before the rules, whose publishing clears the per-app caches.
+        self.shaper.attribution().set_families(&plan.families);
         self.shaper.reconfigure(
             plan.down.clone(),
             plan.up.clone(),

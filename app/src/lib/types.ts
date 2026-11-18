@@ -127,7 +127,24 @@ export interface Config {
   pause?: { until?: number };
   /** Apps (family ids) with no internet, in every mode. */
   blocked?: string[];
+  /** How the user groups apps (§11.6; missing: as SnailNet found them). */
+  families?: Families;
   profiles: Profile[];
+}
+
+/** A family counted as part of another (§11.6). */
+export interface Merge {
+  from: string;
+  from_name?: string;
+  into: string;
+  /** `into`'s name. */
+  name: string;
+}
+
+export interface Families {
+  /** Programs (exe names) that are apps of their own. */
+  split?: string[];
+  merge?: Merge[];
 }
 
 export interface AppInfo {

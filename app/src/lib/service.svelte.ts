@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { withSpeeds } from "./line";
 import { withBar } from "./rules";
-import type { Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
+import type { Families, Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
 
 const notConnected: SaveError = { kind: "failed", message: "not connected" };
 
@@ -107,6 +107,11 @@ class Service {
 
   async resume(): Promise<number> {
     return this.#change("resume", {});
+  }
+
+  /** Replace how apps are grouped (§11.6). */
+  async setFamilies(families: Families): Promise<number> {
+    return this.#change("set_families", { families });
   }
 
   /** Block or unblock an app's internet. */

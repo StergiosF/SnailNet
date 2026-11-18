@@ -109,6 +109,7 @@ pub fn run(args: SpikeArgs) -> Result<()> {
         shape_lan: args.shape_lan,
         blocking: false,
         rx_threads: args.rx_threads.into(),
+        families: Default::default(),
     })?;
 
     print_header(&args);

@@ -188,6 +188,7 @@ pub fn run() {
             current,
             icon::app_icon,
             changes::set_rules,
+            changes::set_families,
             changes::set_line,
             changes::switch_profile,
             changes::reset_profile,

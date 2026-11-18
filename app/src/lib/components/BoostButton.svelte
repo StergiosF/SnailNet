@@ -1,9 +1,12 @@
 <script lang="ts">
   // Boost one app or site (PLAN.md §11.5): a button that opens a small menu
   // (for 1 hour, 4 hours, until I stop it; and for an app, block its
-  // internet), or "Stop boost" on the one that's boosted. The menu is a
-  // native popover, so Escape and a click outside close it.
-  import { block, boost, setFirstChoice, stopBoost } from "../actions";
+  // internet, and how it's grouped: split a program out, put it back, or
+  // count it as part of another app, §11.6), or "Stop boost" on the one
+  // that's boosted. The menu is a native popover, so Escape and a click
+  // outside close it.
+  import { block, boost, mergeInto, putBack, setFirstChoice, splitOut, stopBoost } from "../actions";
+  import { members, splitExe } from "../families";
   import { firstChoiceOf, type FirstChoice } from "../firstChoice";
   import { t } from "../i18n";
   import { service } from "../service.svelte";
@@ -40,6 +43,34 @@
   // Whether this app goes first (§11.5): a game, never, or SnailNet's call.
   // Picking the ticked one again goes back to SnailNet's call.
   const first = $derived(firstChoiceOf(service.snapshot?.config.settings, target.id));
+
+  // Grouping (§11.6). Only an app with more than one program can lose one.
+  const apps = $derived(service.snapshot?.apps ?? []);
+  const own = $derived(splitExe(target.id));
+  const programs = $derived(own ? [] : members(apps, target.id).slice(0, 4));
+  const others = $derived.by(() => {
+    const list: { id: string; name: string }[] = [];
+    for (const a of apps) {
+      const id = a.family.toLowerCase();
+      const skip = id === target.id.toLowerCase() || id === "system" || id === "unknown";
+      if (!skip && !list.some((o) => o.id === id)) list.push({ id, name: a.name });
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  });
+  function split(exe: string) {
+    menu?.hidePopover();
+    void splitOut(exe, name);
+  }
+  function back() {
+    menu?.hidePopover();
+    if (own) void putBack(own);
+  }
+  function merge(e: Event & { currentTarget: HTMLSelectElement }) {
+    const into = others.find((o) => o.id === e.currentTarget.value);
+    if (!into) return;
+    menu?.hidePopover();
+    void mergeInto({ id: target.id, name }, into);
+  }
   function choose(choice: FirstChoice) {
     menu?.hidePopover();
     void setFirstChoice(target.id, name, first === choice ? "auto" : choice);
@@ -83,6 +114,29 @@
         </button>
       {/each}
       <hr />
+      {#if own}
+        <button type="button" role="menuitem" onclick={back}>
+          <i class="icon" aria-hidden="true">&#xE7A7;</i>{t("group.back")}
+        </button>
+      {:else if programs.length > 1}
+        {#each programs as exe (exe)}
+          <button type="button" role="menuitem" onclick={() => split(exe)}>
+            <i class="icon" aria-hidden="true">&#xE8C6;</i><span class="exe">{t("group.split", { exe })}</span>
+          </button>
+        {/each}
+      {/if}
+      {#if others.length > 0}
+        <label class="merge">
+          <span>{t("group.merge")}</span>
+          <select onchange={merge}>
+            <option value="" selected>…</option>
+            {#each others as o (o.id)}
+              <option value={o.id}>{o.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+      <hr />
       <button type="button" role="menuitem" class="danger" onclick={blockIt}>
         <i class="icon" aria-hidden="true">&#xE8F8;</i>{t("block")}
       </button>
@@ -120,6 +174,28 @@
   }
   .b:disabled {
     opacity: 0.5;
+  }
+  .exe {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .merge {
+    display: grid;
+    gap: 6px;
+    padding: 6px 10px 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .merge select {
+    width: 100%;
+    height: 34px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--surface-3);
+    color: var(--text-primary);
+    font-size: 14px;
   }
   @media (forced-colors: active) {
     .b {

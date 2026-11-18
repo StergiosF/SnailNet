@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::clock::{NANOS_PER_MILLI, NANOS_PER_SEC, Nanos};
+use crate::families::Families;
 pub use family::{App, How, Pack, ProcessFacts, ProcessKey, ProcessSource, Resolver};
 pub use flow::{AppId, FlowKey, FlowTable, Owner, PortKey, Source};
 
@@ -52,10 +53,16 @@ pub enum Event {
 
 /// Interned app identities: one id per (family, exe) pair, never reused,
 /// so the fast path can cache `AppId → class` without invalidation.
+///
+/// Ids are for the app as resolved; what [`Attribution::app`] shows is it
+/// grouped as the user wants ([`Families`]), so splitting or merging keeps
+/// every id (and the flows that carry it).
 #[derive(Default)]
 struct Apps {
-    list: Vec<Arc<App>>,
+    list: Vec<App>,
+    shown: Vec<Arc<App>>,
     index: HashMap<(String, String), AppId>,
+    families: Families,
 }
 
 impl Apps {
@@ -65,9 +72,22 @@ impl Apps {
             return id;
         }
         let id = self.list.len() as AppId;
-        self.list.push(Arc::new(app));
+        self.shown.push(Arc::new(self.families.apply(app.clone())));
+        self.list.push(app);
         self.index.insert(key, id);
         id
+    }
+
+    fn set_families(&mut self, families: &Families) {
+        if *families == self.families {
+            return;
+        }
+        self.families = families.clone();
+        self.shown = self
+            .list
+            .iter()
+            .map(|a| Arc::new(self.families.apply(a.clone())))
+            .collect();
     }
 }
 
@@ -169,7 +189,13 @@ impl<S: ProcessSource> Attribution<S> {
 
     /// The app behind an id from [`Self::lookup`] or [`Self::owner_of`].
     pub fn app(&self, id: AppId) -> Arc<App> {
-        self.apps.read().unwrap().list[id as usize].clone()
+        self.apps.read().unwrap().shown[id as usize].clone()
+    }
+
+    /// Group apps as the user wants from now on (PLAN.md §11.6). Ids stay;
+    /// callers caching per-id results (classes, blocks) must drop them.
+    pub fn set_families(&self, families: &Families) {
+        self.apps.write().unwrap().set_families(families);
     }
 
     /// (flows, socket endpoints, snapshot ports, skipped because full).
@@ -189,7 +215,7 @@ impl<S: ProcessSource> Attribution<S> {
 
     /// Every app seen so far, in the order first seen.
     pub fn apps(&self) -> Vec<Arc<App>> {
-        self.apps.read().unwrap().list.clone()
+        self.apps.read().unwrap().shown.clone()
     }
 }
 
@@ -342,6 +368,26 @@ mod tests {
             key: key(5000, 443),
         });
         assert_eq!(a.sizes(), (1, 0, 0, 0));
+    }
+
+    #[test]
+    fn families_regroup_apps_and_keep_their_ids() {
+        let a = attribution();
+        let web = a.owner_of(11).app;
+        let steam = a.owner_of(10).app;
+        a.set_families(&Families {
+            split: vec!["steamwebhelper.exe".into()],
+            ..Families::default()
+        });
+        assert_eq!(a.app(web).family, "split:steamwebhelper.exe");
+        assert_eq!(a.app(steam).family, "steam");
+        // Resolved after the change: grouped the same way, same id again.
+        assert_eq!(a.owner_of(11).app, web);
+        let brave = a.owner_of(20).app;
+        assert_eq!(a.apps().len(), 3);
+        a.set_families(&Families::default());
+        assert_eq!(a.app(web).family, "steam");
+        assert_eq!(a.app(brave).family, "brave");
     }
 
     #[test]

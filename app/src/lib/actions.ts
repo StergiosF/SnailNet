@@ -8,7 +8,8 @@ import { stateKind } from "./format";
 import { t, type Key } from "./i18n";
 import { copyName, modeName } from "./modes";
 import { service } from "./service.svelte";
-import type { Measured, SaveError, Target } from "./types";
+import { withMerge, withSplit, withoutMerge, withoutSplit } from "./families";
+import type { Families, Measured, SaveError, Target } from "./types";
 import { ui } from "./ui.svelte";
 
 /** A failed change in words, under `key` ("Couldn't … {message}"). */
@@ -79,6 +80,40 @@ export async function unblock(familyId: string): Promise<void> {
   } catch (e) {
     failed("block.failed", e);
   }
+}
+
+/** Save a new grouping (§11.6), saying `done` with an Undo back to how
+ *  it was. */
+async function regroup(next: (f: Families | undefined) => Families, done: string): Promise<void> {
+  const before = service.snapshot?.config.families ?? {};
+  try {
+    await service.setFamilies(next(before));
+    ui.say({
+      message: done,
+      action: { label: t("undo"), run: () => void service.setFamilies(before).catch((e) => failed("group.failed", e)) },
+    });
+  } catch (e) {
+    failed("group.failed", e);
+  }
+}
+
+/** `exe` becomes an app of its own, out of `app`. */
+export function splitOut(exe: string, app: string): Promise<void> {
+  return regroup((f) => withSplit(f, exe), t("group.split.done", { exe, app }));
+}
+
+/** A split-out `exe` goes back into its app. */
+export function putBack(exe: string): Promise<void> {
+  return regroup((f) => withoutSplit(f, exe), t("group.back.done", { exe }));
+}
+
+export function mergeInto(from: { id: string; name: string }, into: { id: string; name: string }): Promise<void> {
+  return regroup((f) => withMerge(f, from, into), t("group.merge.done", { from: from.name, into: into.name }));
+}
+
+/** A merged app is on its own again. */
+export function separate(from: string, name: string): Promise<void> {
+  return regroup((f) => withoutMerge(f, from), t("group.separate.done", { name }));
 }
 
 /** Say whether an app goes first (§11.5 overrides); the toast can undo it. */

@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::classify::{Pack, Resolver};
+use snailnet_core::families::Families;
 use snailnet_core::modes;
 use snailnet_core::networks::Switch;
 use snailnet_core::rules::{
@@ -48,8 +49,9 @@ pub struct Seen {
     pub windows: HashSet<String>,
 }
 
-/// A process's app family (`None`: unknown), for the focus overrides.
-type FamilyOf = Box<dyn FnMut(u32) -> Option<String> + Send>;
+/// A process's app family (`None`: unknown), grouped as the user wants,
+/// for the focus overrides.
+type FamilyOf = Box<dyn FnMut(u32, &Families) -> Option<String> + Send>;
 
 pub struct Hub {
     dir: DataDir,
@@ -65,14 +67,14 @@ pub struct Hub {
 /// resolver of its own built on first use.
 fn family_of_process() -> FamilyOf {
     let mut found: Option<(Resolver, WinProcesses)> = None;
-    Box::new(move |pid| {
+    Box::new(move |pid, families: &Families| {
         let (resolver, procs) = found.get_or_insert_with(|| {
             (
                 Resolver::new(Pack::builtin(), &windows_dir()),
                 WinProcesses::new(),
             )
         });
-        let family = resolver.resolve(pid, procs).app.family;
+        let family = families.apply(resolver.resolve(pid, procs).app).family;
         (family != UNKNOWN_ID).then_some(family)
     })
 }
@@ -140,7 +142,8 @@ impl Hub {
     /// Resolve families with `f` instead (tests).
     #[cfg(test)]
     pub fn set_family_of(&self, f: impl FnMut(u32) -> Option<String> + Send + 'static) {
-        *self.family_of.lock().unwrap() = Box::new(f);
+        let mut f = f;
+        *self.family_of.lock().unwrap() = Box::new(move |pid, _: &Families| f(pid));
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -600,7 +603,8 @@ impl Hub {
     /// runs. Wakes the runner when what goes first changed.
     pub fn focus_changed(&self, pid: u32, is_game: bool) {
         let created = snailnet_win::process::created(pid);
-        let family = (self.family_of.lock().unwrap_or_else(|e| e.into_inner()))(pid);
+        let families = self.lock().config.families.clone();
+        let family = (self.family_of.lock().unwrap_or_else(|e| e.into_inner()))(pid, &families);
         let changed = {
             let mut i = self.lock();
             let Inner { focus, config, .. } = &mut *i;
@@ -655,6 +659,15 @@ impl Hub {
             }
         }
         r
+    }
+
+    /// How apps are grouped (§11.6). The new groups show from the next
+    /// stats tick; rules and blocks name families as grouped.
+    pub fn set_families(&self, families: Families, rev: u64) -> Result<u64, Refusal> {
+        self.change(rev, |c| {
+            c.families = families;
+            Ok(())
+        })
     }
 
     pub fn set_line(&self, line: Line, rev: u64) -> Result<u64, Refusal> {
@@ -898,6 +911,24 @@ mod tests {
         assert_eq!(hub.config().blocked, ["hades"]);
         assert!(hub.snapshot().prompts.is_empty());
         assert!(hub.answer_prompt(p.prompt_id, "fine").is_err(), "answered");
+    }
+
+    #[test]
+    fn families_are_saved_and_reach_the_plan() {
+        let (_t, hub) = hub();
+        let f = Families {
+            split: vec!["steamwebhelper.exe".into()],
+            ..Families::default()
+        };
+        let rev = hub.set_families(f.clone(), hub.rev()).unwrap();
+        assert_eq!(hub.config().families, f);
+        assert_eq!(hub.plan(0).0.families, f);
+        let bad = Families {
+            split: vec![r"c:\x.exe".into()],
+            ..Families::default()
+        };
+        assert!(hub.set_families(bad, rev).is_err());
+        assert_eq!(hub.config().families, f, "unchanged");
     }
 
     #[test]

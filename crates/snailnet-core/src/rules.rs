@@ -31,6 +31,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::classify::App;
+use crate::families::{Families, is_family_id};
 use crate::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};
 use crate::sites::{SiteDef, SitePack};
 
@@ -75,6 +76,10 @@ pub struct Config {
     /// Their local-network traffic still passes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocked: Vec<String>,
+    /// Programs split out of their family and families merged into
+    /// another (PLAN.md §7.2, §11.6).
+    #[serde(default, skip_serializing_if = "Families::is_empty")]
+    pub families: Families,
     #[serde(default)]
     pub profiles: Vec<Profile>,
     /// The user's own sites (PLAN.md §8.2 "Add a custom site"). One with a
@@ -160,7 +165,7 @@ impl Settings {
             ("never-first app", &self.never_first),
         ] {
             for (i, id) in list.iter().enumerate() {
-                if id.trim().is_empty() || id.contains(':') {
+                if !is_family_id(id) {
                     return Err(format!("{what} {id:?} is not a family id"));
                 }
                 if list[..i].iter().any(|b| b.eq_ignore_ascii_case(id)) {
@@ -485,6 +490,7 @@ impl Default for Config {
             boost: None,
             pause: None,
             blocked: Vec::new(),
+            families: Families::default(),
             profiles: crate::modes::all(),
             sites: Vec::new(),
         }
@@ -576,7 +582,7 @@ impl Config {
             }
         }
         for (i, id) in self.blocked.iter().enumerate() {
-            if id.trim().is_empty() || id.contains(':') {
+            if !is_family_id(id) {
                 return bad(format!("blocked app {id:?} is not a family id"));
             }
             if self.blocked[..i].iter().any(|b| b.eq_ignore_ascii_case(id)) {
@@ -584,6 +590,7 @@ impl Config {
             }
         }
         self.settings.validate().or_else(bad)?;
+        self.families.validate().or_else(bad)?;
         if let Some(b) = &self.boost {
             if b.target.id.trim().is_empty() {
                 return bad("the boost has an empty target id".into());
@@ -671,6 +678,7 @@ impl Config {
                 prios: Vec::new(),
                 blocked: Vec::new(),
                 strict: false,
+                families: self.families.clone(),
                 shape_lan: !self.settings.lan_exempt,
                 custom_sites: self.sites.clone(),
                 focus: Vec::new(),
@@ -720,6 +728,7 @@ impl Config {
             prios: rules.iter().map(|r| r.priority).collect(),
             blocked: self.blocked.iter().map(|id| id.to_lowercase()).collect(),
             strict: self.settings.new_apps == NewApps::Strict,
+            families: self.families.clone(),
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
             focus: Vec::new(),
@@ -773,6 +782,9 @@ pub struct Plan {
     /// directions from the start (a hold then never restarts shaping).
     /// Strict alone doesn't start the engine.
     pub strict: bool,
+    /// How the user groups apps (PLAN.md §11.6); the engine shows its
+    /// apps this way, so rules and blocks name the grouped families.
+    pub families: Families,
     pub shape_lan: bool,
     /// For the domain → site matcher, with the shipped packs.
     pub custom_sites: Vec<SiteDef>,
@@ -1161,6 +1173,12 @@ ceiling = { down = \"10%\" }
         assert!(c.validate().unwrap_err().to_string().contains("twice"));
         c.blocked = vec!["site:youtube".into()];
         assert!(c.validate().unwrap_err().to_string().contains("family id"));
+        // Apps known by their path or Store package can be blocked too.
+        c.blocked = vec![
+            r"c:\games\celeste.exe".into(),
+            "pkg:spotify_zpdnekdrzrea0".into(),
+        ];
+        assert!(c.validate().is_ok());
     }
 
     #[test]

@@ -4,6 +4,7 @@
 //! and returns the new config revision; the new snapshot arrives through
 //! the bridge.
 
+use snailnet_core::families::Families;
 use snailnet_core::rules::{Line, Rule, Settings, Target};
 use snailnet_ipc::{Client, ClientError, ErrorCode, PIPE_NAME, Reply, Request};
 
@@ -146,6 +147,12 @@ pub async fn set_settings(settings: Settings, rev: u64) -> Result<u64, SaveError
     send(Request::SetSettings { settings, rev }).await
 }
 
+/// Replace how apps are grouped (programs split out, families merged).
+#[tauri::command]
+pub async fn set_families(families: Families, rev: u64) -> Result<u64, SaveError> {
+    send(Request::SetFamilies { families, rev }).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,6 +192,20 @@ mod tests {
         assert_eq!(line.factor, Some(0.85));
         let cleared: Line = serde_json::from_str("{}").unwrap();
         assert_eq!(cleared, Line::default());
+    }
+
+    #[test]
+    fn the_ui_sends_families_as_the_service_reads_them() {
+        let f: Families = serde_json::from_str(
+            r#"{"split":["helper.exe"],"merge":[{"from":"a","into":"b","name":"B"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(f.split, ["helper.exe"]);
+        assert_eq!(f.merge[0].into, "b");
+        assert_eq!(
+            serde_json::from_str::<Families>("{}").unwrap(),
+            Families::default()
+        );
     }
 
     #[test]
