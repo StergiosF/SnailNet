@@ -2,49 +2,72 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, pack feed; newest)
+## Start here (2026-11-18, end of day; newest)
 
-- **Signed site/game pack feed done** (PLAN.md §17.2 "Pack feed"):
-  `snailnet-core::packs` (bundle `packs.toml` = format, serial, the
-  three pack texts; minisign with the updater key; newest serial wins,
-  never back; `current()` / `install()`), game folders now
-  `assets/games.toml`, service `packs.rs` (daily fetch from the GitHub
-  release `packs`, saved in ProgramData, restart shaping once), app
-  `focus.rs` reads the saved bundle, Settings → About switch
-  (`pack_updates`, on). Site "known" check moved to
-  `Config::check_sites` (changes only).
-- **Publishing:** `scripts/publish-packs.ps1` (`-Upload` puts it on the
-  release; not run, repo private). It bumps `assets/packs-serial.txt`:
-  commit that with the assets. Change a pack → run it, commit, upload.
-- Not seen in a real window or run in the real service. The switch
-  follows the existing switches' markup; no impeccable pass for it.
+Everything is committed and pushed on `main` (last: `8443587`). The
+user leaves decisions to Claude; commit + push each verified step.
 
-- **Later the same day (user's choices):** licence **GPL-3.0-or-later**
-  (`5dbfdb7`); the repo is **public**; the lists are **published**
-  (release `packs`, serial 202611181342, fetched back from the public URL
-  and checked with the real key). The app's own update feed still
-  answers 404 until a `v*` release is published.
-- **Perf run done** (PLAN.md §20 "Measured 2026-11-18"): cold start,
-  memory and idle CPU met; **CPU under load not met** (7.8% of one core
-  at ~11 Mbps); latency and split inconclusive (the line was erratic).
-  The old installed service in Program Files (stopped, manual) and the
-  user's `C:\ProgramData\SnailNet` were left alone.
+### Where it stands
 
-### Next, in order
+- **Phases 0–5 built. Phase 6 built except the final checks.** Installer,
+  updater, `release.yml`, README (help, privacy, licences), signed pack
+  feed, and the perf run are done.
+- **Repo is public**, licence **GPL-3.0-or-later** (`LICENSE`).
+- **Pack feed is live:** GitHub release `packs` (pre-release, never
+  "latest") holds `packs.toml` + `.minisig`, serial 202611181342.
+  Installed services fetch it daily. To change a list: edit
+  `assets/{sites,families,games}.toml`, run
+  `scripts\publish-packs.ps1 -Upload`, commit the bumped
+  `assets/packs-serial.txt`.
+- **App updates are not live yet:** no `v*` release exists, so
+  `releases/latest/download/latest.json` answers 404.
+- **Perf (PLAN.md §20 "Measured 2026-11-18"):** met: cold start
+  (77–223 ms), memory (36 MB), idle CPU (0%), live rule change (10 ms).
+  Shaping CPU cut from ~47 to ~29 µs per packet (no timer spin, naps
+  >= 1 ms); ~90% of what's left is WinDivert kernel time, so "< 3% at
+  300 Mbps" is not reachable on WinDivert (moved to the own WFP driver,
+  "Later"). **Not shown:** ping under load within +10 ms and the 40/60
+  split: the line was erratic and the PC ~50% busy from other work in
+  every run, and autorate shaped at 12–14 Mbps.
+- **Never seen in a real window or run as the installed service:** all UI
+  since Phase 4, toasts, tray badge, strict mode, SOCKET refusal, the
+  pack switch, the installer.
+- The old service copy in `C:\Program Files\SnailNet` (stopped, manual
+  start) and the user's `C:\ProgramData\SnailNet` are untouched.
 
-1. ~~Profile the shaping CPU~~ **Done:** ~90% was kernel time (WinDivert
-   recv/reinjection), largely per call; no timer spin + naps >= 1 ms
-   halved the scheduler's kernel time per packet (~47 -> ~29 us per
-   packet in all). The rest is per-packet reinjection: 300 Mbps at < 3%
-   isn't reachable on WinDivert (PLAN.md §20, §6.5). The 60 s log now has
-   a `scheduler:` line (passes, naps, sends, packets per send). The
-   measuring scripts were one-offs in the scratchpad: per-thread CPU via
-   `GetThreadDescription`, user vs kernel; kill-at-end runs need the
-   scratch `crashes.txt` cleared or safe mode kicks in after three.
-2. Redo the latency/split part of the perf run on a calm line.
-3. With the user: the real-service test with the app ("First thing next
-   session" further down), clean Windows 10/11 VM installs, then tag
-   `v1.0.0` (publishing that release also makes the app updater live).
+### Next steps, in order
+
+1. **Perf re-run on a calm line** (Claude, one UAC click each): close
+   heavy apps, then the latency/split part of §20. Scripts were one-offs
+   in the scratchpad; rebuild them from "Running elevated" below: the
+   release service `run --console --data-dir <scratch> --pipe
+   \.\pipe\snailnet-perf`, two curl copies `a.exe=40` / `b.exe=60`,
+   ping 1.1.1.1 idle vs loaded, TCP connect times with
+   `curl -w %{time_connect}`, per-thread CPU via `GetThreadDescription`.
+   Clear the scratch `crashes.txt` + `running` before each start (killing
+   the test service counts as a crash; three = safe mode). Check the
+   shaped rate still reaches the line (1 ms naps; `scheduler:` log line
+   shows packets per send).
+2. **Real-service test with the app** (user's eyes): build, start the
+   elevated dev service, `npm run tauri dev` in `app\`, walk through
+   "First thing next session" further down plus Settings → About →
+   "Keep website and game lists up to date".
+3. **Build the installer** (`scriptsuild-installer.ps1`) and install it
+   on clean Windows 10 and 11 VMs (user: needs VMs/ISOs). Check install,
+   service start, first run, uninstall (keep / remove settings), and an
+   update from one build to the next.
+4. **Bump the version** from 0.0.1, **tag `v1.0.0`**, let `release.yml`
+   make the draft, publish it: that turns the app updater on.
+5. Still owed from earlier phases (user): Phase 1 24 h soak (run 3),
+   Phase 2 YouTube 45% in three browsers, Phase 3 "someone new, mouse
+   only, < 15 s", anti-cheat test.
+
+### Needs the user
+
+- Clicking Yes on UAC prompts for elevated runs (say so first).
+- Looking at the app; the VM installs; the tests in step 5.
+- Back up `%USERPROFILE%\.tauri\snailnet-updater.key` offline: it signs
+  both app updates and the pack lists.
 
 ## Earlier: 2026-11-18, latest session
 
