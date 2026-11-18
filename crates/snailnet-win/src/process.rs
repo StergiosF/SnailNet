@@ -314,7 +314,9 @@ pub fn description(path: &Path) -> Option<String> {
         .query(r"\VarFileInfo\Translation")
         .map(|bytes| {
             bytes
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .take(16)
                 .map(|c| {
                     (
@@ -332,8 +334,10 @@ pub fn description(path: &Path) -> Option<String> {
             r"\StringFileInfo\{lang:04x}{cp:04x}\FileDescription"
         ))?;
         let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| u16::from_le_bytes(c))
             .take_while(|&u| u != 0)
             .collect();
         let s = String::from_utf16_lossy(&units).trim().to_owned();

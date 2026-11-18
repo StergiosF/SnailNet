@@ -131,8 +131,8 @@ pub fn paint(rgba: &mut [u8], w: u32, h: u32, status: Status) {
     match status {
         Status::Normal => {}
         Status::Offline => {
-            for px in rgba.chunks_exact_mut(4) {
-                let [r, g, b, a] = [px[0], px[1], px[2], px[3]].map(u32::from);
+            for px in rgba.as_chunks_mut::<4>().0 {
+                let [r, g, b, a] = px.map(u32::from);
                 let grey = ((r * 30 + g * 59 + b * 11) / 100) as u8;
                 px[..3].fill(grey);
                 px[3] = (a * 55 / 100) as u8;

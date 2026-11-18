@@ -24,9 +24,13 @@ const SIZE: i32 = 64;
 #[derive(Default)]
 pub struct Icons(Mutex<HashMap<String, Option<String>>>);
 
-/// The program's icon as `data:image/png;base64,…`, or `None`.
+/// The program's icon as `data:image/png;base64,…`, or `None`. Never an
+/// error (an async command with a borrowed State must return a Result).
 #[tauri::command]
-pub async fn app_icon(icons: tauri::State<'_, Icons>, exe: String) -> Result<Option<String>, ()> {
+pub async fn app_icon(
+    icons: tauri::State<'_, Icons>,
+    exe: String,
+) -> Result<Option<String>, String> {
     if let Some(hit) = icons
         .0
         .lock()
@@ -98,13 +102,18 @@ fn pixels(icon: HICON) -> Option<(u32, u32, Vec<u8>)> {
     }
     let (w, h, mut bgra) = color?;
     // Old icons carry no alpha: take transparency from the mask instead.
-    if bgra.chunks_exact(4).all(|p| p[3] == 0) {
+    if bgra.as_chunks::<4>().0.iter().all(|p| p[3] == 0) {
         let (_, _, m) = mask?;
-        for (p, q) in bgra.chunks_exact_mut(4).zip(m.chunks_exact(4)) {
+        for (p, q) in bgra
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(m.as_chunks::<4>().0)
+        {
             p[3] = if q[0] == 0 { 255 } else { 0 };
         }
     }
-    for p in bgra.chunks_exact_mut(4) {
+    for p in bgra.as_chunks_mut::<4>().0 {
         p.swap(0, 2);
     }
     Some((w, h, bgra))
