@@ -171,6 +171,16 @@ pub struct Counters {
     pub send_errors: u64,
     /// Dropped on purpose: their app is blocked.
     pub blocked: u64,
+    /// Turns of the scheduler thread's loop.
+    pub passes: u64,
+    /// Naps it took waiting for its next release, and their asked-for
+    /// length in total (µs).
+    pub naps: u64,
+    pub nap_micros: u64,
+    /// Calls to the engine's send, and the packets they carried (both
+    /// threads: scheduled and passed-through).
+    pub send_calls: u64,
+    pub sent: u64,
 }
 
 #[derive(Default)]
@@ -181,6 +191,11 @@ struct AtomicCounters {
     channel_full: AtomicU64,
     send_errors: AtomicU64,
     blocked: AtomicU64,
+    passes: AtomicU64,
+    naps: AtomicU64,
+    nap_micros: AtomicU64,
+    send_calls: AtomicU64,
+    sent: AtomicU64,
 }
 
 impl AtomicCounters {
@@ -192,6 +207,11 @@ impl AtomicCounters {
             channel_full: self.channel_full.load(Relaxed),
             blocked: self.blocked.load(Relaxed),
             send_errors: self.send_errors.load(Relaxed),
+            passes: self.passes.load(Relaxed),
+            naps: self.naps.load(Relaxed),
+            nap_micros: self.nap_micros.load(Relaxed),
+            send_calls: self.send_calls.load(Relaxed),
+            sent: self.sent.load(Relaxed),
         }
     }
 }
@@ -244,6 +264,8 @@ impl Shared {
             return;
         }
         let n = batch.len() as u64;
+        self.counters.send_calls.fetch_add(1, Relaxed);
+        self.counters.sent.fetch_add(n, Relaxed);
         if engine.send_batch(batch).is_err() {
             self.counters.send_errors.fetch_add(n, Relaxed);
         }
@@ -558,6 +580,7 @@ fn schedule_loop(
     'run: loop {
         let now = clock.now();
         shared.heartbeat.store(now, Relaxed);
+        shared.counters.passes.fetch_add(1, Relaxed);
         for (s, live) in [down.as_mut(), up.as_mut()].into_iter().zip(&shared.live) {
             if let (Some(s), Some(live)) = (s, live) {
                 s.sync(live, now);
@@ -613,6 +636,8 @@ fn schedule_loop(
         if let Some(t) = wake {
             let d = t.saturating_sub(clock.now()).min(MAX_NAP);
             if d > 0 {
+                shared.counters.naps.fetch_add(1, Relaxed);
+                shared.counters.nap_micros.fetch_add(d / 1000, Relaxed);
                 nap.nap(Duration::from_nanos(d));
             }
         }

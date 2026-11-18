@@ -3,9 +3,16 @@
 //! `std::thread::sleep` on Windows rounds up to the system tick (often
 //! 15.6 ms), far too coarse for pacing packets. A high-resolution waitable
 //! timer (Windows 10 1803+) gives ~0.5 ms.
+//!
+//! It never spins, and naps at least [`MIN_NAP`] (PLAN.md §6.5, §20,
+//! measured 2026-11-18). Most of the shaper's CPU is kernel time per
+//! WinDivert send call, so fewer, fuller sends are what save CPU; spinning
+//! for microsecond accuracy buys nothing, because the scheduler's root
+//! bucket holds 2 ms of credit and a wake-up a little late just releases
+//! what came due meanwhile, at the same rate.
 
 use std::io;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::Threading::{
@@ -13,8 +20,10 @@ use windows_sys::Win32::System::Threading::{
     TIMER_ALL_ACCESS, WaitForSingleObject,
 };
 
-/// Below this, spin instead of sleeping: the timer can't do better.
-const SPIN_BELOW: Duration = Duration::from_micros(200);
+/// Shorter naps are stretched to this, so a busy shaper wakes about a
+/// thousand times a second and each send carries several packets. With
+/// the timer's lateness it stays inside the root bucket's 2 ms of credit.
+pub const MIN_NAP: Duration = Duration::from_millis(1);
 
 pub struct HighResTimer {
     handle: HANDLE,
@@ -40,24 +49,19 @@ impl HighResTimer {
         Ok(Self { handle })
     }
 
+    /// Sleep at least `d` (at least [`MIN_NAP`]); the timer may run a
+    /// fraction of a millisecond over.
     pub fn sleep(&self, d: Duration) {
-        let deadline = Instant::now() + d;
-        if d > SPIN_BELOW {
-            // Negative = relative, in 100 ns units. Wake a little early and
-            // spin the rest for accuracy.
-            let ticks = ((d - SPIN_BELOW / 2).as_nanos() / 100) as i64;
-            let due = -ticks.max(1);
-            // SAFETY: `handle` is a live timer; no completion routine.
-            let ok = unsafe { SetWaitableTimer(self.handle, &due, 0, None, std::ptr::null(), 0) };
-            if ok != 0 {
-                // SAFETY: waiting on our own live handle.
-                unsafe { WaitForSingleObject(self.handle, INFINITE) };
-            } else {
-                std::thread::sleep(d);
-            }
-        }
-        while Instant::now() < deadline {
-            std::hint::spin_loop();
+        let d = d.max(MIN_NAP);
+        // Negative = relative, in 100 ns units.
+        let due = -((d.as_nanos() / 100) as i64).max(1);
+        // SAFETY: `handle` is a live timer; no completion routine.
+        let ok = unsafe { SetWaitableTimer(self.handle, &due, 0, None, std::ptr::null(), 0) };
+        if ok != 0 {
+            // SAFETY: waiting on our own live handle.
+            unsafe { WaitForSingleObject(self.handle, INFINITE) };
+        } else {
+            std::thread::sleep(d);
         }
     }
 }
@@ -73,17 +77,32 @@ impl Drop for HighResTimer {
 mod tests {
     use super::*;
 
+    use std::time::Instant;
+
     #[test]
     fn sleeps_about_one_millisecond() {
         let t = HighResTimer::new().unwrap();
-        let mut worst = Duration::ZERO;
+        let (mut best, mut worst) = (Duration::MAX, Duration::ZERO);
         for _ in 0..20 {
             let start = Instant::now();
             t.sleep(Duration::from_millis(1));
-            worst = worst.max(start.elapsed());
+            let took = start.elapsed();
+            (best, worst) = (best.min(took), worst.max(took));
         }
-        assert!(worst >= Duration::from_millis(1));
+        // The timer's own granularity allows a hair early.
+        assert!(best >= Duration::from_micros(900), "best {best:?}");
         // Generous bound for loaded CI machines; a 15.6 ms tick would fail.
         assert!(worst < Duration::from_millis(8), "worst {worst:?}");
+    }
+
+    #[test]
+    fn short_naps_are_stretched_not_spun() {
+        let t = HighResTimer::new().unwrap();
+        let start = Instant::now();
+        for _ in 0..20 {
+            t.sleep(Duration::from_micros(10));
+        }
+        // 20 naps of at least MIN_NAP (a spin would take ~0.2 ms in all).
+        assert!(start.elapsed() >= MIN_NAP * 18, "{:?}", start.elapsed());
     }
 }

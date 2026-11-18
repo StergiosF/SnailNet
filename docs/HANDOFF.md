@@ -32,10 +32,15 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
 ### Next, in order
 
-1. **Profile the shaping CPU** (§20): ~80 µs per packet. Look at the rx
-   loop, the scheduler thread's timer/polling and per-packet allocation
-   or locking. A synthetic load (`scripts/phase0-synthetic.ps1`) is
-   enough to measure before/after.
+1. ~~Profile the shaping CPU~~ **Done:** ~90% was kernel time (WinDivert
+   recv/reinjection), largely per call; no timer spin + naps >= 1 ms
+   halved the scheduler's kernel time per packet (~47 -> ~29 us per
+   packet in all). The rest is per-packet reinjection: 300 Mbps at < 3%
+   isn't reachable on WinDivert (PLAN.md §20, §6.5). The 60 s log now has
+   a `scheduler:` line (passes, naps, sends, packets per send). The
+   measuring scripts were one-offs in the scratchpad: per-thread CPU via
+   `GetThreadDescription`, user vs kernel; kill-at-end runs need the
+   scratch `crashes.txt` cleared or safe mode kicks in after three.
 2. Redo the latency/split part of the perf run on a calm line.
 3. With the user: the real-service test with the app ("First thing next
    session" further down), clean Windows 10/11 VM installs, then tag

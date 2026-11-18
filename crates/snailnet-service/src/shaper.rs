@@ -1064,6 +1064,14 @@ impl Report {
             c.send_errors - l.send_errors,
             c.blocked - l.blocked,
         );
+        let naps = c.naps - l.naps;
+        tracing::info!(
+            "scheduler: {} passes, {naps} naps (asked {} us on average), {} sends carrying {} packets",
+            c.passes - l.passes,
+            (c.nap_micros - l.nap_micros) / naps.max(1),
+            c.send_calls - l.send_calls,
+            c.sent - l.sent,
+        );
         let names = who.names();
         let NameTick {
             sni,

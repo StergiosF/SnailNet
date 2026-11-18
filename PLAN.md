@@ -278,7 +278,8 @@ From the WinDivert docs: only the **NETWORK** layer can delay, drop and reinject
 
 ### 6.5 Timing
 
-- Scheduler wake-ups use `CreateWaitableTimerExW(CREATE_WAITABLE_TIMER_HIGH_RESOLUTION)` (Win10 1803+) with ~0.5–1 ms granularity, plus short spin-waits when the next send is < 200 µs away. No global `timeBeginPeriod`.
+- Scheduler wake-ups use `CreateWaitableTimerExW(CREATE_WAITABLE_TIMER_HIGH_RESOLUTION)` (Win10 1803+) with ~0.5–1 ms granularity. No global `timeBeginPeriod`.
+  - **Changed 2026-11-18 (measured, §20):** no spin-waits, and naps are at least 1 ms. Spinning bought no accuracy that matters (the root bucket holds 2 ms of credit, so a late wake-up just releases what came due), and short naps meant ~2 packets per send call; most of the shaper's CPU is kernel time per WinDivert call. With a 1 ms floor a send carries ~4 packets and the scheduler's kernel time per packet halved.
 - Packets are released in micro-batches to amortise syscalls.
 
 ---
@@ -959,7 +960,7 @@ GitHub Actions on `windows-latest`: `cargo fmt --check`, `clippy -D warnings`, `
 | Metric | Result | Verdict |
 |---|---|---|
 | Cold start | pipe answering 77–223 ms after launch | met |
-| Service CPU | idle (monitor only) 0%; shaping a quiet line 0.6% of one core; **7.8% of one core at ~11 Mbps** | **not met**: ~80 µs per packet at ~1 000 pkts/s, so 300 Mbps would need far more than 3%. Phase 0 saw the same (~13% of one core at 21 Mbps). Profile the rx/scheduler loop next |
+| Service CPU | idle (monitor only) 0%; shaping a quiet line 0.6% of one core; 7.8% of one core at ~11 Mbps in the first run. **Profiled the same day** (CPU per named thread, user vs kernel): ~90% is **kernel** time in the scheduler and rx threads, i.e. WinDivert's receive and reinjection (which runs part of Windows' own TCP/IP work on our thread). SnailNet's own code was ~1.2% of one core. Kernel time was largely per *call*: the scheduler sent ~2.3 packets per call. Fix: no timer spin, naps ≥ 1 ms (§6.5) → ~4 packets per call, scheduler kernel time per packet 28.8 → 14.9 µs, whole service ~47 → ~29 µs per packet (9% of one core at ~3 100 pkts/s) | **not met, and not reachable on WinDivert**: what's left is per-packet reinjection, ~25k pkts/s at 300 Mbps would cost most of a core. Fine for the 25–100 Mbps lines v1 is for; the 300 Mbps budget moves to the own WFP callout driver (§21 "Later"). A whole-PC comparison (same download with and without) couldn't separate it: the PC was ~50% busy across 12 cores from other work during the runs |
 | Service memory | 36 MB working set, 28 MB private, 199 handles (a few hundred flows, not 5 000) | met at this size |
 | Rule change → effect | IPC round trip 10 ms, "applied to the running shaper" (no restart); the split moving wasn't captured | likely met; not shown end to end |
 | Added latency, uncongested | TCP connect min 10.3 → 10.8 ms with shaping | inconclusive (the line's own jitter was far larger) |
