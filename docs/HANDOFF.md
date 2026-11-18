@@ -37,6 +37,11 @@ user leaves decisions to Claude; commit + push each verified step.
 
 ### Next steps, in order
 
+0. **Landing page (user's request, 2026-11-18):** a one-page, premium,
+   not overwhelming download page. Full brief in
+   **`docs/HANDOFF-site.md`** (start a session with "read
+   docs/HANDOFF-site.md and build the landing page"). It can be built
+   before v1.0.0; its button must not 404 until a release exists.
 1. **Perf re-run on a calm line** (Claude, one UAC click each): close
    heavy apps, then the latency/split part of §20. Scripts were one-offs
    in the scratchpad; rebuild them from "Running elevated" below: the
@@ -66,8 +71,8 @@ user leaves decisions to Claude; commit + push each verified step.
 
 - Clicking Yes on UAC prompts for elevated runs (say so first).
 - Looking at the app; the VM installs; the tests in step 5.
-- Back up `%USERPROFILE%\.tauri\snailnet-updater.key` offline: it signs
-  both app updates and the pack lists.
+- The updater key (`%USERPROFILE%\.tauri\snailnet-updater.key`, signs
+  app updates and the pack lists) is backed up (user, 2026-11-18).
 
 ## Earlier: 2026-11-18, latest session
 
