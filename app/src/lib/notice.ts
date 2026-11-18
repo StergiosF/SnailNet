@@ -64,6 +64,8 @@ export function noticeOf(
         action: { label: t("pause.resume"), onclick: actions.resume },
       };
     }
+    case "measuring":
+      return { severity: "info", title: t("state.measuring.title"), message: t("state.measuring.body") };
     case "retrying":
       return {
         severity: "caution",

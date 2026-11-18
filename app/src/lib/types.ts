@@ -9,7 +9,9 @@ export type ServiceState =
   | { Retrying: { reason: string } }
   | { SafeMode: { failures: number } }
   /** Paused by the user until `until` (Unix seconds), or until resumed. */
-  | { Paused: { until: number | null } };
+  | { Paused: { until: number | null } }
+  /** Running a speed test: shaping is off for its ~20 s. */
+  | "Measuring";
 
 export type Link =
   | { kind: "connecting" }
@@ -57,6 +59,20 @@ export interface Line {
   factor?: number;
   /** Keep the typed speeds; the estimator doesn't adapt them. */
   pinned?: boolean;
+  /** The last speed test. */
+  measured?: Measured;
+}
+
+/** What a speed test found (snailnet-core `Measured`). */
+export interface Measured {
+  /** Unix seconds. */
+  at: number;
+  down_mbps: number;
+  up_mbps: number;
+  /** Ping before the test, ms. */
+  idle_ms?: number;
+  /** Ping while downloading, without SnailNet, ms. */
+  loaded_ms?: number;
 }
 
 /** One app or site going first for a while (snailnet-core `Boost`). */

@@ -25,13 +25,14 @@ export function speedText(mbps: number | undefined): string {
   return mbps === undefined ? "" : String(Math.round(mbps * 10) / 10);
 }
 
-/** The line to save: new speeds, the factor and the pin kept as they were. */
+/** The line to save: new speeds; the factor, the pin and the last test kept. */
 export function withSpeeds(line: Line, down: number | null, up: number | null): Line {
   const next: Line = {};
   if (down !== null) next.down_mbps = down;
   if (up !== null) next.up_mbps = up;
   if (line.factor !== undefined) next.factor = line.factor;
   if (line.pinned !== undefined) next.pinned = line.pinned;
+  if (line.measured !== undefined) next.measured = line.measured;
   return next;
 }
 

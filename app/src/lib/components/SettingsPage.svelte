@@ -1,13 +1,15 @@
 <script lang="ts">
   // Settings (PLAN.md §14.6), one scrolling page of groups: the connection
-  // speed, starting with Windows, the two resets (this mode's split; all
+  // (speed, Measure, the last test and its ping, following the line
+  // automatically), starting with Windows, the two resets (this mode's split; all
   // of SnailNet, which shows setup again), and what version is running.
   // More arrives with the features behind it (low-ping strength, pause,
   // notifications, hotkeys).
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import { resetAll, resetSplit } from "../actions";
+  import { measureLine, resetAll, resetSplit } from "../actions";
+  import { stateKind } from "../format";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { modeName } from "../modes";
@@ -42,6 +44,23 @@
   const line = $derived(service.snapshot?.config.line ?? {});
   const fig = (v: number | undefined) => (v === undefined ? "–" : String(Math.round(v * 10) / 10));
   const hasLine = $derived(line.down_mbps !== undefined || line.up_mbps !== undefined);
+  const measured = $derived(line.measured);
+  const measuring = $derived(service.state !== null && stateKind(service.state) === "measuring");
+  const measuredOn = $derived(
+    measured ? new Date(measured.at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "",
+  );
+  let pinning = $state(false);
+
+  async function setAdapt(adapt: boolean) {
+    pinning = true;
+    try {
+      await service.setPinned(!adapt);
+    } catch {
+      // The switch shows the saved value again from the next snapshot.
+    } finally {
+      pinning = false;
+    }
+  }
   const mode = $derived(modeName(service.activeProfile));
   const serviceVersion = $derived(service.link.kind === "connected" ? service.link.service_version : null);
 
@@ -68,10 +87,47 @@
             : t("sidebar.line.none")}</span
         >
       </div>
-      <button type="button" class="btn" disabled={!canEdit} onclick={() => lineDialog.show()}>
-        {t("settings.line.change")}
-      </button>
+      <div class="pair">
+        <button type="button" class="btn" disabled={!canEdit || measuring} onclick={() => void measureLine()}>
+          {measuring ? t("measure.running") : t("measure.button")}
+        </button>
+        <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => lineDialog.show()}>
+          {t("settings.line.change")}
+        </button>
+      </div>
     </div>
+    {#if measured}
+      <div class="item">
+        <div class="words">
+          <b>{t("measure.last", { date: measuredOn })}</b>
+          <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
+        </div>
+      </div>
+      {#if measured.idle_ms !== undefined && measured.loaded_ms !== undefined}
+        <div class="item">
+          <div class="words">
+            <b>{t("ping.title")}</b>
+            <span class="num"
+              >{t("ping.body", { idle: Math.round(measured.idle_ms), loaded: Math.round(measured.loaded_ms) })}</span
+            >
+          </div>
+        </div>
+      {/if}
+    {/if}
+    <label class="item">
+      <div class="words">
+        <b>{t("adapt.title")}</b>
+        <span>{t("adapt.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={line.pinned !== true}
+        disabled={!canEdit || !hasLine || pinning}
+        onchange={(e) => void setAdapt(e.currentTarget.checked)}
+      />
+    </label>
   </div>
 </section>
 
@@ -172,6 +228,11 @@
   }
   .item + .item {
     border-top: 1px solid var(--surface-ground);
+  }
+  .pair {
+    display: flex;
+    flex: none;
+    gap: 8px;
   }
   .words {
     display: flex;

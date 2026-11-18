@@ -3,10 +3,11 @@
 // window; a reset of the split can be undone from there.
 
 import { invoke } from "@tauri-apps/api/core";
+import { stateKind } from "./format";
 import { t, type Key } from "./i18n";
 import { modeName } from "./modes";
 import { service } from "./service.svelte";
-import type { SaveError, Target } from "./types";
+import type { Measured, SaveError, Target } from "./types";
 import { ui } from "./ui.svelte";
 
 /** A failed change in words, under `key` ("Couldn't … {message}"). */
@@ -130,4 +131,43 @@ export async function startService(): Promise<void> {
   else if (outcome === "cancelled") ui.say({ message: t("start.cancelled") });
   else if (outcome === "not_installed") ui.say({ message: t("start.not_installed") });
   else ui.say({ message: t("start.failed", { message: outcome.failed.message }) });
+}
+
+/** Resolves once `ok()` holds (checked every 250 ms), or after `ms`. */
+function until(ok: () => boolean, ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const end = Date.now() + ms;
+    const check = () => {
+      if (ok()) resolve(true);
+      else if (Date.now() >= end) resolve(false);
+      else setTimeout(check, 250);
+    };
+    check();
+  });
+}
+
+/** Run the speed test (§10.1) and say how it went. The service turns
+ *  shaping off, measures for ~20 s and saves the result as the line;
+ *  if no new result arrives once it's done, the test failed. */
+export async function measureLine(): Promise<Measured | null> {
+  const before = service.snapshot?.config.line.measured?.at;
+  try {
+    await service.runSpeedTest();
+  } catch (e) {
+    failed("measure.failed", e);
+    return null;
+  }
+  const measuring = () => service.state !== null && stateKind(service.state) === "measuring";
+  await until(measuring, 10_000);
+  await until(() => !measuring(), 90_000);
+  // The new line comes as a config change, maybe just after the state.
+  const got = await until(() => (service.snapshot?.config.line.measured?.at ?? before) !== before, 3_000);
+  const m = service.snapshot?.config.line.measured;
+  ui.say({
+    message:
+      got && m
+        ? t("measure.done", { down: m.down_mbps, up: m.up_mbps })
+        : t("measure.none"),
+  });
+  return got && m ? m : null;
 }

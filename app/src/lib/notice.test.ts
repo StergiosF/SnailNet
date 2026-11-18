@@ -26,3 +26,10 @@ describe("noticeOf", () => {
     expect(noticeOf(connected, "Shaping", actions, 0, true)).toBeNull();
   });
 });
+
+describe("measuring", () => {
+  it("says sharing is off during a speed test", () => {
+    const n = noticeOf({ kind: "connected", service_version: "0.1.0" }, "Measuring", actions, 0);
+    expect(n?.title).toBe("Measuring your connection");
+  });
+});

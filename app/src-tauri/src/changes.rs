@@ -75,6 +75,14 @@ pub async fn reset_all(rev: u64) -> Result<u64, SaveError> {
     send(Request::ResetAll { rev }).await
 }
 
+/// Ask for a speed test (§10.1). The service runs it with shaping off and
+/// saves the result as the line speed; the state says `Measuring` meanwhile.
+#[tauri::command]
+pub async fn run_speed_test(rev: u64) -> Result<u64, SaveError> {
+    let _ = rev;
+    send(Request::RunSpeedTest).await
+}
+
 /// Let `target` go first for `minutes` (`None`: until stopped).
 #[tauri::command]
 pub async fn boost(target: Target, minutes: Option<u32>, rev: u64) -> Result<u64, SaveError> {

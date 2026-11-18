@@ -35,12 +35,13 @@ export function className(target: Target): string {
   return `${target.kind}:${target.id.toLowerCase()}`;
 }
 
-export type StateKind = "starting" | "shaping" | "unshaped" | "retrying" | "safe_mode" | "paused";
+export type StateKind = "starting" | "shaping" | "unshaped" | "retrying" | "safe_mode" | "paused" | "measuring";
 
 export function stateKind(s: ServiceState): StateKind {
   if (s === "Starting") return "starting";
   if (s === "Shaping") return "shaping";
   if (s === "Unshaped") return "unshaped";
+  if (s === "Measuring") return "measuring";
   if ("Paused" in s) return "paused";
   return "Retrying" in s ? "retrying" : "safe_mode";
 }

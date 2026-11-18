@@ -39,5 +39,6 @@ describe("stateKind", () => {
     expect(stateKind({ Retrying: { reason: "x" } })).toBe("retrying");
     expect(stateKind({ SafeMode: { failures: 3 } })).toBe("safe_mode");
     expect(stateKind({ Paused: { until: null } })).toBe("paused");
+    expect(stateKind("Measuring")).toBe("measuring");
   });
 });

@@ -169,6 +169,7 @@ pub fn run() {
             changes::switch_profile,
             changes::reset_profile,
             changes::reset_all,
+            changes::run_speed_test,
             changes::boost,
             changes::stop_boost,
             changes::pause,

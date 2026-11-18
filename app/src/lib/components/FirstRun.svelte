@@ -1,10 +1,10 @@
 <script lang="ts">
-  // First run (PLAN.md §14.5, as far as today's service goes): welcome and
-  // the privacy line, then the connection speed typed by hand (the speed
-  // test is Phase 4, the "what matters to you" profiles Phase 5), then
-  // done. It takes the place of the main content until finished; each
+  // First run (PLAN.md §14.5): welcome and the privacy line, then the
+  // connection speed, measured (the service's speed test, ~20 s) or typed,
+  // then done. (The "what matters to you" cards are Phase 5.) It takes the place of the main content until finished; each
   // step's heading takes focus so screen readers hear where they are.
   import { onMount, tick } from "svelte";
+  import { measureLine } from "../actions";
   import { t } from "../i18n";
   import { parseSpeed } from "../line";
   import { service } from "../service.svelte";
@@ -63,6 +63,22 @@
     }
   }
 
+  /** Measure instead of typing: the service tests the line (~20 s) and
+   *  saves what it finds. */
+  let measuring = $state(false);
+  async function measure() {
+    error = null;
+    measuring = true;
+    const m = await measureLine();
+    measuring = false;
+    if (m) {
+      saved = true;
+      void go("done");
+    } else {
+      error = t("measure.none");
+    }
+  }
+
   function skip() {
     saved = false;
     void go("done");
@@ -88,16 +104,20 @@
       <form onsubmit={next} novalidate aria-labelledby="fr-speed-title" aria-describedby="fr-speed-body">
         <h1 id="fr-speed-title" tabindex="-1" bind:this={headingEl}>{t("firstrun.speed.title")}</h1>
         <p class="lead" id="fr-speed-body">{t("firstrun.speed.body")}</p>
-        <SpeedFields bind:this={fields} bind:down bind:up {submitted} disabled={saving} />
+        <button type="button" class="btn btn-accent measure" disabled={saving || measuring} onclick={() => void measure()}>
+          <i class="icon" aria-hidden="true">&#xEC4A;</i>{measuring ? t("firstrun.measuring") : t("firstrun.measure")}
+        </button>
+        <p class="or">{t("firstrun.or")}</p>
+        <SpeedFields bind:this={fields} bind:down bind:up {submitted} disabled={saving || measuring} />
         {#if error}
           <p class="error" role="alert">{error}</p>
         {/if}
         <div class="actions">
-          <button type="button" class="btn back" disabled={saving} onclick={() => void go("welcome")}>
+          <button type="button" class="btn back" disabled={saving || measuring} onclick={() => void go("welcome")}>
             {t("firstrun.back")}
           </button>
-          <button type="button" class="btn" disabled={saving} onclick={skip}>{t("firstrun.skip")}</button>
-          <button type="submit" class="btn btn-accent" disabled={saving}>{t("firstrun.next")}</button>
+          <button type="button" class="btn" disabled={saving || measuring} onclick={skip}>{t("firstrun.skip")}</button>
+          <button type="submit" class="btn" disabled={saving || measuring}>{t("firstrun.next")}</button>
         </div>
       </form>
     {:else}
@@ -175,5 +195,17 @@
   }
   .back {
     margin-right: auto;
+  }
+  .measure {
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .measure .icon {
+    font-size: 14px;
+  }
+  .or {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--text-secondary);
   }
 </style>

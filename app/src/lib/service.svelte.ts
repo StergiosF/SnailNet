@@ -99,6 +99,22 @@ class Service {
     return this.saveRules(withBar(this.activeProfile?.rules ?? [], shares));
   }
 
+  /** Ask for a speed test (§10.1); the result arrives as a new line. */
+  async runSpeedTest(): Promise<number> {
+    return this.#change("run_speed_test", {});
+  }
+
+  /** Keep the typed speeds as they are (true), or let SnailNet follow the
+   *  line (false). */
+  async setPinned(pinned: boolean): Promise<number> {
+    const line = this.snapshot?.config.line;
+    if (!line) throw notConnected;
+    const next = { ...line };
+    if (pinned) next.pinned = true;
+    else delete next.pinned;
+    return this.#change("set_line", { line: next });
+  }
+
   /** Save the line speed (PLAN.md §12.2 `SetLine`); null = don't shape
    *  that direction. Keeps the factor. Resolves to the new revision;
    *  rejects with a SaveError. */
