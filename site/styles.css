@@ -1719,7 +1719,7 @@ main > section {
   margin-top: 14px;
   background: var(--surface-side);
   color: var(--accent);
-  box-shadow: 0 18px 40px -18px rgb(6 37 32 / 0.9);
+  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.45);
 }
 .closing .btn--primary:hover {
   background: #071a17;
