@@ -43,7 +43,7 @@ was built from, kept for its research and its "why v1 looked bad".
   everywhere (the crates pin each other at an exact 0.0.x, so those pins
   move too), tag pushed, Release drafted it, published with notes;
   `releases/latest/download/latest.json` answers 0.0.2.
-- **v0.0.3, published 2026-11-20:** steady app lists (stats smoothed,
+- **v0.0.3, published 2026-11-19:** steady app lists (stats smoothed,
   quiet apps held 8 s, `app/src/lib/steady.ts`), an Update button in the
   side rail only when a version is out (quiet check on start and every
   6 h), regrouped Settings in plainer words, larger window, installer
