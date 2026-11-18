@@ -14,12 +14,18 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 - **Phase 4 started (2026-11-18):** `snailnet-core::estimator` (pure
   logic, tested) and `snailnet-win::ping` (ICMP + gateway) are built.
   User's choices: the probe pings the router and 1.1.1.1; the speed test
-  uses Cloudflare. **Next:** wire them into the service: a probe thread
-  pinging at 1 Hz only while busy, an idle baseline per host (lowest RTT
-  of the last few minutes), one `Direction` per direction fed from the
-  shaper's per-second throughput, and the live rate applied when it moves
-  > 2%. Then the speed test (HTTP client, consent, results per network),
-  then the UI (Settings → Connection, "Ping under load").
+  uses Cloudflare. **Wired into the service** (`autorate.rs`, commit
+  55f5a2f): probe thread (1 Hz busy, 30 s idle, 5-min min baseline per
+  host), the runner feeds the estimator each second and applies the rate
+  live on a ≥ 2% move; `line.pinned` holds typed speeds; capacity capped
+  at 3× the typed speed. Logged as "line speed: shaping at down …".
+  **Not yet tried on the real line**: the dev service in `target\debug`
+  was running (exe locked), so it still has the old build. To try:
+  stop it (elevated), `cargo build -p snailnet-service`, run it again,
+  start a big download and watch the log. **Next:** the speed test
+  (`RunSpeedTest`: HTTP client + TLS, Cloudflare, its flows not shaped,
+  consent, result per network), then the UI (Settings → Connection,
+  adapting on/off = pinned, "Ping under load").
 
 ## Start here (2026-11-17)
 
