@@ -1,6 +1,8 @@
 // Whether the connection-speed dialog is open, and which box it focuses.
 // Opened from the header's line button and the "Watching only" notice.
 
+import { quietFocus } from "./focusRing";
+
 export type Direction = "down" | "up";
 
 class LineDialogState {
@@ -27,7 +29,10 @@ class LineDialogState {
   returnFocus() {
     const el = this.opener;
     this.opener = null;
-    if (el?.isConnected) el.focus();
+    if (!el?.isConnected) return;
+    // Back on its opener without a ring (focusRing.ts).
+    quietFocus(el);
+    el.focus();
   }
 }
 

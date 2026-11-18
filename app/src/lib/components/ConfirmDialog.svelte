@@ -2,6 +2,7 @@
   // Ask before something that can't be undone (Reset SnailNet). A native
   // <dialog>: focus stays inside, Escape cancels, and focus goes back to
   // the button that opened it. Cancel has the focus first.
+  import { quietFocus } from "../focusRing";
   import { tick } from "svelte";
   import { t } from "../i18n";
 
@@ -36,7 +37,10 @@
       void tick().then(() => cancelBtn?.focus());
     } else if (!open && el.open) {
       el.close();
-      opener?.focus();
+      if (opener) {
+        quietFocus(opener);
+        opener.focus();
+      }
     }
   });
 </script>

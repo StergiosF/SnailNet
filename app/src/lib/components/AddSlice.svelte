@@ -4,6 +4,7 @@
   // with a search box. Picking one gives it a 20% slice (from Everything
   // else first) and opens its row. A native <dialog>: focus stays inside,
   // Escape closes it, focus goes back to the button that opened it.
+  import { quietFocus } from "../focusRing";
   import { tick } from "svelte";
   import { t } from "../i18n";
   import { addRule, pickable } from "../rules";
@@ -37,7 +38,10 @@
 
   function closed() {
     ui.adding = false;
-    if (opener?.isConnected) opener.focus();
+    if (opener?.isConnected) {
+      quietFocus(opener);
+      opener.focus();
+    }
     opener = null;
   }
 

@@ -1,9 +1,10 @@
-// Focus rings for keyboard users only. Chromium shows a ring on a button
-// that gets focus back from a dialog (the speed dialog, Add, Confirm) when
-// the dialog's last focus was a text box, even after a mouse click on
-// Save. So: remember whether the last input was the mouse or the keys,
-// and when focus lands on anything but a text field after the mouse, mark
-// it quiet (app.css hides the ring) until it loses focus.
+// When focus rings show. Two cases are quiet (app.css hides the ring until
+// the element loses focus):
+// - focus that lands after a mouse click, on anything but a text field;
+// - focus a closing dialog hands back to the button that opened it (the
+//   speed dialog, Add, Confirm), however the dialog was closed: Enter,
+//   Escape or a click. The user asked for no ring there (2026-11-18); the
+//   next Tab shows rings as usual.
 
 const QUIET = "quietFocus";
 
@@ -16,6 +17,13 @@ function typable(el: Element): boolean {
   );
 }
 
+/** Mark `el` quiet until it loses focus. */
+export function quietFocus(el: HTMLElement): void {
+  if (QUIET in el.dataset) return;
+  el.dataset[QUIET] = "";
+  el.addEventListener("blur", () => delete el.dataset[QUIET], { once: true });
+}
+
 export function installFocusRing(win: Window = window): void {
   let pointer = false;
   win.addEventListener("pointerdown", () => (pointer = true), true);
@@ -24,9 +32,10 @@ export function installFocusRing(win: Window = window): void {
     "focusin",
     (e) => {
       const el = e.target;
-      if (!pointer || !(el instanceof HTMLElement) || typable(el)) return;
-      el.dataset[QUIET] = "";
-      el.addEventListener("blur", () => delete el.dataset[QUIET], { once: true });
+      if (!(el instanceof HTMLElement)) return;
+      const from = (e as FocusEvent).relatedTarget;
+      const fromDialog = from instanceof Element && from.closest("dialog") !== null && el.closest("dialog") === null;
+      if (fromDialog || (pointer && !typable(el))) quietFocus(el);
     },
     true,
   );
