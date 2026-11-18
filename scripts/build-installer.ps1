@@ -12,9 +12,13 @@ param(
 #   3. THIRD-PARTY-NOTICES.txt into the target folder (bundled under
 #      licenses\ next to WinDivert's licence; scripts\third-party-notices.ps1),
 #   4. latest.json for the GitHub release, pointing at
-#      https://github.com/StergiosF/SnailNet/releases/download/v<version>/.
+#      https://github.com/StergiosF/SnailNet/releases/download/v<version>/,
+#   5. a copy of the installer under the fixed name SnailNet-setup.exe, so
+#      the website's button can link to
+#      releases/latest/download/SnailNet-setup.exe for every version.
 # Output: target\release\bundle\nsis\ (SnailNet_<version>_x64-setup.exe,
-# its .sig, and latest.json). Upload all three to the release v<version>.
+# its .sig, latest.json and SnailNet-setup.exe). Upload all four to the
+# release v<version>.
 #
 # The updater's private key never lives in the repo: by default it is read
 # from %USERPROFILE%\.tauri\snailnet-updater.key (no password). Losing it
@@ -82,8 +86,14 @@ $latestPath = Join-Path $nsis 'latest.json'
 # UTF-8 without a BOM: the updater parses the file as JSON.
 [IO.File]::WriteAllText($latestPath, ($latest | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
 
+# The same installer under a name that never changes, for the website's
+# download button (site/main.js). The updater keeps using the versioned file.
+$stable = Join-Path $nsis 'SnailNet-setup.exe'
+Copy-Item -LiteralPath $setup.FullName -Destination $stable -Force
+
 Write-Host ''
 Write-Host "Installer:   $($setup.FullName)"
 Write-Host "Signature:   $($setup.FullName).sig"
 Write-Host "latest.json: $latestPath"
-Write-Host "Publish all three on the GitHub release v$version."
+Write-Host "Stable name: $stable"
+Write-Host "Publish all four on the GitHub release v$version."

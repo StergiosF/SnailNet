@@ -1,8 +1,10 @@
 name: Release
 
 # Builds the signed-for-updates installer with scripts/build-installer.ps1
-# (the same script as a local release) and puts it, its .sig and latest.json
-# on a DRAFT GitHub release v<version> (PLAN.md §17.2). Publishing the draft
+# (the same script as a local release) and puts it, its .sig, latest.json and
+# the same installer as SnailNet-setup.exe (the website's fixed download
+# link, releases/latest/download/SnailNet-setup.exe) on a DRAFT GitHub
+# release v<version> (PLAN.md §17.2). Publishing the draft
 # is the manual go-live: the app's updater reads
 # releases/latest/download/latest.json, which ignores drafts.
 #
@@ -61,7 +63,7 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME does not match the app version $version."
           }
           $files = Get-ChildItem target/release/bundle/nsis -File |
-            Where-Object { $_.Name -like "*_${version}_x64-setup.exe*" -or $_.Name -eq 'latest.json' } |
+            Where-Object { $_.Name -like "*_${version}_x64-setup.exe*" -or $_.Name -in 'latest.json', 'SnailNet-setup.exe' } |
             ForEach-Object { $_.FullName }
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
