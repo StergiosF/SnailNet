@@ -881,7 +881,7 @@ impl runner::Engine for WinEngine {
             up: plan.up.clone(),
             rules: Arc::new(PlanRules::new(plan.clone())),
             shape_lan: plan.shape_lan,
-            blocking: !plan.blocked.is_empty(),
+            blocking: plan.blocking(),
             rx_threads: self.rx_threads,
         })?;
         let report = Report::new(&shaper);
@@ -889,7 +889,7 @@ impl runner::Engine for WinEngine {
             shaper,
             report,
             shape_lan: plan.shape_lan,
-            blocking: !plan.blocked.is_empty(),
+            blocking: plan.blocking(),
         })
     }
 }
@@ -944,7 +944,7 @@ impl runner::Running for Running {
         if plan.shape_lan != self.shape_lan {
             anyhow::bail!("LAN shaping changed");
         }
-        if !plan.blocked.is_empty() && !self.blocking {
+        if plan.blocking() && !self.blocking {
             anyhow::bail!("an app is blocked now");
         }
         self.shaper.reconfigure(

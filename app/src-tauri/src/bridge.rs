@@ -270,6 +270,7 @@ mod tests {
                     family: "hades".into(),
                     name: "Hades".into(),
                     exe: "hades.exe".into(),
+                    held: false,
                 })),
                 ServerMsg::Stats(tick(500)),
             ]),

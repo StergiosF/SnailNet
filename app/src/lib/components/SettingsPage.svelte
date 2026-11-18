@@ -91,6 +91,7 @@
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
   const notifyNewApps = $derived(service.snapshot?.config.settings.new_apps !== "off");
+  const strictNewApps = $derived(service.snapshot?.config.settings.new_apps === "strict");
   // The apps the user marked from their Boost menu (§11.5 overrides).
   const choices = $derived.by(() => {
     const s = service.snapshot?.config.settings;
@@ -311,6 +312,22 @@
         onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "notify" : "off" })}
       />
     </label>
+    {#if notifyNewApps}
+      <label class="item">
+        <div class="words">
+          <b>{t("settings.strict")}</b>
+          <span>{t("settings.strict.body")}</span>
+        </div>
+        <input
+          type="checkbox"
+          role="switch"
+          class="switch"
+          checked={strictNewApps}
+          disabled={!canEdit || focusing}
+          onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "strict" : "notify" })}
+        />
+      </label>
+    {/if}
   </div>
 </section>
 

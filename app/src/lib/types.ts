@@ -110,7 +110,7 @@ export interface Settings {
   never_first?: string[];
   /** The first time an app goes online: a notification, or nothing
    *  (missing from older services: notify). */
-  new_apps?: "notify" | "off";
+  new_apps?: "notify" | "strict" | "off";
 }
 
 export interface Config {
@@ -153,6 +153,8 @@ export interface NewApp {
   family: string;
   name: string;
   exe: string;
+  /** Strict mode: it waits for the answer (missing: it's online). */
+  held?: boolean;
 }
 
 export interface ClassTick {

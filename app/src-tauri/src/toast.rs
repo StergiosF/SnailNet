@@ -130,9 +130,19 @@ pub fn toast_xml(show: &Show) -> String {
                     xml_escape(&args(a, p))
                 )
             };
+            // Strict mode: its connections wait for this answer (§11.4).
+            let (title, body, fine) = if p.held {
+                (
+                    "wants to go online",
+                    "It waits for your answer, 20 seconds at most.",
+                    "Allow",
+                )
+            } else {
+                ("went online", "It shares Everything else for now.", "Fine")
+            };
             format!(
-                r#"<toast launch="open"><visual><binding template="ToastGeneric"><text>{name} went online</text><text>It shares Everything else for now.</text></binding></visual><actions>{}{}{}</actions></toast>"#,
-                button("Fine", PromptAction::Fine),
+                r#"<toast launch="open"><visual><binding template="ToastGeneric"><text>{name} {title}</text><text>{body}</text></binding></visual><actions>{}{}{}</actions></toast>"#,
+                button(fine, PromptAction::Fine),
                 button("Give it a slice", PromptAction::Slice),
                 button("Block", PromptAction::Block),
             )
@@ -301,6 +311,7 @@ mod tests {
             family: family.into(),
             name: family.to_uppercase(),
             exe: format!("{family}.exe"),
+            held: false,
         }
     }
 
@@ -358,6 +369,11 @@ mod tests {
         let x = toast_xml(&Show::One(a));
         assert!(x.contains("Tom &amp; &quot;Jerry&quot; &lt;3 went online"));
         assert!(x.contains(r#"arguments="block 1 a""#));
+        let mut h = p(2, "b");
+        h.held = true;
+        let x = toast_xml(&Show::One(h));
+        assert!(x.contains("B wants to go online"));
+        assert!(x.contains(r#"content="Allow" arguments="fine 2 b""#));
         let s = toast_xml(&Show::Summary(vec![p(1, "a"), p(2, "b"), p(3, "c")]));
         assert!(s.contains("3 apps went online"));
         assert!(s.contains("A, B and C."));

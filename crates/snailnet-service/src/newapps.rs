@@ -7,9 +7,12 @@
 //! online"). Quiet: parts of Windows, families the user already gave a
 //! rule, a block or an override, and everything met during the first
 //! [`LEARN_SECS`] (so a fresh install doesn't greet every running program).
-//! The app is never held back: it already joined Everything else.
+//! In notify mode the app is never held back: it already joined Everything
+//! else. In strict mode its connections are held (blocked) until the user
+//! answers, [`STRICT_HOLD_SECS`] at most; then it goes online and the
+//! question stays open.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
@@ -17,7 +20,7 @@ use snailnet_core::classify::App;
 use snailnet_core::classify::family::{
     How, SYSTEM_ID, UNKNOWN_ID, WINDOWS_SERVICES_ID, normalise_path,
 };
-use snailnet_core::rules::{Config, TargetKind};
+use snailnet_core::rules::{Config, NewApps, STRICT_HOLD_SECS, TargetKind};
 use snailnet_ipc::{AppInfo, NewApp};
 
 /// Apps met this soon after SnailNet first looked become known silently.
@@ -46,6 +49,8 @@ pub struct Newcomers {
     /// When SnailNet first looked (Unix seconds); `None` until then.
     since: Option<u64>,
     pending: Vec<NewApp>,
+    /// Strict mode: prompt id → until when its app is held (Unix seconds).
+    holds: HashMap<u64, u64>,
     next_id: u64,
     /// How many of the shaper's apps were checked (its list only grows
     /// while it runs; a shorter list means it restarted).
@@ -87,17 +92,20 @@ impl Newcomers {
     }
 
     /// Look at the shaper's apps (in the order first seen) at `now`.
-    /// `windows` are the families that are parts of Windows; `notify`:
-    /// whether to ask about newcomers at all. Returns the new prompts and
-    /// whether the known list changed (save it).
+    /// `windows` are the families that are parts of Windows; `mode`:
+    /// whether to ask about newcomers, and whether to hold them while
+    /// asking. Returns the new prompts and whether the known list changed
+    /// (save it).
     pub fn observe(
         &mut self,
         apps: &[AppInfo],
         windows: &HashSet<String>,
         config: &Config,
-        notify: bool,
+        mode: NewApps,
         now: u64,
     ) -> (Vec<NewApp>, bool) {
+        let notify = mode != NewApps::Off;
+        let held = mode == NewApps::Strict;
         let mut changed = false;
         if self.since.is_none() {
             self.since = Some(now);
@@ -125,7 +133,11 @@ impl Newcomers {
                     family: app.family.clone(),
                     name: app.name.clone(),
                     exe: app.exe.clone(),
+                    held,
                 };
+                if held {
+                    self.holds.insert(p.prompt_id, now + STRICT_HOLD_SECS);
+                }
                 self.pending.push(p.clone());
                 prompts.push(p);
             }
@@ -133,9 +145,43 @@ impl Newcomers {
         self.checked = apps.len();
         if self.pending.len() > MAX_PENDING {
             let extra = self.pending.len() - MAX_PENDING;
-            self.pending.drain(..extra);
+            for p in self.pending.drain(..extra) {
+                self.holds.remove(&p.prompt_id);
+            }
         }
         (prompts, changed)
+    }
+
+    /// Families held now (lowercase, as the plan's blocked list).
+    pub fn held(&self, now: u64) -> Vec<String> {
+        self.pending
+            .iter()
+            .filter(|p| self.holds.get(&p.prompt_id).is_some_and(|&u| now < u))
+            .map(|p| p.family.to_lowercase())
+            .collect()
+    }
+
+    /// End the holds whose time is up at `now` (those apps go online; the
+    /// questions stay open). Returns whether one ended.
+    pub fn release_expired(&mut self, now: u64) -> bool {
+        let before = self.holds.len();
+        self.holds.retain(|_, &mut until| now < until);
+        self.sync_held();
+        self.holds.len() != before
+    }
+
+    /// Strict mode was switched off: every held app goes online.
+    pub fn release_all(&mut self) -> bool {
+        let any = !self.holds.is_empty();
+        self.holds.clear();
+        self.sync_held();
+        any
+    }
+
+    fn sync_held(&mut self) {
+        for p in &mut self.pending {
+            p.held = self.holds.contains_key(&p.prompt_id);
+        }
     }
 
     /// Questions not answered yet, oldest first.
@@ -147,12 +193,15 @@ impl Newcomers {
     /// forgotten).
     pub fn answer(&mut self, id: u64) -> Option<NewApp> {
         let i = self.pending.iter().position(|p| p.prompt_id == id)?;
+        self.holds.remove(&id);
         Some(self.pending.remove(i))
     }
 
-    /// Notifications were switched off: drop the open questions.
+    /// Notifications were switched off: drop the open questions (and with
+    /// them any holds).
     pub fn clear_pending(&mut self) {
         self.pending.clear();
+        self.holds.clear();
     }
 }
 
@@ -215,14 +264,20 @@ mod tests {
         let c = Config::default();
         let none = HashSet::new();
         let apps = vec![app("hades", "hades.exe")];
-        let (p, changed) = n.observe(&apps, &none, &c, true, LATER);
+        let (p, changed) = n.observe(&apps, &none, &c, NewApps::Notify, LATER);
         assert_eq!(names(&p), ["hades"]);
         assert!(changed);
         assert_eq!(n.pending().len(), 1);
         // The same list again, and after a restart of the shaper.
-        assert_eq!(n.observe(&apps, &none, &c, true, LATER), (vec![], false));
+        assert_eq!(
+            n.observe(&apps, &none, &c, NewApps::Notify, LATER),
+            (vec![], false)
+        );
         n.checked = 5;
-        assert_eq!(n.observe(&apps, &none, &c, true, LATER), (vec![], false));
+        assert_eq!(
+            n.observe(&apps, &none, &c, NewApps::Notify, LATER),
+            (vec![], false)
+        );
     }
 
     #[test]
@@ -230,10 +285,10 @@ mod tests {
         let mut n = Newcomers::default();
         let c = Config::default();
         let none = HashSet::new();
-        let (p, changed) = n.observe(&[app("brave", "brave.exe")], &none, &c, true, T0);
+        let (p, changed) = n.observe(&[app("brave", "brave.exe")], &none, &c, NewApps::Notify, T0);
         assert!(p.is_empty() && changed);
         let apps = [app("brave", "brave.exe"), app("hades", "hades.exe")];
-        let (p, _) = n.observe(&apps, &none, &c, true, T0 + LEARN_SECS);
+        let (p, _) = n.observe(&apps, &none, &c, NewApps::Notify, T0 + LEARN_SECS);
         assert_eq!(names(&p), ["hades"]);
     }
 
@@ -264,7 +319,7 @@ mod tests {
             app("steam", "steam.exe"),
             app("celeste", "celeste.exe"),
         ];
-        let (p, _) = n.observe(&apps, &windows, &c, true, LATER);
+        let (p, _) = n.observe(&apps, &windows, &c, NewApps::Notify, LATER);
         assert_eq!(names(&p), ["celeste"], "steam has a rule in a shipped mode");
     }
 
@@ -273,9 +328,15 @@ mod tests {
         let mut n = settled();
         let c = Config::default();
         let none = HashSet::new();
-        let (p, changed) = n.observe(&[app("zoom", "zoom.exe")], &none, &c, false, LATER);
+        let (p, changed) = n.observe(&[app("zoom", "zoom.exe")], &none, &c, NewApps::Off, LATER);
         assert!(p.is_empty() && changed);
-        let (p, _) = n.observe(&[app("zoom", "zoom.exe")], &none, &c, true, LATER);
+        let (p, _) = n.observe(
+            &[app("zoom", "zoom.exe")],
+            &none,
+            &c,
+            NewApps::Notify,
+            LATER,
+        );
         assert!(p.is_empty(), "met already");
     }
 
@@ -287,12 +348,53 @@ mod tests {
         let apps: Vec<_> = (0..MAX_PENDING + 3)
             .map(|i| app(&format!("a{i}"), "a.exe"))
             .collect();
-        n.observe(&apps, &none, &c, true, LATER);
+        n.observe(&apps, &none, &c, NewApps::Notify, LATER);
         assert_eq!(n.pending().len(), MAX_PENDING);
         assert_eq!(n.pending()[0].family, "a3", "the oldest went");
         let id = n.pending()[0].prompt_id;
         assert_eq!(n.answer(id).unwrap().family, "a3");
         assert_eq!(n.answer(id), None);
+    }
+
+    #[test]
+    fn strict_mode_holds_until_answered_or_timed_out() {
+        let mut n = settled();
+        let c = Config::default();
+        let none = HashSet::new();
+        let apps = [app("Hades", "hades.exe"), app("celeste", "celeste.exe")];
+        let (p, _) = n.observe(&apps, &none, &c, NewApps::Strict, LATER);
+        assert!(p.iter().all(|p| p.held));
+        assert_eq!(n.held(LATER), ["hades", "celeste"]);
+        // Answering frees one at once.
+        n.answer(p[0].prompt_id).unwrap();
+        assert_eq!(n.held(LATER), ["celeste"]);
+        // The other goes online when its time is up; its question stays.
+        let end = LATER + STRICT_HOLD_SECS;
+        assert!(!n.release_expired(end - 1));
+        assert!(n.held(end).is_empty(), "the plan stops holding it on time");
+        assert!(n.release_expired(end));
+        assert!(!n.pending()[0].held);
+        assert_eq!(n.pending().len(), 1);
+        // Notify mode never holds.
+        let (p, _) = n.observe(
+            &[app("obscura", "obscura.exe")],
+            &none,
+            &c,
+            NewApps::Notify,
+            end,
+        );
+        assert!(!p[0].held && n.held(end).is_empty());
+    }
+
+    #[test]
+    fn switching_strict_off_lets_everyone_go() {
+        let mut n = settled();
+        let none = HashSet::new();
+        let c = Config::default();
+        n.observe(&[app("a", "a.exe")], &none, &c, NewApps::Strict, LATER);
+        assert!(n.release_all());
+        assert!(n.held(LATER).is_empty() && !n.pending()[0].held);
+        assert!(!n.release_all());
     }
 
     #[test]
@@ -305,7 +407,7 @@ mod tests {
             &[app("steam", "steam.exe")],
             &none,
             &Config::default(),
-            true,
+            NewApps::Notify,
             T0,
         );
         n.save(&path).unwrap();

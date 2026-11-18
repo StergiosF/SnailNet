@@ -2,7 +2,19 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, night; newest)
+## Start here (2026-11-18, later; newest)
+
+- **B, strict mode (§11.4), done:** `new_apps = "strict"`; a held app's
+  family joins `Plan.blocked` until answered or 20 s (`Newcomers` holds,
+  `NewApp.held`); timeout lets it online, the question stays; `Plan.strict`
+  makes the engine divert both ways so a hold never restarts shaping.
+  App: "Wait for my answer first" switch, held toast text. Not seen in a
+  real window or service.
+
+Next: **C** (SOCKET-layer refusal + tray counter), **D** family
+split/merge, **E** small. "Needs the user" below still stands.
+
+## Start here (2026-11-18, night)
 
 Pushed on `main` (last: b9e0c61). Done this session (decisions in PLAN.md):
 

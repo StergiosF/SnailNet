@@ -273,8 +273,8 @@ pub struct Snapshot {
 }
 
 /// An app went online for the first time (PLAN.md §11.4). It is already
-/// allowed (it joins Everything else); the user may answer with
-/// [`Request::AnswerPrompt`].
+/// allowed (it joins Everything else) unless `held`; the user may answer
+/// with [`Request::AnswerPrompt`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewApp {
     pub prompt_id: u64,
@@ -283,6 +283,10 @@ pub struct NewApp {
     pub name: String,
     /// Lowercase exe file name.
     pub exe: String,
+    /// Strict mode: its connections wait for the answer (at most 20 s,
+    /// then it goes online). Absent from older services.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held: bool,
 }
 
 /// The answers to a [`NewApp`] prompt.
@@ -614,6 +618,7 @@ mod tests {
                         family: "hades".into(),
                         name: "Hades".into(),
                         exe: "hades.exe".into(),
+                        held: false,
                     }],
                 })),
             },
@@ -664,6 +669,7 @@ mod tests {
                 family: "steam".into(),
                 name: "Steam".into(),
                 exe: "steam.exe".into(),
+                held: true,
             })),
         ] {
             roundtrip(msg);

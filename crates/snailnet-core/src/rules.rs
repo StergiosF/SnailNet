@@ -116,9 +116,16 @@ pub enum NewApps {
     /// Let it go online and say so in a notification.
     #[default]
     Notify,
+    /// Hold its new connections until the user answers, at most
+    /// [`STRICT_HOLD_SECS`]; then let it go online (as Notify would).
+    Strict,
     /// Say nothing.
     Off,
 }
+
+/// How long strict mode holds a new app's connections (PLAN.md §11.4).
+/// Short enough that a held TCP connect is still retrying its SYN.
+pub const STRICT_HOLD_SECS: u64 = 20;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -663,6 +670,7 @@ impl Config {
                 targets: Vec::new(),
                 prios: Vec::new(),
                 blocked: Vec::new(),
+                strict: false,
                 shape_lan: !self.settings.lan_exempt,
                 custom_sites: self.sites.clone(),
                 focus: Vec::new(),
@@ -711,6 +719,7 @@ impl Config {
             targets: rules.iter().map(|r| r.target.clone()).collect(),
             prios: rules.iter().map(|r| r.priority).collect(),
             blocked: self.blocked.iter().map(|id| id.to_lowercase()).collect(),
+            strict: self.settings.new_apps == NewApps::Strict,
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
             focus: Vec::new(),
@@ -759,6 +768,11 @@ pub struct Plan {
     pub prios: Vec<Priority>,
     /// Lowercase family ids whose internet traffic is dropped.
     pub blocked: Vec<String>,
+    /// Strict new-app mode (PLAN.md §11.4): the service may add held apps
+    /// to `blocked` at any time, so a running engine diverts both
+    /// directions from the start (a hold then never restarts shaping).
+    /// Strict alone doesn't start the engine.
+    pub strict: bool,
     pub shape_lan: bool,
     /// For the domain → site matcher, with the shipped packs.
     pub custom_sites: Vec<SiteDef>,
@@ -776,6 +790,11 @@ impl Plan {
     /// Whether packets need diverting at all: shaping or blocking.
     pub fn needs_engine(&self) -> bool {
         self.shapes_anything() || !self.blocked.is_empty()
+    }
+
+    /// Whether the engine diverts both directions (apps may be blocked).
+    pub fn blocking(&self) -> bool {
+        !self.blocked.is_empty() || self.strict
     }
 
     /// Is `app` blocked?

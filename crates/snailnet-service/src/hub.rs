@@ -195,6 +195,14 @@ impl Hub {
         if i.config.settings.focus_boost && plan.shapes_anything() {
             plan.focus = i.focus.pids(&i.config.settings);
         }
+        if plan.strict {
+            // New apps waiting for an answer (§11.4).
+            for f in i.newcomers.held(now) {
+                if !plan.blocked.contains(&f) {
+                    plan.blocked.push(f);
+                }
+            }
+        }
         (plan, name)
     }
 
@@ -224,6 +232,10 @@ impl Hub {
     /// End a boost or a pause whose time is up, so the file and every
     /// client see it gone. Returns whether one ended.
     pub fn end_expired(&self, now: u64) -> bool {
+        if self.lock().newcomers.release_expired(now) {
+            tracing::info!("no answer in time: the held app goes online");
+            self.signal.request_reload();
+        }
         let (boost, pause) = {
             let i = self.lock();
             if i.rev == 0 {
@@ -359,26 +371,38 @@ impl Hub {
     /// Check the apps seen for newcomers (§11.4): remember them, and ask
     /// about them if the user wants that.
     fn meet_apps(&self, i: &mut Inner, windows: &HashSet<String>) {
-        let notify = i.rev > 0 && i.config.settings.new_apps == NewApps::Notify;
+        let mode = if i.rev > 0 {
+            i.config.settings.new_apps
+        } else {
+            NewApps::Off
+        };
         let Inner {
             newcomers,
             apps,
             config,
             ..
         } = i;
-        let (prompts, changed) = newcomers.observe(apps, windows, config, notify, unix_now());
+        let (prompts, changed) = newcomers.observe(apps, windows, config, mode, unix_now());
         if changed && let Err(e) = newcomers.save(&self.dir.known_apps()) {
             tracing::warn!("could not save the list of known apps: {e}");
         }
+        if prompts.iter().any(|p| p.held) {
+            // Strict mode: the plan holds them from now on.
+            self.signal.request_reload();
+        }
         for p in prompts {
-            tracing::info!("new app online: {} ({})", p.name, p.family);
+            if p.held {
+                tracing::info!("new app held until answered: {} ({})", p.name, p.family);
+            } else {
+                tracing::info!("new app online: {} ({})", p.name, p.family);
+            }
             let _ = self.events.send(Event::NewApp(p));
         }
     }
 
     /// The user answered new-app question `prompt_id` (§11.4). `block`
-    /// blocks the app; `fine` and `slice` only close the question (the app
-    /// opens the split for a slice).
+    /// blocks the app; `fine` and `slice` close the question (the app opens
+    /// the split for a slice) and let a held app go online.
     pub fn answer_prompt(&self, prompt_id: u64, action: &str) -> Result<u64, Refusal> {
         let action = PromptAction::parse(action)
             .ok_or_else(|| (ErrorCode::Invalid, format!("{action:?} isn't an answer")))?;
@@ -391,7 +415,12 @@ impl Hub {
         tracing::info!("new app {}: {}", prompt.family, action.name());
         match action {
             PromptAction::Block => self.set_blocked(&prompt.family, true, self.rev()),
-            PromptAction::Fine | PromptAction::Slice => Ok(self.rev()),
+            PromptAction::Fine | PromptAction::Slice => {
+                if prompt.held {
+                    self.signal.request_reload();
+                }
+                Ok(self.rev())
+            }
         }
     }
 
@@ -605,13 +634,25 @@ impl Hub {
     }
 
     pub fn set_settings(&self, settings: Settings, rev: u64) -> Result<u64, Refusal> {
-        let quiet = settings.new_apps == NewApps::Off;
+        let mode = settings.new_apps;
         let r = self.change(rev, |c| {
             c.settings = settings;
             Ok(())
         });
-        if r.is_ok() && quiet {
-            self.lock().newcomers.clear_pending();
+        if r.is_ok() && mode != NewApps::Strict {
+            let released = {
+                let mut i = self.lock();
+                let held = i.newcomers.release_all();
+                if mode == NewApps::Off {
+                    i.newcomers.clear_pending();
+                }
+                held
+            };
+            // The reload `change` asked for may have planned the holds
+            // already: once more without them.
+            if released {
+                self.signal.request_reload();
+            }
         }
         r
     }
@@ -803,7 +844,7 @@ fn known_sites(config: &Config) -> Vec<SiteInfo> {
 
 #[cfg(test)]
 mod tests {
-    use snailnet_core::rules::Target;
+    use snailnet_core::rules::{STRICT_HOLD_SECS, Target};
     use snailnet_core::scheduler::ClassStats;
     use snailnet_engine::fastpath::NO_TAG;
 
@@ -857,6 +898,56 @@ mod tests {
         assert_eq!(hub.config().blocked, ["hades"]);
         assert!(hub.snapshot().prompts.is_empty());
         assert!(hub.answer_prompt(p.prompt_id, "fine").is_err(), "answered");
+    }
+
+    #[test]
+    fn strict_mode_holds_a_new_app_in_the_plan() {
+        let t = tempfile::tempdir().unwrap();
+        let d = DataDir::new(t.path());
+        d.create().unwrap();
+        std::fs::write(d.known_apps(), "since 0\n").unwrap();
+        let hub = Hub::new(d, StopSignal::new());
+        let mut c = Config::default();
+        c.line.down_mbps = Some(100.0);
+        c.settings.new_apps = NewApps::Strict;
+        hub.set_loaded(c);
+        let seen = |family: &str| Seen {
+            apps: vec![AppInfo {
+                family: family.into(),
+                name: family.into(),
+                exe: format!("{family}.exe"),
+            }],
+            ..Seen::default()
+        };
+        let now = unix_now();
+        let (plan, _) = hub.plan(now);
+        assert!(plan.strict && plan.blocking() && plan.blocked.is_empty());
+
+        hub.publish(&EngineSnapshot::default(), Some(seen("hades")));
+        let p = hub.snapshot().prompts[0].clone();
+        assert!(p.held);
+        assert_eq!(hub.plan(now).0.blocked, ["hades"]);
+        // Past the hold the plan lets it go, and the runner's check ends it.
+        let end = now + STRICT_HOLD_SECS + 1;
+        assert!(hub.plan(end).0.blocked.is_empty());
+        hub.end_expired(end);
+        assert!(!hub.snapshot().prompts[0].held, "still asked, not held");
+        hub.answer_prompt(p.prompt_id, "fine").unwrap();
+
+        // Allowed by the answer before the time is up.
+        let mut more = seen("celeste");
+        more.apps.insert(0, seen("hades").apps[0].clone());
+        hub.publish(&EngineSnapshot::default(), Some(more));
+        let p = hub.snapshot().prompts[0].clone();
+        assert_eq!(hub.plan(now).0.blocked, ["celeste"]);
+        hub.answer_prompt(p.prompt_id, "fine").unwrap();
+        assert!(hub.plan(now).0.blocked.is_empty());
+
+        // Notify mode never holds, and its plan doesn't divert both ways.
+        let mut s = hub.config().settings;
+        s.new_apps = NewApps::Notify;
+        hub.set_settings(s, hub.rev()).unwrap();
+        assert!(!hub.plan(now).0.blocking());
     }
 
     fn rule(id: &str, share: u32) -> Rule {

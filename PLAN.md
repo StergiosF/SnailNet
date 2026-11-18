@@ -539,7 +539,14 @@ Creating a rule: click any app row → "Give it a slice". The split bar animates
   - **App:** `app/src-tauri/src/toast.rs` shows WinRT toasts directly (the `windows` crate already in the tree; `tauri-plugin-notification` has no action buttons on desktop) under the AppUserModelID `net.snailnet.app`, registered in HKCU at start. One toast per app per app run: "{app} went online · It shares Everything else for now." with **Fine · Give it a slice · Block**. "Give it a slice" answers the service and opens the window on the split with a 20% slice for the app (webview event `give-slice`).
   - **Quiet hours:** while a game, a presentation or another fullscreen program is in front (`SHQueryUserNotificationState`), toasts wait; afterwards one summary ("3 apps went online while you played: A, B and C"), or the normal toast if only one waited.
   - Button clicks reach the app through the toast's `Activated` event while the app runs (it lives in the tray). A toast clicked later from Action Center after the app quit does nothing (no COM activator); accepted for v1.
-  - **Not yet:** seen in a real window or the real service; strict mode (the bullet above).
+  - **Not yet:** seen in a real window or the real service.
+- **Strict mode, built (2026-11-18), decisions taken:**
+  - `Settings.new_apps = strict`; in the app a second switch under the notify one, "Wait for my answer first" (shown only while notifications are on).
+  - **A hold is a temporary block.** A new app's prompt carries `held: true` (`NewApp.held`, absent from older services); the service adds its family to the plan's blocked list until the answer or **20 s** (`STRICT_HOLD_SECS`), whichever comes first. The existing drop path does the holding: packets of its flows are dropped, so a TCP connect keeps retrying its SYN (Windows retries for about 21 s) and gets through once released. No SOCKET-layer refusal (that's §11.3, item C); "SOCKET layer blocks with retry semantics" above is dropped in favour of this.
+  - **Timeout = go online** (notify mode's default); the question stays open, so Block still works later. Fine and Give it a slice release at once, Block blocks for good. Switching back to notify releases every hold; off also drops the questions.
+  - **No restart on a hold:** in strict mode the plan says so (`Plan.strict`) and the engine diverts both directions from the start, as for blocking, so adding a held app is a live reconfigure. Strict alone doesn't start the engine: with no line speed and nothing blocked, nothing is seen, so nothing is held.
+  - **Accepted gaps:** the first packets of a new app pass until the shaper has attributed its flow and the hub has seen it (up to about a second, the stats poll); a held app's already-open flows break and reconnect. Holds live in memory: a service restart lets held apps go (they're known by then).
+  - Toast for a held app: "{app} wants to go online · It waits for your answer, 20 seconds at most." with **Allow · Give it a slice · Block**. During quiet hours the toast waits for the summary, and the app goes online after 20 s.
 
 ### 11.5 Focus boost (Smart)
 
