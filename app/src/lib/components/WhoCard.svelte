@@ -6,7 +6,7 @@
   // follow who overtook whom.
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
-  import type { Ledger } from "../ledger";
+  import { unnamed, type Ledger } from "../ledger";
   import { flip } from "svelte/animate";
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
@@ -24,6 +24,15 @@
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
   const list = $derived(ledger ? users(ledger, live, label) : []);
+  // Website traffic whose name is hidden (ECH): said, never hidden.
+  const hidden = $derived(ledger ? unnamed(service.stats?.down) : null);
+  const hiddenApps = $derived(
+    hidden
+      ? hidden.apps.length > 3
+        ? t("unnamed.apps.more", { apps: hidden.apps.slice(0, 3).join(", "), count: hidden.apps.length - 3 })
+        : hidden.apps.join(", ")
+      : "",
+  );
   const blocked = $derived(
     (service.snapshot?.config.blocked ?? []).map((id) => {
       const target: Target = { kind: "family", id };
@@ -59,6 +68,15 @@
         </li>
       {/each}
     </ul>
+  {/if}
+  {#if hidden}
+    <p class="unnamed">
+      <i class="icon" aria-hidden="true">&#xE72E;</i>
+      <span
+        ><b class="num">{t("unnamed.speed", { speed: mbps(hidden.bps) })}</b>
+        {t("unnamed.body", { apps: hiddenApps })}</span
+      >
+    </p>
   {/if}
   {#if blocked.length > 0}
     <div class="blocked" role="group" aria-labelledby="who-blocked">
@@ -150,6 +168,26 @@
     font-size: 12px;
     font-weight: 400;
     color: var(--text-secondary);
+  }
+  .unnamed {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 4px 6px 2px;
+    padding-top: 10px;
+    border-top: 1px solid var(--stroke-card);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+  }
+  .unnamed .icon {
+    flex: none;
+    font-size: 12px;
+    transform: translateY(1px);
+  }
+  .unnamed b {
+    font-weight: 700;
+    color: var(--text-primary);
   }
   .blocked {
     display: flex;

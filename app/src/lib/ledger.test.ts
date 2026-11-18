@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glance, ledger, membersOf, parts, statusText } from "./ledger";
+import { glance, ledger, membersOf, parts, statusText, unnamed } from "./ledger";
 import { setOther } from "./split";
 import type { DirStats, Rule, Target } from "./types";
 
@@ -147,5 +147,22 @@ describe("setOther", () => {
 
   it("is everything with no rules", () => {
     expect(setOther([10_000], 500)).toEqual([10_000]);
+  });
+});
+
+describe("unnamed", () => {
+  const fam = (name: string, unidentified_bps: number) => ({ family: name, name, bps: unidentified_bps * 2, unidentified_bps });
+  const dir = (families: ReturnType<typeof fam>[]) => ({ shaped_bps: 0, classes: [], families, sites: [] });
+
+  it("is quiet below the quiet line", () => {
+    expect(unnamed(dir([fam("Brave", 10_000)]))).toBeNull();
+    expect(unnamed(null)).toBeNull();
+  });
+
+  it("sums hidden website traffic, busiest app first", () => {
+    expect(unnamed(dir([fam("Brave", 40_000), fam("Chrome", 900_000), fam("Steam", 0)]))).toEqual({
+      bps: 940_000,
+      apps: ["Chrome", "Brave"],
+    });
   });
 });

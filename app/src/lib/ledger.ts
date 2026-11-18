@@ -313,3 +313,14 @@ export function parts(l: Ledger): Part[] {
   }
   return out;
 }
+
+/** Website traffic SnailNet couldn't name (ECH, no SNI): how much, and in
+ *  which apps, busiest first. It still counts toward its app's slice;
+ *  PRODUCT.md asks for it to be shown, never hidden. Null when quiet. */
+export function unnamed(dir: DirStats | null | undefined): { bps: number; apps: string[] } | null {
+  const fams = (dir?.families ?? []).filter((f) => f.unidentified_bps > 0);
+  const bps = fams.reduce((sum, f) => sum + f.unidentified_bps, 0);
+  if (bps < QUIET_BPS) return null;
+  fams.sort((a, b) => b.unidentified_bps - a.unidentified_bps);
+  return { bps, apps: fams.map((f) => f.name) };
+}
