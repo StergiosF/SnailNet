@@ -451,7 +451,7 @@ Dragging the split bar sends new weights over IPC (debounced 50 ms). The schedul
 
 At first run (with clear consent text): a ~10 s speed test.
 
-- Endpoints: configurable list; default a public, no-account HTTP speed-test service with download/upload endpoints. Run with 4–8 parallel connections, take the 90th-percentile throughput of the last 6 s.
+- Endpoints: configurable list; default **Cloudflare** (`speed.cloudflare.com`, `__down?bytes=` / `__up`), the user's choice 2026-11-18. Run with 4–8 parallel connections, take the 90th-percentile throughput of the last 6 s.
 - The test flows are excluded from shaping.
 - **Offline / blocked:** fall back to the passive estimate (§10.2) and ask the user to type the speed if they want precision now.
 - The result is stored per network (see 10.3).
@@ -461,7 +461,7 @@ At first run (with clear consent text): a ~10 s speed test.
 Continuous, cheap, no extra traffic:
 
 - Track the **peak sustained throughput** (1 s windows, decaying max over 7 days) per direction.
-- Track **latency under load**: a tiny RTT probe (ICMP or TCP SYN to the default gateway and to one public anycast host) at 1 Hz *only while the line is busy*.
+- Track **latency under load**: a tiny ICMP echo to the default gateway and to **1.1.1.1** (user's choice 2026-11-18) at 1 Hz *only while the line is busy*. The rise is measured over each host's idle baseline (the lowest RTT of the last few minutes). The logic is `snailnet-core::estimator` (built 2026-11-18).
 - If throughput repeatedly exceeds the estimate without a latency increase, raise the estimate. If latency rises sharply at a throughput *below* the estimate (line got slower: Wi-Fi, peak hours), lower the shaped rate. This is in the spirit of `cake-autorate`.
 - Bounded change rate (≤ 10% per minute up, faster down) so it never oscillates.
 
