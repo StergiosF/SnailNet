@@ -2,7 +2,44 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, end of session; newest)
+## Start here (2026-11-18, latest session; newest)
+
+Pushed on `main`: `05fb091` E, `b70cae1` audit fixes, `4a45626` README +
+notices. Decisions in PLAN.md §11.2, §11.5, §11.6, §21 Phase 6.
+
+- **E done, so Phase 5 is complete.** The game reason ("Goes first · a game, it ran
+  full screen" / "in a launcher's library" / "you said it's a game") on
+  the row under "Using your internet": `FocusChanged.why`,
+  `StatsTick.games` (`GameTick`, `GameWhy`), `Focus::games`. Hotkey keys
+  from four presets (`hotkey::CHOICES`, `hotkey-keys` file, Settings →
+  Windows select; commands `hotkey_info` / `set_hotkey_keys`).
+- **impeccable audit done** (code only, no browser): merge select now
+  pick + Move (arrow keys merged by accident), Block hover contrast,
+  long menus scroll, hotkey select focus. Left: menu arrow-key movement,
+  global reduced-motion cut. Rendered contrast wasn't measured.
+- **Phase 6:** README (help section, privacy, licences) and
+  `scripts/third-party-notices.ps1` (run by `build-installer.ps1`,
+  shipped as `licenses\THIRD-PARTY-NOTICES.txt`) done. The installer
+  hasn't been built since.
+
+### Next, in order
+
+1. **Signed site/game pack feed** (§21 Phase 6): packs update without a
+   new build. Needs decisions: where it's hosted (same GitHub releases as
+   the updater?), signature (ed25519/minisign, which crate: Context7
+   first), how the service fetches (WinHTTP via `snailnet-win::http`
+   exists), and falling back to the compiled-in packs.
+2. Final perf run against §20 (needs the elevated real service).
+3. With the user: the real-service test ("First thing next session"
+   further down), VM installs, tag `v1.0.0`.
+
+### Needs the user (new)
+
+- **SnailNet's own licence**, before the repo goes public for the update
+  feed (README says "not chosen yet; all rights reserved").
+- Everything under "Needs the user" below still stands.
+
+## Earlier: 2026-11-18, end of session
 
 Everything is committed and pushed on `main` (last code commit:
 `bfb2b16`). The user leaves decisions to Claude: pick, decide, record in
