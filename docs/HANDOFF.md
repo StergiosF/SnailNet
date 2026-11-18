@@ -34,7 +34,7 @@ The user ticked the real-service test as seen and chose to move on.
 **Nothing of Phase 4 has run inside the real service or been seen in a
 real window.** Every automated check passes (cargo clippy/fmt/test,
 app check/lint/vitest/build, Tauri clippy/test). The old dev service
-(elevated, PID from 2026-11-17) still locks `target\debugsnailnet-service.exe`, so `cargo build -p snailnet-service` fails with
+(elevated, PID from 2026-11-17) still locks `target\debug\snailnet-service.exe`, so `cargo build -p snailnet-service` fails with
 "Access is denied" until it's stopped (Ctrl+C in its console, or an
 elevated `Stop-Process`). The test steps are under "First thing next
 session" below; do them whenever the user wants.
