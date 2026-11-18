@@ -3,8 +3,10 @@
   // (for 1 hour, 4 hours, until I stop it; and for an app, block its
   // internet), or "Stop boost" on the one that's boosted. The menu is a
   // native popover, so Escape and a click outside close it.
-  import { block, boost, stopBoost } from "../actions";
+  import { block, boost, setFirstChoice, stopBoost } from "../actions";
+  import { firstChoiceOf, type FirstChoice } from "../firstChoice";
   import { t } from "../i18n";
+  import { service } from "../service.svelte";
   import { placeMenu } from "../popover";
   import type { Target } from "../types";
 
@@ -34,6 +36,14 @@
     menu?.hidePopover();
     void block(target.id, name);
   }
+
+  // Whether this app goes first (§11.5): a game, never, or SnailNet's call.
+  // Picking the ticked one again goes back to SnailNet's call.
+  const first = $derived(firstChoiceOf(service.snapshot?.config.settings, target.id));
+  function choose(choice: FirstChoice) {
+    menu?.hidePopover();
+    void setFirstChoice(target.id, name, first === choice ? "auto" : choice);
+  }
 </script>
 
 {#if boosted}
@@ -61,6 +71,17 @@
       <button type="button" role="menuitem" onclick={() => pick(c.minutes)}>{c.label}</button>
     {/each}
     {#if target.kind === "family"}
+      <hr />
+      {#each [["game", t("first.game")], ["never", t("first.never")]] as const as [choice, label] (choice)}
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={first === choice}
+          onclick={() => choose(choice)}
+        >
+          <i class="icon" aria-hidden="true">{first === choice ? "" : ""}</i>{label}
+        </button>
+      {/each}
       <hr />
       <button type="button" role="menuitem" class="danger" onclick={blockIt}>
         <i class="icon" aria-hidden="true">&#xE8F8;</i>{t("block")}

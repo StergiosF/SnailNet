@@ -375,7 +375,10 @@ select {
   outline-offset: -2px;
 }
 .popmenu .icon {
+  flex: none;
+  width: 16px;
   font-size: 14px;
+  text-align: center;
 }
 .popmenu hr {
   margin: 6px 4px;

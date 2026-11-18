@@ -3,6 +3,7 @@
 // window; a reset of the split can be undone from there.
 
 import { invoke } from "@tauri-apps/api/core";
+import { firstChoiceOf, withFirstChoice, type FirstChoice } from "./firstChoice";
 import { stateKind } from "./format";
 import { t, type Key } from "./i18n";
 import { modeName } from "./modes";
@@ -77,6 +78,23 @@ export async function unblock(familyId: string): Promise<void> {
     await service.setBlocked(familyId, false);
   } catch (e) {
     failed("block.failed", e);
+  }
+}
+
+/** Say whether an app goes first (§11.5 overrides); the toast can undo it. */
+export async function setFirstChoice(familyId: string, name: string, choice: FirstChoice): Promise<void> {
+  const settings = service.snapshot?.config.settings;
+  if (!settings) return;
+  const before = firstChoiceOf(settings, familyId);
+  if (before === choice) return;
+  try {
+    await service.setSettings(withFirstChoice(settings, familyId, choice));
+    ui.say({
+      message: t(`first.done.${choice}`, { name }),
+      action: { label: t("undo"), run: () => void setFirstChoice(familyId, name, before) },
+    });
+  } catch (e) {
+    failed("first.failed", e);
   }
 }
 

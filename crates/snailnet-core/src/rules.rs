@@ -96,6 +96,14 @@ pub struct Settings {
     /// Use the Gaming mode while a game runs, then go back (PLAN.md §11.5
     /// "Optional automation"). Off by default.
     pub gaming_while_playing: bool,
+    /// Apps (family ids) that are games whatever the detection says: they
+    /// stay first while they run (PLAN.md §11.5 overrides).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub games: Vec<String>,
+    /// Apps (family ids) never put first, in front or not, and never
+    /// counted as a game.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub never_first: Vec<String>,
 }
 
 impl Default for Settings {
@@ -105,7 +113,43 @@ impl Default for Settings {
             lan_exempt: true,
             focus_boost: true,
             gaming_while_playing: false,
+            games: Vec::new(),
+            never_first: Vec::new(),
         }
+    }
+}
+
+impl Settings {
+    /// The user said `family` is a game.
+    pub fn is_game(&self, family: &str) -> bool {
+        self.games.iter().any(|g| g.eq_ignore_ascii_case(family))
+    }
+
+    /// The user said `family` never goes first.
+    pub fn never_first(&self, family: &str) -> bool {
+        self.never_first
+            .iter()
+            .any(|g| g.eq_ignore_ascii_case(family))
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        for (what, list) in [
+            ("game", &self.games),
+            ("never-first app", &self.never_first),
+        ] {
+            for (i, id) in list.iter().enumerate() {
+                if id.trim().is_empty() || id.contains(':') {
+                    return Err(format!("{what} {id:?} is not a family id"));
+                }
+                if list[..i].iter().any(|b| b.eq_ignore_ascii_case(id)) {
+                    return Err(format!("{id:?} is listed twice as a {what}"));
+                }
+            }
+        }
+        if let Some(id) = self.games.iter().find(|g| self.never_first(g)) {
+            return Err(format!("{id:?} can't be a game and never first"));
+        }
+        Ok(())
     }
 }
 
@@ -517,6 +561,7 @@ impl Config {
                 return bad(format!("{id:?} is blocked twice"));
             }
         }
+        self.settings.validate().or_else(bad)?;
         if let Some(b) = &self.boost {
             if b.target.id.trim().is_empty() {
                 return bad("the boost has an empty target id".into());
@@ -1081,6 +1126,29 @@ ceiling = { down = \"10%\" }
         c.blocked = vec!["steam".into(), "STEAM".into()];
         assert!(c.validate().unwrap_err().to_string().contains("twice"));
         c.blocked = vec!["site:youtube".into()];
+        assert!(c.validate().unwrap_err().to_string().contains("family id"));
+    }
+
+    #[test]
+    fn games_and_never_first_overrides() {
+        let mut c = Config::default();
+        c.settings.games = vec!["Hades".into()];
+        c.settings.never_first = vec!["obs".into()];
+        c.validate().unwrap();
+        assert_eq!(Config::parse(&c.to_toml()).unwrap(), c, "round trip");
+        assert!(c.settings.is_game("hades") && !c.settings.is_game("obs"));
+        assert!(c.settings.never_first("OBS") && !c.settings.never_first("hades"));
+        assert!(
+            !Config::default().to_toml().contains("never_first"),
+            "empty lists stay out of the file"
+        );
+
+        c.settings.never_first = vec!["hades".into()];
+        assert!(c.validate().unwrap_err().to_string().contains("can't be"));
+        c.settings.never_first.clear();
+        c.settings.games = vec!["hades".into(), "HADES".into()];
+        assert!(c.validate().unwrap_err().to_string().contains("twice"));
+        c.settings.games = vec!["site:youtube".into()];
         assert!(c.validate().unwrap_err().to_string().contains("family id"));
     }
 

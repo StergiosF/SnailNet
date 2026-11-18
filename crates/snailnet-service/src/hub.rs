@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
+use snailnet_core::classify::{Pack, Resolver};
 use snailnet_core::modes;
 use snailnet_core::networks::Switch;
 use snailnet_core::rules::{
@@ -21,6 +22,7 @@ use snailnet_ipc::{
     AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, NameTick, ServiceState, SiteInfo,
     SiteTick, Snapshot, StatsTick,
 };
+use snailnet_win::process::{WinProcesses, windows_dir};
 use tokio::sync::broadcast;
 
 use crate::focus::{Focus, Proc};
@@ -43,12 +45,33 @@ pub struct Seen {
     pub names: Option<NameTick>,
 }
 
+/// A process's app family (`None`: unknown), for the focus overrides.
+type FamilyOf = Box<dyn FnMut(u32) -> Option<String> + Send>;
+
 pub struct Hub {
     dir: DataDir,
     signal: StopSignal,
     started: Instant,
     events: broadcast::Sender<Event>,
     inner: Mutex<Inner>,
+    /// Only asked when the window in front changes (debounced, rare).
+    family_of: Mutex<FamilyOf>,
+}
+
+/// Families as the shaper resolves them (same pack, same rules), with a
+/// resolver of its own built on first use.
+fn family_of_process() -> FamilyOf {
+    let mut found: Option<(Resolver, WinProcesses)> = None;
+    Box::new(move |pid| {
+        let (resolver, procs) = found.get_or_insert_with(|| {
+            (
+                Resolver::new(Pack::builtin(), &windows_dir()),
+                WinProcesses::new(),
+            )
+        });
+        let family = resolver.resolve(pid, procs).app.family;
+        (family != UNKNOWN_ID).then_some(family)
+    })
 }
 
 struct Inner {
@@ -71,7 +94,7 @@ impl Inner {
     /// the Gaming mode (§11.5).
     fn playing(&self) -> bool {
         self.config.settings.gaming_while_playing
-            && self.focus.has_games()
+            && self.focus.has_games(&self.config.settings)
             && self.config.profiles.iter().any(|p| p.id == modes::GAMING)
     }
 }
@@ -101,7 +124,14 @@ impl Hub {
                 speedtest: false,
                 focus: Focus::default(),
             }),
+            family_of: Mutex::new(family_of_process()),
         })
+    }
+
+    /// Resolve families with `f` instead (tests).
+    #[cfg(test)]
+    pub fn set_family_of(&self, f: impl FnMut(u32) -> Option<String> + Send + 'static) {
+        *self.family_of.lock().unwrap() = Box::new(f);
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -154,7 +184,7 @@ impl Hub {
             name = i.config.active().name.clone();
         }
         if i.config.settings.focus_boost && plan.shapes_anything() {
-            plan.focus = i.focus.pids();
+            plan.focus = i.focus.pids(&i.config.settings);
         }
         (plan, name)
     }
@@ -474,7 +504,12 @@ impl Hub {
     /// runs. Wakes the runner when what goes first changed.
     pub fn focus_changed(&self, pid: u32, is_game: bool) {
         let created = snailnet_win::process::created(pid);
-        let changed = self.lock().focus.changed(pid, is_game, created);
+        let family = (self.family_of.lock().unwrap_or_else(|e| e.into_inner()))(pid);
+        let changed = {
+            let mut i = self.lock();
+            let Inner { focus, config, .. } = &mut *i;
+            focus.changed(pid, is_game, created, family, &config.settings)
+        };
         if changed {
             self.signal.request_reload();
         }
@@ -482,7 +517,7 @@ impl Hub {
 
     /// Forget games that have exited; wakes the runner if any did.
     pub fn prune_focus(&self) {
-        if !self.lock().focus.has_games() {
+        if !self.lock().focus.tracks_games() {
             return;
         }
         let alive = |p: Proc| snailnet_win::process::created(p.pid) == Some(p.created);
@@ -774,6 +809,33 @@ mod tests {
         })
         .unwrap();
         assert!(hub.plan(0).0.focus.is_empty(), "switched off");
+    }
+
+    #[test]
+    fn the_users_overrides_decide_what_goes_first() {
+        let (_t, hub) = hub();
+        hub.set_family_of(|_| Some("hades".into()));
+        let me = std::process::id();
+        hub.change(hub.rev(), |c| {
+            c.line.down_mbps = Some(25.0);
+            c.settings.gaming_while_playing = true;
+            c.settings.games = vec!["Hades".into()];
+            Ok(())
+        })
+        .unwrap();
+        hub.focus_changed(me, false);
+        assert_eq!(hub.plan(0).0.focus, vec![me]);
+        assert_eq!(hub.plan(0).1, "Gaming", "a game by the user's word");
+
+        hub.change(hub.rev(), |c| {
+            c.settings.games.clear();
+            c.settings.never_first = vec!["hades".into()];
+            Ok(())
+        })
+        .unwrap();
+        assert!(hub.plan(0).0.focus.is_empty(), "never first");
+        assert_eq!(hub.plan(0).1, "Balanced", "nor a game any more");
+        assert!(!hub.latest_tick().playing);
     }
 
     #[test]

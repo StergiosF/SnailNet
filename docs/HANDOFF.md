@@ -44,10 +44,11 @@ session" below; do them whenever the user wants.
 1. ~~**Show the Gaming switch-over in the app**~~ **Done (2026-11-18):**
    `StatsTick.playing`; outlined "Playing" flag on Gaming + a note in the
    mode tiles and flyout (PLAN.md §11.5). Not seen in a real window.
-2. **Per-app overrides (§11.5):** "This is a game", "Never boost",
-   "Always High" on the app rows / rule editor; stored in config
-   (e.g. `[focus] games = [...]`, `never = [...]`) and honoured by the
-   app's `is_game` and the service's focus list.
+2. ~~**Per-app overrides (§11.5)**~~ **Done (2026-11-18):**
+   `[settings] games` / `never_first`, applied in the service (hub
+   resolves the focused PID's family); Boost menu items + "Your choices"
+   in Settings. "Always High" = a High-priority rule (exists). Not seen
+   in a real window.
 3. **Metered network note (§10.3):** `INetworkCostManager` / WinRT
    `ConnectionCost`; a note in Settings → Connection.
 4. Then Phase 5 (profiles/hotkey, new-app notifications, §11.4), Phase 6

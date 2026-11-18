@@ -104,6 +104,10 @@ export interface Settings {
   focus_boost: boolean;
   /** Use the Gaming mode while a game runs. */
   gaming_while_playing: boolean;
+  /** Families the user says are games (missing when none). */
+  games?: string[];
+  /** Families the user says never go first (missing when none). */
+  never_first?: string[];
 }
 
 export interface Config {

@@ -8,7 +8,7 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import { measureLine, resetAll, resetSplit } from "../actions";
+  import { measureLine, resetAll, resetSplit, setFirstChoice } from "../actions";
   import { stateKind } from "../format";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
@@ -61,6 +61,16 @@
   let focusing = $state(false);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
+  // The apps the user marked from their Boost menu (§11.5 overrides).
+  const choices = $derived.by(() => {
+    const s = service.snapshot?.config.settings;
+    const name = (id: string) =>
+      service.snapshot?.apps.find((a) => a.family.toLowerCase() === id.toLowerCase())?.name ?? id;
+    return [
+      ...(s?.games ?? []).map((id) => ({ id, name: name(id), kind: t("first.list.game") })),
+      ...(s?.never_first ?? []).map((id) => ({ id, name: name(id), kind: t("first.list.never") })),
+    ];
+  });
 
   async function setSetting(change: Partial<Settings>) {
     focusing = true;
@@ -197,6 +207,29 @@
         onchange={(e) => void setSetting({ gaming_while_playing: e.currentTarget.checked })}
       />
     </label>
+    {#if choices.length > 0}
+      <div class="item">
+        <div class="words">
+          <b>{t("first.list.title")}</b>
+          <span>{t("first.list.body")}</span>
+          <ul class="nets choices">
+            {#each choices as c (c.id)}
+              <li>
+                <span class="net">{c.name}</span>
+                <span>{c.kind}</span>
+                <button
+                  type="button"
+                  class="btn btn-quiet"
+                  disabled={!canEdit}
+                  aria-label={t("first.list.remove.label", { name: c.name })}
+                  onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
+                >
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </div>
+    {/if}
   </div>
 </section>
 
@@ -340,6 +373,13 @@
   }
   .nets .num {
     flex: none;
+  }
+  .choices li {
+    align-items: center;
+  }
+  .choices .net {
+    flex: 1;
+    min-width: 0;
   }
   .switch {
     appearance: none;
