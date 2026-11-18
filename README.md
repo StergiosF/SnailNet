@@ -118,14 +118,15 @@ with − and +, and Pause.
 | **Quiet downloads** | Downloads never slow anything else down. |
 
 Press **Ctrl+Alt+S** anywhere to step to the next mode (change the keys
-in Settings → Windows). With *Gaming mode while you play* on, SnailNet
+in Settings → Windows). With *Switch to Gaming while I play* on, SnailNet
 switches to Gaming when a game starts and back when it closes.
 
-**Settings** holds your connection speed (**Measure** or **Change**),
-other networks you use (each keeps its own speed), whether SnailNet
-follows your line automatically, whether what you're using goes first,
-start with Windows, a notice when an app goes online for the first time,
-and updates.
+**Settings** is grouped the way you'd look for things: your internet
+(speed, **Measure** or **Change**, the last speed test, other networks),
+games and the app you're using, new apps, Windows (start with Windows,
+the hotkey), version and updates, and starting over. When a new version
+is out, an **Update** button appears in the side bar; one click installs
+it.
 
 ### The words SnailNet uses
 
@@ -227,11 +228,14 @@ When you report a problem, the service's logs help: they're in
   in your own app data folder. Uninstalling can delete all of it.
 - **The only connections SnailNet makes itself:**
   - the update check, to GitHub (`github.com/StergiosF/SnailNet`
-    releases), only when you click Check for updates in Settings;
+    releases), when SnailNet starts, every six hours, and when you click
+    Check for updates in Settings. It only asks for the newest version
+    number; nothing installs until you click the update button;
   - the website and game lists, from the same GitHub releases, once a
     day (two small downloads, checked against SnailNet's signing key
     before use; kept in `C:\ProgramData\SnailNet\packs.toml`). Turn it
-    off in Settings → About → "Keep website and game lists up to date";
+    off in Settings → Version and updates → "Keep app and game lists up
+    to date";
   - the speed test, to Cloudflare (`speed.cloudflare.com`), only when
     you click Measure;
   - pings to your router and to `1.1.1.1` while SnailNet is shaping
