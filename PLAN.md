@@ -954,6 +954,19 @@ GitHub Actions on `windows-latest`: `cargo fmt --check`, `clippy -D warnings`, `
 | Rule change → effect | < 100 ms |
 | Cold start (service ready) | < 1 s after network stack is up |
 
+**Measured 2026-11-18** (release build, `run --console` elevated with a scratch data folder and pipe; 25/40 Mbps line typed, low-latency on; two curl copies `a.exe=40` / `b.exe=60` from Cloudflare; ICMP isn't diverted, so pings show the ISP buffer and TCP connect times show the shaper's own delay):
+
+| Metric | Result | Verdict |
+|---|---|---|
+| Cold start | pipe answering 77–223 ms after launch | met |
+| Service CPU | idle (monitor only) 0%; shaping a quiet line 0.6% of one core; **7.8% of one core at ~11 Mbps** | **not met**: ~80 µs per packet at ~1 000 pkts/s, so 300 Mbps would need far more than 3%. Phase 0 saw the same (~13% of one core at 21 Mbps). Profile the rx/scheduler loop next |
+| Service memory | 36 MB working set, 28 MB private, 199 handles (a few hundred flows, not 5 000) | met at this size |
+| Rule change → effect | IPC round trip 10 ms, "applied to the running shaper" (no restart); the split moving wasn't captured | likely met; not shown end to end |
+| Added latency, uncongested | TCP connect min 10.3 → 10.8 ms with shaping | inconclusive (the line's own jitter was far larger) |
+| Ping under load | inconclusive: the line was erratic that hour (idle ping avg 79 ms, max 229, before SnailNet ran; downloads 2–21 Mbps), so the shaper was never saturated and the split read ~50/50 | redo on a calm line |
+| Throughput ≥ 500 Mbps | not testable on a 25 Mbps line | open |
+| UI memory | not measured | open |
+
 ---
 
 ## 21. Roadmap and milestones

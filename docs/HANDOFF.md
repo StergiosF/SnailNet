@@ -19,12 +19,27 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 - Not seen in a real window or run in the real service. The switch
   follows the existing switches' markup; no impeccable pass for it.
 
+- **Later the same day (user's choices):** licence **GPL-3.0-or-later**
+  (`5dbfdb7`); the repo is **public**; the lists are **published**
+  (release `packs`, serial 202611181342, fetched back from the public URL
+  and checked with the real key). The app's own update feed still
+  answers 404 until a `v*` release is published.
+- **Perf run done** (PLAN.md §20 "Measured 2026-11-18"): cold start,
+  memory and idle CPU met; **CPU under load not met** (7.8% of one core
+  at ~11 Mbps); latency and split inconclusive (the line was erratic).
+  The old installed service in Program Files (stopped, manual) and the
+  user's `C:\ProgramData\SnailNet` were left alone.
+
 ### Next, in order
 
-1. Final perf run against §20 (needs the elevated real service).
-2. With the user: the real-service test ("First thing next session"
-   further down), VM installs, tag `v1.0.0`; making the repo public
-   (licence first), then `publish-packs.ps1 -Upload`.
+1. **Profile the shaping CPU** (§20): ~80 µs per packet. Look at the rx
+   loop, the scheduler thread's timer/polling and per-packet allocation
+   or locking. A synthetic load (`scripts/phase0-synthetic.ps1`) is
+   enough to measure before/after.
+2. Redo the latency/split part of the perf run on a calm line.
+3. With the user: the real-service test with the app ("First thing next
+   session" further down), clean Windows 10/11 VM installs, then tag
+   `v1.0.0` (publishing that release also makes the app updater live).
 
 ## Earlier: 2026-11-18, latest session
 
