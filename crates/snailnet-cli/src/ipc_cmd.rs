@@ -38,6 +38,7 @@ fn state_text(s: &ServiceState) -> String {
         ServiceState::Paused { until: None } => {
             "paused until resumed: not shaping or blocking".into()
         }
+        ServiceState::Measuring => "measuring the line speed (shaping off for ~20 s)".into(),
     }
 }
 
@@ -239,6 +240,37 @@ pub fn profile(pipe: &str, id: Option<String>) -> Result<()> {
     })?;
     println!("Switched to {id}.");
     Ok(())
+}
+
+/// Ask for a speed test and wait for its result.
+pub fn speedtest(pipe: &str) -> Result<()> {
+    let mut c = connect(pipe)?;
+    let before = snapshot(&mut c)?.config.line.measured.map(|m| m.at);
+    c.call(Request::RunSpeedTest)
+        .context("asking for a speed test")?;
+    println!("Measuring against Cloudflare (~20 s; shaping is off meanwhile)…");
+    let started = std::time::Instant::now();
+    let mut seen_measuring = false;
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let s = snapshot(&mut c)?;
+        let measuring = s.state == ServiceState::Measuring;
+        seen_measuring |= measuring;
+        let done = seen_measuring && !measuring;
+        if done || started.elapsed() > std::time::Duration::from_secs(60) {
+            match s.config.line.measured {
+                Some(m) if Some(m.at) != before => {
+                    println!("Down {} Mbps · up {} Mbps", m.down_mbps, m.up_mbps);
+                    if let (Some(i), Some(l)) = (m.idle_ms, m.loaded_ms) {
+                        println!("Ping {i} ms idle, {l} ms while downloading (without SnailNet)");
+                    }
+                    println!("Saved as the line speed.");
+                    return Ok(());
+                }
+                _ => bail!("the speed test didn't finish; see the service log"),
+            }
+        }
+    }
 }
 
 pub struct LineArgs {

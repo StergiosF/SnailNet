@@ -109,6 +109,25 @@ pub struct Line {
     /// adapt them. Absent = adapt.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned: Option<bool>,
+    /// The last speed test (§10.1); its speeds were saved as the typed ones.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measured: Option<Measured>,
+}
+
+/// What a speed test found (PLAN.md §10.1), run with shaping off.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Measured {
+    /// Unix seconds.
+    pub at: u64,
+    pub down_mbps: f64,
+    pub up_mbps: f64,
+    /// Ping to the public host before the test, ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_ms: Option<f64>,
+    /// Ping during the download, without SnailNet, ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loaded_ms: Option<f64>,
 }
 
 impl Line {

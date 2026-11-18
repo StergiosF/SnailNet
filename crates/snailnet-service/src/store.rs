@@ -39,13 +39,13 @@ pub struct Loaded {
 enum Read {
     Missing,
     Bad(RulesError),
-    Good(Config),
+    Good(Box<Config>),
 }
 
 fn read(path: &std::path::Path) -> io::Result<Read> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(match Config::parse(&text) {
-            Ok(c) => Read::Good(c),
+            Ok(c) => Read::Good(Box::new(c)),
             Err(e) => Read::Bad(e),
         }),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Read::Missing),
@@ -61,7 +61,7 @@ pub fn load(dir: &DataDir) -> io::Result<Loaded> {
     let primary = match read(&dir.config())? {
         Read::Good(config) => {
             return Ok(Loaded {
-                config,
+                config: *config,
                 source: Source::File,
                 problems,
             });
@@ -84,7 +84,7 @@ pub fn load(dir: &DataDir) -> io::Result<Loaded> {
         Read::Missing => true,
     };
     let (config, source) = match read(&dir.config_bak())? {
-        Read::Good(c) => (c, Source::Backup),
+        Read::Good(c) => (*c, Source::Backup),
         Read::Bad(e) => {
             problems.push(format!("config.toml.bak: {e}"));
             (Config::default(), Source::Default)

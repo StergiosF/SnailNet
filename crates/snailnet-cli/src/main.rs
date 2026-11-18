@@ -67,6 +67,9 @@ enum Command {
         #[arg(long, conflicts_with_all = ["down", "up", "factor"])]
         clear: bool,
     },
+    /// Measure the line against Cloudflare (~20 s, shaping off meanwhile)
+    /// and save the result as the line speed.
+    Speedtest,
     /// Live per-class rates. Ctrl+C to quit.
     Top {
         /// Updates per second (1–10).
@@ -119,6 +122,7 @@ fn main() -> anyhow::Result<()> {
                 clear,
             },
         ),
+        Command::Speedtest => ipc_cmd::speedtest(pipe),
         Command::Top { hz, count } => ipc_cmd::top(pipe, hz, count),
         Command::Check { seconds, max } => check::run(seconds, max),
         Command::Spike(args) => spike::run(args),

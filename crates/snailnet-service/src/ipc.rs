@@ -365,9 +365,8 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             blocked,
             rev,
         } => ack(hub.set_blocked(&family_id, blocked, rev)),
-        other @ (Request::FocusChanged { .. }
-        | Request::RunSpeedTest
-        | Request::AnswerPrompt { .. }) => err(
+        Request::RunSpeedTest => ack(hub.request_speedtest()),
+        other @ (Request::FocusChanged { .. } | Request::AnswerPrompt { .. }) => err(
             ErrorCode::Unsupported,
             format!("{} isn't available in this version", other.name()),
         ),
@@ -470,7 +469,7 @@ mod tests {
 
     #[test]
     fn invalid_and_unsupported_requests_are_refused() {
-        let (_t, _hub, server, pipe) = setup("refuse");
+        let (_t, hub, server, pipe) = setup("refuse");
         let mut c = Client::connect(&pipe, "t").unwrap();
         match c.call(Request::SwitchProfile {
             id: "nope".into(),
@@ -482,13 +481,24 @@ mod tests {
             }) => {}
             r => panic!("{r:?}"),
         }
-        match c.call(Request::RunSpeedTest) {
+        match c.call(Request::FocusChanged {
+            pid: 1,
+            is_game: false,
+            confidence: 0.0,
+        }) {
             Err(ClientError::Refused {
                 code: ErrorCode::Unsupported,
                 ..
             }) => {}
             r => panic!("{r:?}"),
         }
+        // A speed test is queued for the runner, which takes it.
+        assert!(matches!(
+            c.call(Request::RunSpeedTest),
+            Ok(Reply::Ack { rev: 1 })
+        ));
+        assert!(hub.take_speedtest());
+        assert!(!hub.take_speedtest());
         // Still usable afterwards.
         assert_eq!(snapshot(&mut c).rev, 1);
         server.stop();

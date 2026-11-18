@@ -4,6 +4,7 @@
 #![cfg(windows)]
 
 pub mod fs;
+pub mod http;
 pub mod ping;
 pub mod pipe;
 pub mod ports;

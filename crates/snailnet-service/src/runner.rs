@@ -27,6 +27,7 @@
 //! first, so the network is back to normal before the service reports
 //! Stopped.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -39,6 +40,7 @@ use tracing::{error, info, warn};
 use crate::autorate::{self, Autorate};
 use crate::crashguard::{self, CrashGuard};
 use crate::hub::{Hub, Seen};
+use crate::speedtest;
 use crate::store::{self, Source};
 
 /// Starts shaping for a plan. The real one is [`crate::shaper::WinEngine`].
@@ -289,6 +291,12 @@ fn supervise<E: Engine>(
             while stop.wait_any(Duration::from_secs(3600)) != Wake::Stop {}
             break Ended::StoppedInSafeMode;
         }
+        if hub.take_speedtest() {
+            if measure(hub, stop, now) == Wake::Stop {
+                break Ended::Stopped;
+            }
+            continue;
+        }
         hub.end_expired(now());
         let (plan, profile) = hub.plan(now());
         if !plan.needs_engine() {
@@ -330,6 +338,8 @@ fn supervise<E: Engine>(
                 let outcome = loop {
                     match stop.wait_any(timing.poll) {
                         Wake::Stop => break Outcome::Stop,
+                        // A speed test runs with shaping stopped.
+                        Wake::Reload if hub.speedtest_pending() => break Outcome::Reload,
                         Wake::Reload => {
                             autorate.follow(&hub.config());
                             let (plan, profile) = hub.plan_live(now(), autorate.live());
@@ -409,6 +419,46 @@ fn supervise<E: Engine>(
     };
     guard.clean_exit().context("clearing the running marker")?;
     Ok(ended)
+}
+
+/// Run the speed test (§10.1) with nothing shaped or blocked, and save
+/// its result as the line speed. A stop request cancels it.
+fn measure(hub: &Hub, stop: &StopSignal, now: &dyn Fn() -> u64) -> Wake {
+    hub.set_state(ServiceState::Measuring);
+    info!("speed test: measuring against Cloudflare with shaping off (~20 s)");
+    let cancel = Arc::new(AtomicBool::new(false));
+    let at = now();
+    let test = {
+        let cancel = cancel.clone();
+        std::thread::spawn(move || speedtest::run(&cancel, at))
+    };
+    while !test.is_finished() {
+        if stop.is_requested() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if stop.is_requested() {
+        let _ = test.join();
+        return Wake::Stop;
+    }
+    match test.join() {
+        Ok(Ok(m)) => {
+            info!(
+                "speed test: down {} Mbps, up {} Mbps; ping {} ms idle, {} ms loaded without SnailNet",
+                m.down_mbps,
+                m.up_mbps,
+                m.idle_ms.map_or("?".into(), |v| v.to_string()),
+                m.loaded_ms.map_or("?".into(), |v| v.to_string()),
+            );
+            if let Err((_, e)) = hub.record_measured(m) {
+                warn!("speed test: could not save the result: {e}");
+            }
+        }
+        Ok(Err(e)) => warn!("speed test failed: {e:#}"),
+        Err(_) => warn!("speed test failed: it crashed"),
+    }
+    Wake::Reload
 }
 
 /// Wait for a stop or a config change.

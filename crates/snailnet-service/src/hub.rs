@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use snailnet_core::classify::family::UNKNOWN_ID;
 use snailnet_core::modes;
-use snailnet_core::rules::{Boost, Config, Line, Pause, Plan, Rule, Target};
+use snailnet_core::rules::{Boost, Config, Line, Measured, Pause, Plan, Rule, Target};
 use snailnet_core::sites::SitePack;
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
@@ -56,6 +56,8 @@ struct Inner {
     tick: Option<StatsTick>,
     apps: Vec<AppInfo>,
     sites: Vec<(String, String)>,
+    /// A speed test was asked for and hasn't started yet.
+    speedtest: bool,
 }
 
 struct Sample {
@@ -80,6 +82,7 @@ impl Hub {
                 tick: None,
                 apps: Vec::new(),
                 sites: Vec::new(),
+                speedtest: false,
             }),
         })
     }
@@ -384,6 +387,53 @@ impl Hub {
     pub fn stop_boost(&self, rev: u64) -> Result<u64, Refusal> {
         self.change(rev, |c| {
             c.boost = None;
+            Ok(())
+        })
+    }
+
+    /// Ask for a speed test (§10.1); the runner runs it with shaping off.
+    /// Refused in Safe mode (nothing runs until a restart) and while one
+    /// is already running.
+    pub fn request_speedtest(&self) -> Result<u64, Refusal> {
+        let rev = {
+            let mut i = self.lock();
+            match i.state {
+                ServiceState::SafeMode { .. } => {
+                    return Err((
+                        ErrorCode::Invalid,
+                        "SnailNet is in Safe mode; restart the service first".into(),
+                    ));
+                }
+                ServiceState::Measuring => {
+                    return Err((ErrorCode::Invalid, "a speed test is already running".into()));
+                }
+                _ => {}
+            }
+            i.speedtest = true;
+            i.rev
+        };
+        self.signal.request_reload();
+        Ok(rev)
+    }
+
+    /// Whether a speed test is waiting to run.
+    pub fn speedtest_pending(&self) -> bool {
+        self.lock().speedtest
+    }
+
+    /// Take the waiting speed test, if any.
+    pub fn take_speedtest(&self) -> bool {
+        std::mem::take(&mut self.lock().speedtest)
+    }
+
+    /// Save a speed test's result: its speeds become the typed ones (a pin
+    /// stays as it was; the user asked to measure), with the record.
+    pub fn record_measured(&self, m: Measured) -> Result<u64, Refusal> {
+        let rev = self.rev();
+        self.change(rev, |c| {
+            c.line.down_mbps = Some(m.down_mbps);
+            c.line.up_mbps = Some(m.up_mbps);
+            c.line.measured = Some(m);
             Ok(())
         })
     }

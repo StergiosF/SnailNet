@@ -217,6 +217,8 @@ pub enum ServiceState {
     Paused {
         until: Option<u64>,
     },
+    /// Running a speed test (§10.1): shaping is off for its ~20 s.
+    Measuring,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -474,6 +476,7 @@ mod tests {
                     up_mbps: None,
                     factor: None,
                     pinned: None,
+                    measured: None,
                 },
                 rev: 1,
             },
