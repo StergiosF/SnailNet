@@ -51,11 +51,12 @@ priorities and absolute limits and make the user do the arithmetic.
 - Rules target an app family (`steam`, `brave`) or a site (`youtube`); a
   site rule applies in every app and beats the app's rule.
 - Everything else keeps a 5% floor. Priorities: High · Normal · Low.
-- Line speed is set by hand today; the speed test and estimator are
-  Phase 4. Modes (four built-in profiles), Boost, Pause and blocking an
-  app are built; notifications, hotkeys and the speed test are not.
-  `RunSpeedTest`, `FocusChanged`, `AnswerPrompt` answer Unsupported.
-- Service states the UI must show: Starting, Shaping, Unshaped (no line
+- Line speed: typed, or measured by the speed test (Cloudflare, ~20 s,
+  shaping off meanwhile), then followed live by the estimator from the
+  ping (unless pinned). Modes (four built-in profiles), Boost, Pause and
+  blocking an app are built; notifications, hotkeys and per-network
+  speeds are not. `FocusChanged`, `AnswerPrompt` answer Unsupported.
+- Service states the UI must show: Starting, Shaping, Measuring, Unshaped (no line
   speed), Retrying (failed open), Safe mode, Paused, not running.
 - Some HTTPS traffic can't be named (ECH, no SNI): "unidentified", shown
   honestly, never hidden.

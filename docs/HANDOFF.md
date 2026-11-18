@@ -22,10 +22,17 @@ Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
   **Not yet tried on the real line**: the dev service in `target\debug`
   was running (exe locked), so it still has the old build. To try:
   stop it (elevated), `cargo build -p snailnet-service`, run it again,
-  start a big download and watch the log. **Next:** the speed test
-  (`RunSpeedTest`: HTTP client + TLS, Cloudflare, its flows not shaped,
-  consent, result per network), then the UI (Settings → Connection,
-  adapting on/off = pinned, "Ping under load").
+  start a big download and watch the log.
+- **Speed test built (2026-11-18, 45d6123 + dc55e46):** service runs it
+  with shaping off (state `Measuring`), saves `[line.measured]` and the
+  speeds; app: Measure in first run and Settings → Connection, the ping
+  readout, "Follow the line automatically" (= not pinned). CLI
+  `snailnet speedtest`. Measured once by test: 22.0 / 25.7 Mbps, 11 / 40
+  ms (dev service was shaping down). **Needs a service rebuild** to try
+  (exe locked, see above). **Next in Phase 4:** speeds per network
+  (§10.3: key by network GUID / SSID + gateway MAC), then focus boost
+  (foreground hook, game detection). Phase 4 exit: ping under load
+  within +10 ms on your line; games boosted automatically.
 
 ## Start here (2026-11-17)
 

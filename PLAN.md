@@ -451,6 +451,8 @@ Dragging the split bar sends new weights over IPC (debounced 50 ms). The schedul
 
 At first run (with clear consent text): a ~10 s speed test.
 
+- **Built (2026-11-18):** `RunSpeedTest` queues it; the runner stops shaping (state `Measuring`), runs `speedtest.rs` (WinHTTP, `snailnet-win::http`: 6 download / 4 upload connections × 8 s, the 90th percentile of 1 s rates after 2 s warm-up, ping to 1.1.1.1 idle and during the download) and saves the result as the line speed with `[line.measured]`. About 20 s in all. The app offers it in first run ("Measure my connection", the consent being the button and the Cloudflare line above it) and Settings → Connection (Measure; last result; "Ping while downloading"). CLI: `snailnet speedtest`. The reply is an Ack, not the progress/result messages sketched in §12; the result arrives as a config change. Not yet: results per network (§10.3).
+
 - Endpoints: configurable list; default **Cloudflare** (`speed.cloudflare.com`, `__down?bytes=` / `__up`), the user's choice 2026-11-18. Run with 4–8 parallel connections, take the 90th-percentile throughput of the last 6 s.
 - The test flows are excluded from shaping.
 - **Offline / blocked:** fall back to the passive estimate (§10.2) and ask the user to type the speed if they want precision now.
@@ -672,7 +674,7 @@ Main window, default 1120 × 740, min 840 × 560, custom title bar (Tauri `decor
 - **Now:** "What matters right now?"; four mode tiles (radios); "Using your internet": who moves data, busiest first, each with its status in words and a Boost menu (1 h · 4 h · until I stop it · Block its internet for apps); blocked apps with Unblock; "The split": the mode's shares as one bar and a line each, how many take only what's free, Fine-tune (→ Split) and Reset split (with Undo); at the bottom the sentence on who uses the most and whether anyone is waiting (`ledger.ts` `glance`).
 - **Split:** "{Mode} split" with Reset split; the live strip; the slices (the former Ledger rows: icon · name · Mbps and status in words · a thin bar · − % +; settings in place: Goes first, Only when the line is free, a speed limit, Remove; Everything else with its apps and "Give it a slice"); quiet "only when free" rules fold into one row that opens; Add a slice.
 - **Settings:** §14.6.
-- **Not built yet, so not shown:** speed test, ping, notifications, hotkeys.
+- **Not built yet, so not shown:** notifications, hotkeys. (Speed test and ping readout: Settings → Connection, 2026-11-18.)
 
 ### 14.3 Changing a share
 
