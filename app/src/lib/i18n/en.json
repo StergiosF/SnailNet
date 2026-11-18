@@ -253,7 +253,6 @@
   "settings.apps": "New apps",
   "sidebar.update.available": "Update to {version}",
   "sidebar.update.installing": "Updating…",
-  "sidebar.update.none": "Up to date",
   "settings.windows": "Windows",
   "settings.autostart": "Start with Windows",
   "settings.autostart.body": "SnailNet starts quietly in the tray.",
