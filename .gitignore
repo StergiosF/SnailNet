@@ -4,3 +4,6 @@ node_modules/
 *.pcapng
 app/dist/
 app/src-tauri/gen/
+
+# Design-skill scratch (impeccable)
+.impeccable/
