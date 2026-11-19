@@ -1,11 +1,14 @@
-//! "Start SnailNet" on the not-running notice (PLAN.md §14.8): ask Windows
-//! to start the service, elevated. Starting a service needs admin rights,
-//! so this runs `sc.exe start SnailNet` through the UAC prompt; the bridge
-//! reconnects by itself once the service answers.
+//! Starting a stopped service (PLAN.md §14.8). The installer lets signed-in
+//! users start SnailNet (only start it), so the app starts it by itself when
+//! it opens and finds it stopped, with no prompt. "Start SnailNet" on the
+//! not-running notice tries the same first, then falls back to `sc.exe start
+//! SnailNet` through the UAC prompt (for installs older than 0.0.5). The
+//! bridge reconnects by itself once the service answers.
 
 use serde::Serialize;
 use windows::Win32::System::Services::{
     CloseServiceHandle, OpenSCManagerW, OpenServiceW, SC_MANAGER_CONNECT, SERVICE_QUERY_STATUS,
+    SERVICE_START, StartServiceW,
 };
 use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
 use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
@@ -45,6 +48,40 @@ fn installed() -> bool {
     }
 }
 
+/// ERROR_SERVICE_ALREADY_RUNNING.
+const ALREADY_RUNNING: u32 = 1056;
+
+/// Starts the service without elevation. Works when the installer granted
+/// users the right to start it; fails with access denied on older installs,
+/// and with "does not exist" in a dev build.
+fn start_plain() -> windows::core::Result<()> {
+    // SAFETY: plain Win32 calls; every handle opened here is closed here.
+    unsafe {
+        let scm = OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), SC_MANAGER_CONNECT)?;
+        let result = match OpenServiceW(scm, &HSTRING::from(SERVICE_NAME), SERVICE_START) {
+            Ok(svc) => {
+                let r = StartServiceW(svc, None);
+                let _ = CloseServiceHandle(svc);
+                r
+            }
+            Err(e) => Err(e),
+        };
+        let _ = CloseServiceHandle(scm);
+        match result {
+            Err(e) if e.code() == HRESULT::from_win32(ALREADY_RUNNING) => Ok(()),
+            r => r,
+        }
+    }
+}
+
+/// On app start: if SnailNet is installed but stopped, start it, quietly.
+/// Whatever fails just leaves the not-running notice and its button.
+pub fn start_if_stopped() {
+    std::thread::spawn(|| {
+        let _ = start_plain();
+    });
+}
+
 /// ERROR_CANCELLED: the UAC prompt was declined.
 const ERROR_CANCELLED: u32 = 1223;
 
@@ -53,6 +90,9 @@ pub async fn start_service() -> StartOutcome {
     tauri::async_runtime::spawn_blocking(|| {
         if !installed() {
             return StartOutcome::NotInstalled;
+        }
+        if start_plain().is_ok() {
+            return StartOutcome::Asked;
         }
         let params = HSTRING::from(format!("start {SERVICE_NAME}"));
         let mut info = SHELLEXECUTEINFOW {

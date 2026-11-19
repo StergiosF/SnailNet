@@ -159,6 +159,8 @@ pub fn run() {
         .manage(shared.clone())
         .manage(icon::Icons::default())
         .setup(move |app| {
+            // A stopped SnailNet comes back as the app opens (no prompt).
+            service_start::start_if_stopped();
             // Before the tray, so its "Start with Windows" check is current.
             autostart::setup(app);
             tray::setup(app)?;

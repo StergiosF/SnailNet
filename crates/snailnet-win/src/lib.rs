@@ -10,4 +10,5 @@ pub mod ping;
 pub mod pipe;
 pub mod ports;
 pub mod process;
+pub mod service;
 pub mod timer;

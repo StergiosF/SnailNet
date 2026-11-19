@@ -3,7 +3,8 @@
 //! Install registers the service `SnailNet` to run this exe as LocalSystem,
 //! started automatically at boot, with recovery actions *restart after 5 s,
 //! restart after 30 s, then stop* (also on a non-crash failure exit), an
-//! unrestricted service SID, and creates the protected data folder. Running
+//! unrestricted service SID, lets signed-in users start (only start) it,
+//! and creates the protected data folder. Running
 //! it again updates the registration in place (for upgrades).
 
 use std::ffi::OsString;
@@ -87,6 +88,10 @@ pub fn install() -> Result<()> {
     service.set_failure_actions_on_non_crash_failures(true)?;
     service.set_config_service_sid_info(ServiceSidType::Unrestricted)?;
     service.set_delayed_auto_start(false)?;
+    // Signed-in users may start it (not stop or change it), so the app can
+    // bring back a stopped SnailNet without a UAC prompt.
+    snailnet_win::service::set_dacl(SERVICE_NAME, snailnet_win::service::USERS_MAY_START_SDDL)
+        .context("letting users start the service")?;
 
     let dir = DataDir::system();
     dir.create_protected()
