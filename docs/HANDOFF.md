@@ -2,6 +2,25 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
+## v0.0.5 (2026-11-19): SnailNet starts by itself, no right-click menu
+
+- The installed service had stopped silently on 2026-11-19 at 02:45
+  (log cut off mid-run, `running` marker left, no SCM crash/stop event,
+  so recovery actions never fired; cause unknown). The app then showed
+  "SnailNet isn't running" and needed UAC to start it.
+- Fix: `snailnet-service install` sets the service DACL
+  (`snailnet_win::service::USERS_MAY_START_SDDL`: interactive users may
+  start, not stop/change); the app calls `StartServiceW` unelevated on
+  launch (`service_start::start_if_stopped`) and from "Start SnailNet"
+  before falling back to UAC.
+- WebView2's context menu is off in release builds (`app/src/main.ts`),
+  except in text fields.
+- **Not seen running:** the DACL against the real SCM, and the quiet
+  start; both happen when the user's 0.0.4 updates to 0.0.5.
+- Still open: why the service died at 02:45 without a trace. If it
+  happens again, check `crashes.txt`, the last log lines and
+  Application/System events at that minute.
+
 ## v0.0.4 (2026-11-19): Calls go first
 
 **Released as v0.0.4 untested live** (user's choice, 2026-11-19). README
