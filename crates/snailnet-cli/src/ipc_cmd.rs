@@ -3,11 +3,12 @@
 //! rights: the pipe lets interactive users in.
 
 use anyhow::{Context, Result, bail};
+use snailnet_core::proof;
 use snailnet_core::rules::{Config, Line, OTHER_CLASS, Profile, Rule, Target};
 use snailnet_core::scheduler::{Priority, shares};
 use snailnet_ipc::{
-    Client, FamilyTick, NameTick, Reply, Request, ServerMsg, ServiceState, SiteTick, Snapshot,
-    StatsTick,
+    Client, FamilyTick, NameTick, PingTick, Reply, Request, ServerMsg, ServiceState, SiteTick,
+    Snapshot, StatsTick,
 };
 
 fn connect(pipe: &str) -> Result<Client> {
@@ -242,13 +243,22 @@ pub fn profile(pipe: &str, id: Option<String>) -> Result<()> {
     Ok(())
 }
 
+/// The grades (§11.10) for how far ping rose while downloading.
+fn print_grades(idle: Option<f64>, without: Option<f64>, with: Option<f64>) {
+    for (name, loaded) in [("Without SnailNet", without), ("With SnailNet", with)] {
+        if let Some(r) = proof::rise(idle, loaded) {
+            println!("{name:<17} {:?}  ping rose {r:.0} ms", proof::grade(r));
+        }
+    }
+}
+
 /// Ask for a speed test and wait for its result.
 pub fn speedtest(pipe: &str) -> Result<()> {
     let mut c = connect(pipe)?;
     let before = snapshot(&mut c)?.config.line.measured.map(|m| m.at);
     c.call(Request::RunSpeedTest)
         .context("asking for a speed test")?;
-    println!("Measuring against Cloudflare (~20 s; shaping is off meanwhile)…");
+    println!("Measuring against Cloudflare (~20 s; shaping is off meanwhile), then with SnailNet…");
     let started = std::time::Instant::now();
     let mut seen_measuring = false;
     loop {
@@ -261,10 +271,32 @@ pub fn speedtest(pipe: &str) -> Result<()> {
             match s.config.line.measured {
                 Some(m) if Some(m.at) != before => {
                     println!("Down {} Mbps · up {} Mbps", m.down_mbps, m.up_mbps);
+                    println!("Saved as the line speed.");
                     if let (Some(i), Some(l)) = (m.idle_ms, m.loaded_ms) {
                         println!("Ping {i} ms idle, {l} ms while downloading (without SnailNet)");
                     }
-                    println!("Saved as the line speed.");
+                    if let (Some(i), Some(u)) = (m.idle_ms, m.loaded_up_ms) {
+                        println!("Ping {i} ms idle, {u} ms while uploading (without SnailNet)");
+                    }
+                    // The check with SnailNet follows once shaping is back (§11.10).
+                    println!("Checking ping with SnailNet (~10 s)…");
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+                    while std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        let Some(now) = snapshot(&mut c)?.config.line.measured else {
+                            break;
+                        };
+                        if now.at != m.at {
+                            break;
+                        }
+                        if let Some(w) = now.with_ms {
+                            println!("Ping {w} ms while downloading with SnailNet");
+                            print_grades(now.idle_ms, now.loaded_ms, Some(w));
+                            return Ok(());
+                        }
+                    }
+                    println!("The check with SnailNet didn't finish; see the service log.");
+                    print_grades(m.idle_ms, m.loaded_ms, None);
                     return Ok(());
                 }
                 _ => bail!("the speed test didn't finish; see the service log"),
@@ -350,6 +382,14 @@ fn print_tick(t: &StatsTick) {
     if !t.calls.is_empty() {
         println!("{:>12}calls: {}", "", t.calls.join(", "));
     }
+    if let Some(p) = &t.ping {
+        println!("{:>12}{}", "", ping_line(p));
+    }
+}
+
+/// The line's ping now (§11.10): `ping: 19 ms (lowest 12 ms)`.
+fn ping_line(p: &PingTick) -> String {
+    format!("ping: {:.0} ms (lowest {:.0} ms)", p.now_ms, p.low_ms)
 }
 
 /// How the tick's packets got their site names, when any were named:
@@ -474,6 +514,15 @@ mod tests {
                 .unwrap()
                 .starts_with("App0 7.00, App1 6.00 (0.25 unidentified), App2")
         );
+    }
+
+    #[test]
+    fn ping_line_shows_now_and_the_lowest() {
+        let p = PingTick {
+            now_ms: 19.4,
+            low_ms: 12.0,
+        };
+        assert_eq!(ping_line(&p), "ping: 19 ms (lowest 12 ms)");
     }
 
     #[test]

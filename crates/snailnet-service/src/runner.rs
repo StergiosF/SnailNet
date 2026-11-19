@@ -29,7 +29,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use snailnet_core::rules::Plan;
@@ -148,6 +149,10 @@ impl StopSignal {
     }
 }
 
+/// The "with SnailNet" check (§11.10): download while shaping and return
+/// the median ping meanwhile. [`speedtest::check`] in the service.
+pub type CheckFn = fn(&AtomicBool) -> Result<Option<f64>>;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
     /// How often to check for a fail-open and publish stats.
@@ -165,6 +170,12 @@ pub struct Timing {
     /// Fetch newer signed packs once a day (§17.2). Off in tests, which
     /// must not reach the internet.
     pub fetch_packs: bool,
+    /// The "with SnailNet" check after a speed test (§11.10). `None` in
+    /// tests unless one injects a fake.
+    pub check: Option<CheckFn>,
+    /// How long shaping runs before the check starts, so the plan has
+    /// settled at the new speed.
+    pub check_after: Duration,
 }
 
 impl Default for Timing {
@@ -176,12 +187,70 @@ impl Default for Timing {
             autorate: true,
             watch_network: true,
             fetch_packs: true,
+            check: Some(speedtest::check),
+            check_after: CHECK_AFTER,
         }
     }
 }
 
 /// How often the live line speed takes a step (the estimator's 1 s tick).
 const RATE_EVERY: Duration = Duration::from_secs(1);
+/// Shaping runs this long before the "with SnailNet" check starts.
+const CHECK_AFTER: Duration = Duration::from_secs(2);
+
+/// A running "with SnailNet" check (§11.10).
+struct Check {
+    /// The `measured.at` it belongs to.
+    at: u64,
+    /// The network it started on (§10.3).
+    network: Option<String>,
+    cancel: Arc<AtomicBool>,
+    thread: JoinHandle<Result<Option<f64>>>,
+}
+
+impl Check {
+    fn start(f: CheckFn, at: u64, network: Option<String>) -> Self {
+        info!("speed test: checking ping with SnailNet (~10 s)");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let thread = {
+            let cancel = cancel.clone();
+            std::thread::spawn(move || f(&cancel))
+        };
+        Self {
+            at,
+            network,
+            cancel,
+            thread,
+        }
+    }
+
+    /// Ask it to stop; the thread ends by itself (a download can take until
+    /// its phase ends), and nothing it finds is recorded.
+    fn cancel(self, why: &str) -> JoinHandle<Result<Option<f64>>> {
+        info!("speed test: ping check with SnailNet cancelled ({why})");
+        self.cancel.store(true, Ordering::Relaxed);
+        self.thread
+    }
+
+    /// Record a finished check's ping, if it's still for the last test on
+    /// this network.
+    fn finish(self, hub: &Hub) {
+        let network = hub.config().network.map(|n| n.id);
+        match self.thread.join() {
+            Ok(Ok(Some(ms))) if network == self.network => match hub.record_check(self.at, ms) {
+                Ok(true) => info!("speed test: ping {ms} ms loaded with SnailNet"),
+                Ok(false) => {
+                    info!("speed test: ping check finished after a newer speed; not saved")
+                }
+                Err((_, e)) => warn!("speed test: could not save the ping check: {e}"),
+            },
+            Ok(Ok(Some(_))) => info!("speed test: the network changed during the ping check"),
+            Ok(Ok(None)) => info!("speed test: no ping came back during the check with SnailNet"),
+            Ok(Err(e)) => warn!("speed test: ping check with SnailNet failed: {e:#}"),
+            Err(_) => warn!("speed test: ping check with SnailNet crashed"),
+        }
+    }
+}
 
 /// The stats polls of one second, averaged per direction.
 #[derive(Default)]
@@ -293,6 +362,9 @@ fn supervise<E: Engine>(
     now: &dyn Fn() -> u64,
 ) -> Result<Ended> {
     let stop = hub.signal();
+    // A cancelled check still finishing: the next waits for it, so two
+    // downloads never overlap.
+    let mut draining: Option<JoinHandle<Result<Option<f64>>>> = None;
     let ended = loop {
         if stop.is_requested() {
             break Ended::Stopped;
@@ -357,6 +429,10 @@ fn supervise<E: Engine>(
                 autorate.follow(&hub.config());
                 let mut since_rate = Duration::ZERO;
                 let mut moved = Moved::default();
+                // The "with SnailNet" check (§11.10) measures the download.
+                let started = Instant::now();
+                let down_shaped = plan.down.is_some();
+                let mut check: Option<Check> = None;
                 let outcome = loop {
                     match stop.wait_any(timing.poll) {
                         Wake::Stop => break Outcome::Stop,
@@ -368,7 +444,21 @@ fn supervise<E: Engine>(
                             break Outcome::Reload;
                         }
                         Wake::Reload => {
-                            autorate.follow(&hub.config());
+                            let config = hub.config();
+                            if let Some(c) = check.take() {
+                                let network = config.network.as_ref().map(|n| n.id.clone());
+                                let at = config.line.measured.as_ref().map(|m| m.at);
+                                check = if network != c.network {
+                                    draining = Some(c.cancel("the network changed"));
+                                    None
+                                } else if at != Some(c.at) {
+                                    draining = Some(c.cancel("a newer speed"));
+                                    None
+                                } else {
+                                    Some(c)
+                                };
+                            }
+                            autorate.follow(&config);
                             let (plan, profile) = hub.plan_live(now(), autorate.live());
                             if !plan.needs_engine() {
                                 break Outcome::Reload;
@@ -392,6 +482,20 @@ fn supervise<E: Engine>(
                     if let Some(f) = running.failure() {
                         break Outcome::Failed(f);
                     }
+                    if check.as_ref().is_some_and(|c| c.thread.is_finished()) {
+                        check.take().unwrap().finish(hub);
+                    }
+                    if check.is_none()
+                        && down_shaped
+                        && started.elapsed() >= timing.check_after
+                        && draining.as_ref().is_none_or(JoinHandle::is_finished)
+                        && let Some(f) = timing.check
+                        && let Some(at) = hub.take_check()
+                    {
+                        draining = None;
+                        let network = hub.config().network.map(|n| n.id);
+                        check = Some(Check::start(f, at, network));
+                    }
                     if let Some(s) = running.sample() {
                         hub.publish(&s, Some(running.seen()));
                         moved.add(hub.moved_bps());
@@ -406,6 +510,7 @@ fn supervise<E: Engine>(
                                 autorate::log_live(live);
                             }
                         }
+                        hub.set_ping(autorate.ping());
                     }
                     since_report += timing.poll;
                     if since_report >= timing.report_every {
@@ -413,6 +518,19 @@ fn supervise<E: Engine>(
                         since_report = Duration::ZERO;
                     }
                 };
+                if let Some(c) = check.take() {
+                    let at = c.at;
+                    let why = match outcome {
+                        Outcome::Stop => "stopping",
+                        Outcome::Reload => "shaping restarts",
+                        Outcome::Failed(_) => "shaping failed",
+                    };
+                    draining = Some(c.cancel(why));
+                    // Once shaping is back (same test, same network), again.
+                    if matches!(outcome, Outcome::Reload) && hub.measured_at() == Some(at) {
+                        hub.retry_check(at);
+                    }
+                }
                 let failure = running.stop();
                 hub.clear_stats();
                 match (outcome, failure) {
@@ -453,7 +571,7 @@ fn supervise<E: Engine>(
 /// its result as the line speed. A stop request cancels it.
 fn measure(hub: &Hub, stop: &StopSignal, now: &dyn Fn() -> u64) -> Wake {
     hub.set_state(ServiceState::Measuring);
-    info!("speed test: measuring against Cloudflare with shaping off (~20 s)");
+    info!("speed test: measuring against Cloudflare with shaping off (~20 s), then with SnailNet");
     let cancel = Arc::new(AtomicBool::new(false));
     let at = now();
     let test = {
@@ -473,11 +591,13 @@ fn measure(hub: &Hub, stop: &StopSignal, now: &dyn Fn() -> u64) -> Wake {
     match test.join() {
         Ok(Ok(m)) => {
             info!(
-                "speed test: down {} Mbps, up {} Mbps; ping {} ms idle, {} ms loaded without SnailNet",
+                "speed test: down {} Mbps, up {} Mbps; ping {} ms idle, {} ms loaded without \
+                 SnailNet ({} ms uploading)",
                 m.down_mbps,
                 m.up_mbps,
-                m.idle_ms.map_or("?".into(), |v| v.to_string()),
-                m.loaded_ms.map_or("?".into(), |v| v.to_string()),
+                ms(m.idle_ms),
+                ms(m.loaded_ms),
+                ms(m.loaded_up_ms),
             );
             if let Err((_, e)) = hub.record_measured(m) {
                 warn!("speed test: could not save the result: {e}");
@@ -487,6 +607,10 @@ fn measure(hub: &Hub, stop: &StopSignal, now: &dyn Fn() -> u64) -> Wake {
         Err(_) => warn!("speed test failed: it crashed"),
     }
     Wake::Reload
+}
+
+fn ms(v: Option<f64>) -> String {
+    v.map_or("?".into(), |v| v.to_string())
 }
 
 /// Wait for a stop or a config change.
@@ -626,6 +750,17 @@ mod tests {
             autorate: false,
             watch_network: false,
             fetch_packs: false,
+            check: None,
+            check_after: Duration::ZERO,
+        }
+    }
+
+    /// [`fast`] with a fake "with SnailNet" check.
+    fn checking(f: CheckFn) -> Timing {
+        Timing {
+            check: Some(f),
+            check_after: Duration::from_millis(5),
+            ..fast()
         }
     }
 
@@ -670,12 +805,23 @@ mod tests {
         now: impl Fn() -> u64 + Send + 'static,
         during: impl FnOnce(&Hub),
     ) -> (Result<Ended>, Fake) {
+        run_timed(d, engine, fast(), now, during)
+    }
+
+    /// [`run_with_clock`] with its own timing.
+    fn run_timed(
+        d: &DataDir,
+        engine: Fake,
+        timing: Timing,
+        now: impl Fn() -> u64 + Send + 'static,
+        during: impl FnOnce(&Hub),
+    ) -> (Result<Ended>, Fake) {
         let hub = Hub::new(d.clone(), StopSignal::new());
         let h = {
             let hub = hub.clone();
             std::thread::spawn(move || {
                 let mut engine = engine;
-                let r = run(&hub, &mut engine, fast(), &now);
+                let r = run(&hub, &mut engine, timing, &now);
                 (r, engine)
             })
         };
@@ -908,6 +1054,146 @@ mod tests {
         let r = run(&hub, &mut f, fast(), &|| 1_000).unwrap();
         assert_eq!(r, Ended::Stopped);
         assert_eq!(f.live.load(Ordering::SeqCst), 0);
+    }
+
+    fn measured(at: u64) -> snailnet_core::rules::Measured {
+        snailnet_core::rules::Measured {
+            at,
+            down_mbps: 24.6,
+            up_mbps: 4.8,
+            idle_ms: Some(12.0),
+            loaded_ms: Some(142.0),
+            loaded_up_ms: None,
+            with_ms: None,
+        }
+    }
+
+    fn saved_with_ms(d: &DataDir) -> Option<f64> {
+        store::load(d).unwrap().config.line.measured?.with_ms
+    }
+
+    /// Wait (up to 5 s) for the cancel flag or `release`; a check that was
+    /// let go finds 21 ms.
+    fn blocking_check(cancel: &AtomicBool, release: &AtomicBool) -> Result<Option<f64>> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            if cancel.load(Ordering::SeqCst) {
+                anyhow::bail!("cancelled");
+            }
+            if release.load(Ordering::SeqCst) {
+                return Ok(Some(21.0));
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        anyhow::bail!("never released")
+    }
+
+    #[test]
+    fn the_check_records_the_ping_with_snailnet() {
+        fn check(_: &AtomicBool) -> Result<Option<f64>> {
+            Ok(Some(21.0))
+        }
+        let (_t, d) = setup(true);
+        let (r, _) = run_timed(
+            &d,
+            fake(&[]),
+            checking(check),
+            || 1_000,
+            |hub| {
+                eventually(|| hub.state() == ServiceState::Shaping);
+                hub.record_measured(measured(1_000)).unwrap();
+                eventually(|| hub.config().line.measured.and_then(|m| m.with_ms) == Some(21.0));
+            },
+        );
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(saved_with_ms(&d), Some(21.0));
+    }
+
+    #[test]
+    fn a_stop_cancels_the_check_with_nothing_recorded() {
+        static STARTED: AtomicBool = AtomicBool::new(false);
+        static CANCELLED: AtomicBool = AtomicBool::new(false);
+        static NEVER: AtomicBool = AtomicBool::new(false);
+        fn check(cancel: &AtomicBool) -> Result<Option<f64>> {
+            STARTED.store(true, Ordering::SeqCst);
+            let r = blocking_check(cancel, &NEVER);
+            CANCELLED.store(cancel.load(Ordering::SeqCst), Ordering::SeqCst);
+            r
+        }
+        let (_t, d) = setup(true);
+        let (r, f) = run_timed(
+            &d,
+            fake(&[]),
+            checking(check),
+            || 1_000,
+            |hub| {
+                eventually(|| hub.state() == ServiceState::Shaping);
+                hub.record_measured(measured(1_000)).unwrap();
+                eventually(|| STARTED.load(Ordering::SeqCst));
+            },
+        );
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(f.live.load(Ordering::SeqCst), 0);
+        eventually(|| CANCELLED.load(Ordering::SeqCst));
+        assert_eq!(saved_with_ms(&d), None);
+    }
+
+    #[test]
+    fn a_newer_speed_wins_over_a_running_check() {
+        static STARTS: AtomicUsize = AtomicUsize::new(0);
+        static RELEASE: AtomicBool = AtomicBool::new(false);
+        fn check(cancel: &AtomicBool) -> Result<Option<f64>> {
+            STARTS.fetch_add(1, Ordering::SeqCst);
+            blocking_check(cancel, &RELEASE)
+        }
+        let (_t, d) = setup(true);
+        let (r, _) = run_timed(
+            &d,
+            fake(&[]),
+            checking(check),
+            || 1_000,
+            |hub| {
+                eventually(|| hub.state() == ServiceState::Shaping);
+                hub.record_measured(measured(100)).unwrap();
+                eventually(|| STARTS.load(Ordering::SeqCst) == 1);
+                // A newer test while the first check runs: that one is cancelled,
+                // and the check runs again for the newer test.
+                hub.record_measured(measured(200)).unwrap();
+                eventually(|| STARTS.load(Ordering::SeqCst) == 2);
+                RELEASE.store(true, Ordering::SeqCst);
+                eventually(|| hub.config().line.measured.and_then(|m| m.with_ms).is_some());
+            },
+        );
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        let m = store::load(&d).unwrap().config.line.measured.unwrap();
+        assert_eq!((m.at, m.with_ms), (200, Some(21.0)));
+    }
+
+    #[test]
+    fn no_check_while_the_download_isnt_shaped() {
+        static STARTS: AtomicUsize = AtomicUsize::new(0);
+        fn check(_: &AtomicBool) -> Result<Option<f64>> {
+            STARTS.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(21.0))
+        }
+        let (_t, d) = setup(false);
+        let mut c = store::load(&d).unwrap().config;
+        c.line.up_mbps = Some(10.0);
+        store::save(&d, &c).unwrap();
+        let (r, _) = run_timed(
+            &d,
+            fake(&[]),
+            checking(check),
+            || 1_000,
+            |hub| {
+                eventually(|| hub.state() == ServiceState::Shaping);
+                hub.retry_check(1_000);
+                std::thread::sleep(Duration::from_millis(50));
+                assert_eq!(hub.take_check(), Some(1_000), "still waiting");
+            },
+        );
+        assert_eq!(r.unwrap(), Ended::Stopped);
+        assert_eq!(STARTS.load(Ordering::SeqCst), 0);
     }
 
     #[test]

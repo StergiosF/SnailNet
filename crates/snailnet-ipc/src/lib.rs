@@ -375,6 +375,21 @@ pub struct StatsTick {
     /// §11.9). Empty from a service that doesn't report it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub calls: Vec<String>,
+    /// The line's ping now (PLAN.md §11.10), while shaping and the line is
+    /// busy. `None` when the line is quiet, ICMP is blocked, or from a
+    /// service that doesn't report it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ping: Option<PingTick>,
+}
+
+/// The ping to 1.1.1.1 while the line is busy (PLAN.md §11.10). Pings skip
+/// SnailNet's own queues, so this is the line's ping beyond this PC.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PingTick {
+    /// The median of the last 5 s, ms.
+    pub now_ms: f64,
+    /// The lowest of the last 5 minutes, ms.
+    pub low_ms: f64,
 }
 
 /// Why SnailNet counts a program as a game (PLAN.md §11.5).
@@ -653,6 +668,15 @@ mod tests {
         let mut config = Config::default();
         config.profiles[0].rules.push(rule());
         config.line.down_mbps = Some(25.0);
+        config.line.measured = Some(snailnet_core::rules::Measured {
+            at: 1_700_000_000,
+            down_mbps: 24.6,
+            up_mbps: 4.8,
+            idle_ms: Some(12.0),
+            loaded_ms: Some(142.0),
+            loaded_up_ms: Some(310.0),
+            with_ms: Some(21.0),
+        });
         for msg in [
             ServerMsg::Reply {
                 id: 1,
@@ -723,6 +747,10 @@ mod tests {
                     why: GameWhy::Library,
                 }],
                 calls: vec!["discord".into()],
+                ping: Some(PingTick {
+                    now_ms: 19.5,
+                    low_ms: 12.0,
+                }),
             })),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
             ServerMsg::Event(Event::NewApp(NewApp {
@@ -779,6 +807,7 @@ mod tests {
         assert_eq!(new.names, None);
         assert!(!new.playing);
         assert!(new.games.is_empty());
+        assert_eq!(new.ping, None, "a tick without ping decodes");
         let d = new.down.as_ref().unwrap();
         assert!(d.sites.is_empty());
         assert_eq!(d.families[0].unidentified_bps, 0);
@@ -786,6 +815,10 @@ mod tests {
         let mut tick = new;
         tick.names = Some(NameTick::default());
         tick.playing = true;
+        tick.ping = Some(PingTick {
+            now_ms: 19.0,
+            low_ms: 12.0,
+        });
         tick.games.push(GameTick {
             family: "steam".into(),
             why: GameWhy::Marked,

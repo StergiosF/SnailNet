@@ -28,6 +28,20 @@ const APPLY_STEP: f64 = 0.02;
 const BASELINE_WINDOW: Duration = Duration::from_secs(300);
 /// A ping older than this says nothing about now.
 const FRESH: Duration = Duration::from_secs(3);
+/// The live ping (§11.10) is the median of the public host's pings this
+/// recent…
+const NOW_WINDOW: Duration = Duration::from_secs(5);
+/// …and needs at least this many of them.
+const NOW_MIN: usize = 2;
+
+/// The live ping to the public host (§11.10), ms.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PingNow {
+    /// The median of the last [`NOW_WINDOW`].
+    pub now_ms: f64,
+    /// The lowest of the last [`BASELINE_WINDOW`].
+    pub low_ms: f64,
+}
 
 /// The lowest round trip of the last [`BASELINE_WINDOW`], and the latest.
 #[derive(Debug, Default)]
@@ -55,6 +69,30 @@ impl Baseline {
         }
         let low = self.samples.iter().map(|(_, r)| *r).min()?;
         Some((last - low).as_secs_f64() * 1e3)
+    }
+
+    /// The ping now (at `now`): the median of the last [`NOW_WINDOW`]'s
+    /// samples, at least [`NOW_MIN`] of them, with the latest still fresh;
+    /// `None` otherwise (the line went quiet and the probe slowed down).
+    pub fn now(&self, now: Instant) -> Option<PingNow> {
+        let &(at, _) = self.samples.back()?;
+        if now.saturating_duration_since(at) > FRESH {
+            return None;
+        }
+        let recent: Vec<f64> = self
+            .samples
+            .iter()
+            .filter(|(t, _)| now.saturating_duration_since(*t) <= NOW_WINDOW)
+            .map(|(_, r)| r.as_secs_f64() * 1e3)
+            .collect();
+        if recent.len() < NOW_MIN {
+            return None;
+        }
+        let low = self.samples.iter().map(|(_, r)| *r).min()?;
+        Some(PingNow {
+            now_ms: crate::speedtest::quantile(&recent, 0.5)?,
+            low_ms: low.as_secs_f64() * 1e3,
+        })
     }
 }
 
@@ -145,6 +183,15 @@ impl Probe {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
+    }
+
+    /// The public host's ping now (§11.10).
+    pub fn now(&self) -> Option<PingNow> {
+        let now = Instant::now();
+        let g = self.hosts.lock().unwrap_or_else(PoisonError::into_inner);
+        g.iter()
+            .find(|(host, _)| *host == PUBLIC_HOST)
+            .and_then(|(_, b)| b.now(now))
     }
 
     /// The larger ping rise of the hosts, ms.
@@ -250,6 +297,12 @@ impl Autorate {
         [0, 1].map(|i| self.running[i].filter(|_| self.live[i]))
     }
 
+    /// The public host's ping now (§11.10); `None` without a probe or
+    /// while the line is quiet.
+    pub fn ping(&self) -> Option<PingNow> {
+        self.probe.as_ref().and_then(Probe::now)
+    }
+
     /// One second: what each direction moved (bps). Returns the new live
     /// rates when one moved enough to apply.
     pub fn tick(&mut self, moved: [Option<f64>; 2]) -> Option<[Option<f64>; 2]> {
@@ -315,6 +368,50 @@ mod tests {
         let later = t0 + BASELINE_WINDOW + Duration::from_secs(1);
         b.add(later, Duration::from_millis(30));
         assert_eq!(b.rise_ms(later), Some(0.0));
+    }
+
+    fn ms(v: u64) -> Duration {
+        Duration::from_millis(v)
+    }
+
+    #[test]
+    fn ping_now_is_the_median_of_the_last_five_seconds() {
+        let t0 = Instant::now();
+        let mut b = Baseline::default();
+        b.add(t0, ms(12));
+        // Busy: one a second, rising.
+        for (s, rtt) in [(10, 140), (11, 20), (12, 150), (13, 30), (14, 145)] {
+            b.add(t0 + Duration::from_secs(s), ms(rtt));
+        }
+        let p = b.now(t0 + Duration::from_secs(14)).unwrap();
+        assert!((p.now_ms - 140.0).abs() < 1e-9, "{p:?}");
+        assert!((p.low_ms - 12.0).abs() < 1e-9, "the 5-minute lowest");
+        // At 16 s the 140 at 10 s has left the window: 20, 30, 145, 150
+        // (nearest rank: the lower middle).
+        let p = b.now(t0 + Duration::from_secs(16)).unwrap();
+        assert!((p.now_ms - 30.0).abs() < 1e-9, "{p:?}");
+    }
+
+    #[test]
+    fn ping_now_needs_two_fresh_samples() {
+        let t0 = Instant::now();
+        let mut b = Baseline::default();
+        assert_eq!(b.now(t0), None, "nothing yet");
+        b.add(t0, ms(12));
+        assert_eq!(b.now(t0), None, "one sample");
+        // Idle: the probe pings every 30 s, so two are never within 5 s.
+        b.add(t0 + Duration::from_secs(30), ms(13));
+        assert_eq!(b.now(t0 + Duration::from_secs(30)), None);
+        b.add(t0 + Duration::from_secs(31), ms(15));
+        assert!(b.now(t0 + Duration::from_secs(31)).is_some());
+        // Stale once the latest is over 3 s old.
+        assert!(b.now(t0 + Duration::from_secs(34)).is_some());
+        assert_eq!(b.now(t0 + Duration::from_secs(35)), None);
+    }
+
+    #[test]
+    fn without_a_probe_there_is_no_ping() {
+        assert_eq!(Autorate::new(false).ping(), None);
     }
 
     fn config(down: Option<f64>, pinned: bool) -> Config {

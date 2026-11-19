@@ -222,6 +222,14 @@ pub struct Measured {
     /// Ping during the download, without SnailNet, ms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_ms: Option<f64>,
+    /// Ping during the upload, without SnailNet, ms (uploads often bloat
+    /// worse than downloads).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loaded_up_ms: Option<f64>,
+    /// Ping during the check download right after the test, *through*
+    /// SnailNet, ms (§11.10). Absent until that check finishes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub with_ms: Option<f64>,
 }
 
 impl Line {
@@ -1319,5 +1327,35 @@ ceiling = { down = \"10%\" }
         let bad = with_profile("")
             + "[[sites]]\nid = \"x\"\nname = \"X\"\ndomains = [\"not a domain\"]\n";
         assert!(err(&bad).contains("not a domain pattern"));
+    }
+
+    /// A config saved before the proof (§11.10) has no `loaded_up_ms` or
+    /// `with_ms`: it still loads, and a record without them writes neither.
+    #[test]
+    fn a_measured_record_without_the_proof_fields_still_loads() {
+        let old = with_profile("")
+            + "[line]
+down_mbps = 24.6
+up_mbps = 4.8
+               [line.measured]
+at = 1700000000
+down_mbps = 24.6
+up_mbps = 4.8
+               idle_ms = 14.0
+loaded_ms = 142.0
+";
+        let c = Config::parse(&old).unwrap();
+        let m = c.line.measured.as_ref().unwrap();
+        assert_eq!(m.loaded_ms, Some(142.0));
+        assert_eq!((m.loaded_up_ms, m.with_ms), (None, None));
+        let text = c.to_toml();
+        assert!(!text.contains("loaded_up_ms") && !text.contains("with_ms"));
+
+        let mut c = c;
+        let m = c.line.measured.as_mut().unwrap();
+        m.loaded_up_ms = Some(310.0);
+        m.with_ms = Some(21.0);
+        let back = Config::parse(&c.to_toml()).unwrap();
+        assert_eq!(back, c);
     }
 }

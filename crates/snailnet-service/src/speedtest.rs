@@ -6,7 +6,12 @@
 //! 1. Idle ping: five echoes to 1.1.1.1, the median.
 //! 2. Download for [`PHASE`] on [`DOWN_STREAMS`] connections, pinging every
 //!    half second meanwhile (the loaded ping, median).
-//! 3. Upload for [`PHASE`] on [`UP_STREAMS`] connections.
+//! 3. Upload for [`PHASE`] on [`UP_STREAMS`] connections, pinging the same
+//!    way (the loaded upload ping).
+//!
+//! Then, with shaping back on, the runner downloads once more through
+//! SnailNet ([`check`], ~10 s): the ping meanwhile is the "with SnailNet"
+//! number of the proof (§11.10).
 //!
 //! A direction's speed is the 90th percentile of its one-second rates after
 //! the first [`WARMUP`] (TCP ramping up).
@@ -140,36 +145,69 @@ fn median_ping(p: &mut Pinger, n: usize, gap: Duration, until: Option<Instant>) 
     quantile(&v, 0.5)
 }
 
-/// Run the whole test (blocking, ~20 s). `now`: Unix seconds for the record.
-pub fn run(cancel: &AtomicBool, now: u64) -> Result<Measured> {
-    let https = Arc::new(Https::new(
+/// One loaded phase: `streams` workers for [`PHASE`] while a side thread
+/// pings every half second after [`WARMUP`]. The speed (bits/s), the median
+/// loaded ping (ms), and the pinger back for the next phase.
+fn loaded_phase(
+    https: &Arc<Https>,
+    streams: usize,
+    cancel: &AtomicBool,
+    work: Work,
+    pinger: Option<Pinger>,
+) -> (Result<f64>, Option<f64>, Option<Pinger>) {
+    let pings = std::thread::spawn(move || {
+        let mut pinger = pinger;
+        let until = Instant::now() + PHASE;
+        std::thread::sleep(WARMUP);
+        let ms = pinger
+            .as_mut()
+            .and_then(|p| median_ping(p, 32, Duration::from_millis(500), Some(until)));
+        (ms, pinger)
+    });
+    let bps = phase(https, streams, cancel, work);
+    let (ms, pinger) = pings.join().unwrap_or((None, None));
+    (bps, ms, pinger)
+}
+
+fn client() -> Result<Arc<Https>> {
+    Ok(Arc::new(Https::new(
         concat!("SnailNet/", env!("CARGO_PKG_VERSION")),
         HOST,
-    )?);
+    )?))
+}
+
+/// Run the whole test (blocking, ~20 s). `now`: Unix seconds for the record.
+pub fn run(cancel: &AtomicBool, now: u64) -> Result<Measured> {
+    let https = client()?;
     let mut pinger = Pinger::new().ok();
     let idle_ms = pinger
         .as_mut()
         .and_then(|p| median_ping(p, 5, Duration::from_millis(200), None));
-
-    // Ping through the download from a side thread.
-    let loaded = std::thread::spawn(move || {
-        let until = Instant::now() + PHASE;
-        std::thread::sleep(WARMUP);
-        pinger
-            .as_mut()
-            .and_then(|p| median_ping(p, 32, Duration::from_millis(500), Some(until)))
-    });
-    let down = phase(&https, DOWN_STREAMS, cancel, download);
-    let loaded_ms = loaded.join().ok().flatten();
+    let (down, loaded_ms, pinger) = loaded_phase(&https, DOWN_STREAMS, cancel, download, pinger);
     let down = down?;
-    let up = phase(&https, UP_STREAMS, cancel, upload)?;
+    let (up, loaded_up_ms, _) = loaded_phase(&https, UP_STREAMS, cancel, upload, pinger);
+    let up = up?;
     Ok(Measured {
         at: now,
         down_mbps: round1(down / 1e6),
         up_mbps: round1(up / 1e6),
         idle_ms: idle_ms.map(round1),
         loaded_ms: loaded_ms.map(round1),
+        loaded_up_ms: loaded_up_ms.map(round1),
+        with_ms: None,
     })
+}
+
+/// The "with SnailNet" check (§11.10; blocking, ~10 s): the download phase
+/// once more, run while SnailNet shapes, so its traffic goes through
+/// SnailNet like any app's. The median ping meanwhile, ms; `None` when no
+/// ping came back (ICMP blocked).
+pub fn check(cancel: &AtomicBool) -> Result<Option<f64>> {
+    let https = client()?;
+    let pinger = Pinger::new().ok();
+    let (down, ms, _) = loaded_phase(&https, DOWN_STREAMS, cancel, download, pinger);
+    down?;
+    Ok(ms.map(round1))
 }
 
 fn round1(x: f64) -> f64 {

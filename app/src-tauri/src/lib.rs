@@ -8,7 +8,6 @@
 //! | `snapshot`     | `snailnet_ipc::Snapshot`        |
 //! | `service-state`| `snailnet_ipc::ServiceState`    |
 //! | `stats`        | `snailnet_ipc::StatsTick`       |
-//! | `give-slice`   | `{ family }` (toast button)     |
 //!
 //! The webview may load after the first events went out, so [`current`]
 //! returns the latest of each.
@@ -21,7 +20,6 @@ pub mod hotkey;
 pub mod icon;
 pub mod metered;
 pub mod service_start;
-pub mod toast;
 pub mod tray;
 pub mod tray_icon;
 pub mod updates;
@@ -30,7 +28,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Serialize;
-use snailnet_ipc::{CAP_NEW_APPS, Client, NewApp, PIPE_NAME, ServiceState, Snapshot, StatsTick};
+use snailnet_ipc::{Client, PIPE_NAME, ServiceState, Snapshot, StatsTick};
 use tauri::{AppHandle, Emitter, Manager};
 
 use bridge::{Link, Sink};
@@ -65,7 +63,6 @@ impl Shared {
 struct TauriSink {
     app: AppHandle,
     shared: Arc<Shared>,
-    toaster: Arc<toast::Toaster>,
 }
 
 impl TauriSink {
@@ -100,10 +97,6 @@ impl Sink for TauriSink {
         self.refresh_tray();
     }
     fn snapshot(&self, snap: &Snapshot) {
-        // Questions asked while the app wasn't listening (shown once each).
-        for p in &snap.prompts {
-            self.toaster.offer(p);
-        }
         self.shared.update(|l| l.snapshot = Some(snap.clone()));
         self.emit("snapshot", snap);
         self.refresh_tray();
@@ -120,9 +113,6 @@ impl Sink for TauriSink {
     fn stats(&self, tick: &StatsTick) {
         self.shared.update(|l| l.stats = Some(tick.clone()));
         self.emit("stats", tick);
-    }
-    fn new_app(&self, prompt: &NewApp) {
-        self.toaster.offer(prompt);
     }
 }
 
@@ -168,7 +158,6 @@ pub fn run() {
             let sink = TauriSink {
                 app: app.handle().clone(),
                 shared,
-                toaster: toast::Toaster::start(app.handle().clone()),
             };
             let stop = Arc::new(AtomicBool::new(false));
             app.manage(stop.clone());
@@ -178,7 +167,7 @@ pub fn run() {
                 .spawn(move || {
                     let version = env!("CARGO_PKG_VERSION");
                     bridge::run(
-                        || Client::connect_with(PIPE_NAME, version, &[CAP_NEW_APPS]),
+                        || Client::connect_with(PIPE_NAME, version, &[]),
                         &sink,
                         &stop,
                         std::thread::sleep,

@@ -13,6 +13,7 @@ pub mod modes;
 pub mod networks;
 pub mod packs;
 pub mod parse;
+pub mod proof;
 pub mod rules;
 pub mod scheduler;
 pub mod sites;

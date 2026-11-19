@@ -20,11 +20,12 @@ use snailnet_core::rules::{
 use snailnet_engine::fastpath::{DirectionStats, Snapshot as EngineSnapshot, Tag};
 use snailnet_ipc::{
     AppInfo, ClassTick, DirStats, ErrorCode, Event, FamilyTick, GameTick, GameWhy, NameTick,
-    PromptAction, ServiceState, SiteInfo, SiteTick, Snapshot, StatsTick,
+    PingTick, PromptAction, ServiceState, SiteInfo, SiteTick, Snapshot, StatsTick,
 };
 use snailnet_win::process::{WinProcesses, windows_dir};
 use tokio::sync::broadcast;
 
+use crate::autorate;
 use crate::focus::{Focus, Proc};
 use crate::newapps::Newcomers;
 use crate::paths::DataDir;
@@ -96,6 +97,11 @@ struct Inner {
     sites: Vec<(String, String)>,
     /// A speed test was asked for and hasn't started yet.
     speedtest: bool,
+    /// The "with SnailNet" check (§11.10) waits for shaping: the
+    /// `measured.at` it belongs to.
+    check_pending: Option<u64>,
+    /// The line's ping now, while shaping (§11.10).
+    ping: Option<PingTick>,
     /// What goes first now (§11.5).
     focus: Focus,
     /// Families in a live call, as the shaper last saw them (§11.9).
@@ -160,6 +166,8 @@ impl Hub {
                 apps: Vec::new(),
                 sites: Vec::new(),
                 speedtest: false,
+                check_pending: None,
+                ping: None,
                 focus: Focus::default(),
                 calls: Vec::new(),
                 newcomers: Newcomers::load(&dir.known_apps()).unwrap_or_else(|e| {
@@ -349,6 +357,7 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: i.calls(),
+                ping: i.ping,
                 ..t.clone()
             },
             None => StatsTick {
@@ -360,6 +369,7 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: Vec::new(),
+                ping: None,
             },
         }
     }
@@ -402,6 +412,7 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: i.calls(),
+                ping: i.ping,
             }
         });
         if tick.is_some() {
@@ -477,6 +488,15 @@ impl Hub {
         i.last = None;
         i.tick = None;
         i.calls.clear();
+        i.ping = None;
+    }
+
+    /// The line's ping now (§11.10), from the runner each second.
+    pub(crate) fn set_ping(&self, ping: Option<autorate::PingNow>) {
+        self.lock().ping = ping.map(|p| PingTick {
+            now_ms: p.now_ms,
+            low_ms: p.low_ms,
+        });
     }
 
     pub fn set_rules(&self, profile_id: &str, rules: Vec<Rule>, rev: u64) -> Result<u64, Refusal> {
@@ -634,14 +654,53 @@ impl Hub {
 
     /// Save a speed test's result: its speeds become the typed ones (a pin
     /// stays as it was; the user asked to measure), with the record.
+    /// A "with SnailNet" check (§11.10) is set up for it, run once shaping
+    /// at the new speed has settled.
     pub fn record_measured(&self, m: Measured) -> Result<u64, Refusal> {
         let rev = self.rev();
-        self.change(rev, |c| {
+        let at = m.at;
+        let r = self.change(rev, |c| {
             c.line.down_mbps = Some(m.down_mbps);
             c.line.up_mbps = Some(m.up_mbps);
             c.line.measured = Some(m);
             Ok(())
-        })
+        });
+        if r.is_ok() {
+            self.lock().check_pending = Some(at);
+        }
+        r
+    }
+
+    /// Take the waiting "with SnailNet" check: the `measured.at` it
+    /// belongs to.
+    pub fn take_check(&self) -> Option<u64> {
+        self.lock().check_pending.take()
+    }
+
+    /// Put a check that was cut short (shaping restarted) back, unless a
+    /// newer one is waiting.
+    pub(crate) fn retry_check(&self, at: u64) {
+        self.lock().check_pending.get_or_insert(at);
+    }
+
+    /// The `measured.at` of the current network's last speed test.
+    pub fn measured_at(&self) -> Option<u64> {
+        self.lock().config.line.measured.as_ref().map(|m| m.at)
+    }
+
+    /// Save the "with SnailNet" ping of the check for the speed test taken
+    /// at `at`; only if that is still the last one (a newer test, a typed
+    /// speed or another network wins). True if it was saved.
+    pub fn record_check(&self, at: u64, with_ms: f64) -> Result<bool, Refusal> {
+        let mut saved = false;
+        self.change(self.rev(), |c| {
+            if let Some(m) = c.line.measured.as_mut().filter(|m| m.at == at) {
+                m.with_ms = Some(with_ms);
+                saved = true;
+            }
+            Ok(())
+        })?;
+        Ok(saved)
     }
 
     /// The window in front is `pid`'s (§11.5); a game stays first while it
@@ -1168,6 +1227,86 @@ mod tests {
         assert_eq!(saved.line.down_mbps, Some(25.0));
         assert_eq!(saved.network, Some(net("home")));
         assert_eq!(saved.networks[0].id, "phone");
+    }
+
+    fn measured(at: u64) -> Measured {
+        Measured {
+            at,
+            down_mbps: 24.6,
+            up_mbps: 4.8,
+            idle_ms: Some(12.0),
+            loaded_ms: Some(142.0),
+            loaded_up_ms: Some(300.0),
+            with_ms: None,
+        }
+    }
+
+    #[test]
+    fn a_check_is_saved_only_for_the_test_it_belongs_to() {
+        let (_t, hub) = hub();
+        assert_eq!(hub.take_check(), None);
+        hub.record_measured(measured(100)).unwrap();
+        assert_eq!(hub.take_check(), Some(100));
+        assert_eq!(hub.take_check(), None, "taken");
+        let mut events = hub.subscribe();
+        assert_eq!(hub.record_check(100, 21.0), Ok(true));
+        assert!(matches!(events.try_recv(), Ok(Event::ConfigChanged { .. })));
+        let saved = store::load(hub.dir()).unwrap().config;
+        assert_eq!(saved.line.measured.unwrap().with_ms, Some(21.0));
+
+        // A newer test wins over the older check.
+        hub.record_measured(measured(200)).unwrap();
+        let rev = hub.rev();
+        assert_eq!(hub.record_check(100, 19.0), Ok(false));
+        assert_eq!(hub.rev(), rev, "nothing changed");
+        assert_eq!(hub.config().line.measured.unwrap().with_ms, None);
+
+        // A typed speed drops the record: nothing to attach to.
+        let line = Line {
+            down_mbps: Some(30.0),
+            ..Line::default()
+        };
+        hub.set_line(line, hub.rev()).unwrap();
+        assert_eq!(hub.record_check(200, 19.0), Ok(false));
+    }
+
+    #[test]
+    fn a_cut_short_check_waits_again_unless_a_newer_one_does() {
+        let (_t, hub) = hub();
+        hub.retry_check(100);
+        assert_eq!(hub.take_check(), Some(100));
+        hub.record_measured(measured(200)).unwrap();
+        hub.retry_check(100);
+        assert_eq!(hub.take_check(), Some(200));
+    }
+
+    #[test]
+    fn the_ping_reaches_the_tick_until_stats_are_cleared() {
+        let (_t, hub) = hub();
+        let ping = autorate::PingNow {
+            now_ms: 19.0,
+            low_ms: 12.0,
+        };
+        hub.set_ping(Some(ping));
+        let want = Some(PingTick {
+            now_ms: 19.0,
+            low_ms: 12.0,
+        });
+        assert_eq!(hub.latest_tick().ping, None, "not shaping: no tick yet");
+        let t0 = Instant::now();
+        for k in 0..2 {
+            let snap = EngineSnapshot {
+                taken: Some(t0 + std::time::Duration::from_millis(k * 250)),
+                ..EngineSnapshot::default()
+            };
+            hub.publish(&snap, None);
+        }
+        assert_eq!(hub.latest_tick().ping, want);
+        hub.set_ping(None);
+        assert_eq!(hub.latest_tick().ping, None);
+        hub.set_ping(Some(ping));
+        hub.clear_stats();
+        assert_eq!(hub.latest_tick().ping, None);
     }
 
     #[test]
