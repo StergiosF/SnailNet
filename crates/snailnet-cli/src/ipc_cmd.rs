@@ -347,6 +347,9 @@ fn print_tick(t: &StatsTick) {
     if let Some(names) = t.names.as_ref().and_then(name_line) {
         println!("{:>12}{names}", "");
     }
+    if !t.calls.is_empty() {
+        println!("{:>12}calls: {}", "", t.calls.join(", "));
+    }
 }
 
 /// How the tick's packets got their site names, when any were named:

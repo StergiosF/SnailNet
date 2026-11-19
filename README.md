@@ -50,8 +50,10 @@ nothing sent anywhere.
   Netflix applies in every browser and comes before the browser's own
   slice.
 - **Lets games and calls go first.** The app in front gets its traffic out
-  first, a game keeps that while it runs, and Boost lets one app go first
-  for an hour, four hours or until you stop it.
+  first, a game keeps that while it runs, a voice or video call (in any
+  app or browser) goes first while it lasts, and Boost lets one app go
+  first for an hour, four hours or until you stop it. A call only sends
+  sooner; it never gets a bigger share.
 - **Keeps ping low.** It sends slightly below your line speed, so the
   queue stays on your PC instead of in your router, and follows your line
   as it gets faster or slower.
@@ -123,7 +125,8 @@ switches to Gaming when a game starts and back when it closes.
 
 **Settings** is grouped the way you'd look for things: your internet
 (speed, **Measure** or **Change**, the last speed test, other networks),
-games and the app you're using, new apps, Windows (start with Windows,
+games, calls and the app you're using (*Put calls first* is on by
+default), new apps, Windows (start with Windows,
 the hotkey), version and updates, and starting over. When a new version
 is out, an **Update** button appears in the side bar; one click installs
 it.
