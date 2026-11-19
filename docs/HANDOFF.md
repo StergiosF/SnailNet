@@ -2,9 +2,12 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## New since v0.0.3 (2026-11-19): Calls go first
+## v0.0.4 (2026-11-19): Calls go first
 
-Built, tested in code, **not released and not seen live**. A live voice or
+**Released as v0.0.4 untested live** (user's choice, 2026-11-19). README
+and the site's "Games and calls go first" tab say so. `snailnet top` now
+prints `calls: discord, ...` while a call goes first, so the live check
+needs no app. A live voice or
 video call (any app or browser) goes first with no rule, spotted by its
 traffic's shape; never a bigger share. Design and decisions: PLAN.md §11.9.
 Code: `snailnet-core::calls`, the classifier in `snailnet-service::shaper`,
@@ -13,13 +16,16 @@ Code: `snailnet-core::calls`, the classifier in `snailnet-service::shaper`,
 
 Still to do:
 
-1. **Try it live** (one UAC click): elevated dev service, a Discord or Meet
-   call while Steam downloads; the row should say "Goes first · in a
-   call" within ~3 s, and the call should stay clear. Also check YouTube
-   (QUIC) is *not* marked, and a torrent client isn't.
-2. **With the release that ships it:** README ("Lets games and calls go
-   first" bullet, the Settings paragraph) and the site's "Games and calls
-   go first" tab (`site/index.html`, `fx-p-boost`).
+1. **Try it live** (one UAC click, user in a call): the script is ready
+   to rebuild from this recipe: copy `C:\ProgramData\SnailNet\config.toml`
+   into a scratch data dir, run `target\release\snailnet-service.exe run
+   --console --data-dir <scratch> --pipe \\.\pipe\snailnet-live` elevated
+   (stop it via a marker file, ~10 min cap), then unelevated
+   `target\release\snailnet.exe --pipe \\.\pipe\snailnet-live top`. A
+   Discord or Meet call while Steam downloads should show `calls:` within
+   ~3 s; YouTube (QUIC) and a torrent client must not. Or just use the
+   installed v0.0.4 and watch the app's row.
+2. ~~README and site~~ done with v0.0.4.
 
 ## Start here (2026-11-18, end of day)
 

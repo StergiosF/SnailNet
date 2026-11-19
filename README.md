@@ -125,7 +125,7 @@ switches to Gaming when a game starts and back when it closes.
 
 **Settings** is grouped the way you'd look for things: your internet
 (speed, **Measure** or **Change**, the last speed test, other networks),
-games, calls and the app you're using (*Put calls first* is on by
+calls, games and the app you're using (*Put calls first* is on by
 default), new apps, Windows (start with Windows,
 the hotkey), version and updates, and starting over. When a new version
 is out, an **Update** button appears in the side bar; one click installs

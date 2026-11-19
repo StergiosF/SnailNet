@@ -49,6 +49,9 @@ was built from, kept for its research and its "why v1 looked bad".
   6 h), regrouped Settings in plainer words, larger window, installer
   renames an old `snailnet.exe`. The site's and README's privacy lists
   now say the update check runs on its own.
+- **v0.0.4, published 2026-11-19:** calls go first (PLAN.md §11.9),
+  released before a live call test (user's choice). The site's "Games and
+  calls go first" tab and the README say so.
 - **The snail** was also fixed the same day: its eye stalks now grow from
   the head (app icon set, tray, Snail.svelte, README pictures, favicons,
   og.png).
