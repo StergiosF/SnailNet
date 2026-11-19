@@ -101,6 +101,9 @@ pub struct Settings {
     /// Use the Gaming mode while a game runs, then go back (PLAN.md §11.5
     /// "Optional automation"). Off by default.
     pub gaming_while_playing: bool,
+    /// Live calls (and games' server streams), spotted by their traffic,
+    /// go first in any app and any mode (PLAN.md §11.9). On by default.
+    pub calls_first: bool,
     /// Apps (family ids) that are games whatever the detection says: they
     /// stay first while they run (PLAN.md §11.5 overrides).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -142,6 +145,7 @@ impl Default for Settings {
             lan_exempt: true,
             focus_boost: true,
             gaming_while_playing: false,
+            calls_first: true,
             games: Vec::new(),
             never_first: Vec::new(),
             new_apps: NewApps::Notify,
@@ -698,6 +702,8 @@ impl Config {
                 shape_lan: !self.settings.lan_exempt,
                 custom_sites: self.sites.clone(),
                 focus: Vec::new(),
+                calls_first: false,
+                never_first: Vec::new(),
             };
         }
         let all = self.effective_rules(now);
@@ -748,6 +754,13 @@ impl Config {
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
             focus: Vec::new(),
+            calls_first: self.settings.calls_first,
+            never_first: self
+                .settings
+                .never_first
+                .iter()
+                .map(|f| f.to_lowercase())
+                .collect(),
         }
     }
 }
@@ -808,6 +821,10 @@ pub struct Plan {
     /// the app in front and running games (PLAN.md §11.5). Not from the
     /// config; the service fills it in.
     pub focus: Vec<u32>,
+    /// Live calls go first (PLAN.md §11.9), from `Settings::calls_first`.
+    pub calls_first: bool,
+    /// Lowercase family ids that never go first, calls included.
+    pub never_first: Vec<String>,
 }
 
 impl Plan {
@@ -855,6 +872,13 @@ impl Plan {
     /// Whether flows need to be named at all.
     pub fn has_site_rules(&self) -> bool {
         self.targets.iter().any(|t| t.kind == TargetKind::Site)
+    }
+
+    /// Whether the user said `family` never goes first.
+    pub fn never_first(&self, family: &str) -> bool {
+        self.never_first
+            .iter()
+            .any(|f| f.eq_ignore_ascii_case(family))
     }
 
     pub fn prio_of(&self, class: usize) -> Priority {
@@ -1195,6 +1219,25 @@ ceiling = { down = \"10%\" }
             "pkg:spotify_zpdnekdrzrea0".into(),
         ];
         assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn the_plan_carries_calls_first_and_never_first() {
+        let mut c = Config::default();
+        assert!(c.plan(0).calls_first, "on by default");
+        assert!(!c.to_toml().contains("calls_first = false"));
+        c.settings.never_first = vec!["OBS".into()];
+        let p = c.plan(0);
+        assert!(p.never_first("obs") && !p.never_first("discord"));
+        c.settings.calls_first = false;
+        assert!(!c.plan(0).calls_first);
+        // An older config without the key gets it on.
+        let old = c.to_toml().replace(
+            "calls_first = false
+",
+            "",
+        );
+        assert!(Config::parse(&old).unwrap().settings.calls_first);
     }
 
     #[test]

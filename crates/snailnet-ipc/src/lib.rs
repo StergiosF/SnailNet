@@ -205,8 +205,13 @@ impl Request {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ServerMsg {
-    Reply { id: u32, reply: Reply },
-    Stats(StatsTick),
+    Reply {
+        id: u32,
+        reply: Reply,
+    },
+    /// Boxed: the tick is much bigger than the other messages. Serde
+    /// writes it the same as unboxed.
+    Stats(Box<StatsTick>),
     Event(Event),
 }
 
@@ -366,6 +371,10 @@ pub struct StatsTick {
     /// by app family. Empty from a service that doesn't report it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub games: Vec<GameTick>,
+    /// Apps (family ids) in a live call that goes first now (PLAN.md
+    /// §11.9). Empty from a service that doesn't report it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calls: Vec<String>,
 }
 
 /// Why SnailNet counts a program as a game (PLAN.md §11.5).
@@ -676,7 +685,7 @@ mod tests {
                     msg: "changed".into(),
                 },
             },
-            ServerMsg::Stats(StatsTick {
+            ServerMsg::Stats(Box::new(StatsTick {
                 t_ms: 250,
                 state: ServiceState::Shaping,
                 down: Some(DirStats {
@@ -713,7 +722,8 @@ mod tests {
                     family: "hades".into(),
                     why: GameWhy::Library,
                 }],
-            }),
+                calls: vec!["discord".into()],
+            })),
             ServerMsg::Event(Event::ConfigChanged { rev: 5 }),
             ServerMsg::Event(Event::NewApp(NewApp {
                 prompt_id: 1,

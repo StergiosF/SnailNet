@@ -227,6 +227,7 @@ mod tests {
             names: None,
             playing: false,
             games: Vec::new(),
+            calls: Vec::new(),
         }
     }
 
@@ -263,7 +264,7 @@ mod tests {
                 Reply::Snapshot(Box::new(snapshot(4))),
             ]),
             msgs: VecDeque::from([
-                ServerMsg::Stats(tick(250)),
+                ServerMsg::Stats(Box::new(tick(250))),
                 ServerMsg::Event(Event::ConfigChanged { rev: 4 }),
                 ServerMsg::Event(Event::StateChanged(ServiceState::Unshaped)),
                 ServerMsg::Event(Event::NewApp(NewApp {
@@ -273,7 +274,7 @@ mod tests {
                     exe: "hades.exe".into(),
                     held: false,
                 })),
-                ServerMsg::Stats(tick(500)),
+                ServerMsg::Stats(Box::new(tick(500))),
             ]),
             calls: Vec::new(),
         };

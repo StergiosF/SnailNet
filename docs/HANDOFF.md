@@ -2,7 +2,26 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Start here (2026-11-18, end of day; newest)
+## New since v0.0.3 (2026-11-19): Calls go first
+
+Built, tested in code, **not released and not seen live**. A live voice or
+video call (any app or browser) goes first with no rule, spotted by its
+traffic's shape; never a bigger share. Design and decisions: PLAN.md §11.9.
+Code: `snailnet-core::calls`, the classifier in `snailnet-service::shaper`,
+`StatsTick.calls`, "Goes first · in a call" on the app's row, Settings →
+**Put calls first** (on by default).
+
+Still to do:
+
+1. **Try it live** (one UAC click): elevated dev service, a Discord or Meet
+   call while Steam downloads; the row should say "Goes first · in a
+   call" within ~3 s, and the call should stay clear. Also check YouTube
+   (QUIC) is *not* marked, and a torrent client isn't.
+2. **With the release that ships it:** README ("Lets games and calls go
+   first" bullet, the Settings paragraph) and the site's "Games and calls
+   go first" tab (`site/index.html`, `fx-p-boost`).
+
+## Start here (2026-11-18, end of day)
 
 Everything is committed and pushed on `main` (last: `8443587`). The
 user leaves decisions to Claude; commit + push each verified step.

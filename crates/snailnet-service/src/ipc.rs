@@ -273,7 +273,7 @@ async fn serve(
                 }
             }
             _ = next_tick(&mut s.ticker) => {
-                if let Err(e) = write_msg(&mut wr, &ServerMsg::Stats(hub.latest_tick())).await {
+                if let Err(e) = write_msg(&mut wr, &ServerMsg::Stats(Box::new(hub.latest_tick()))).await {
                     break Err(e);
                 }
             }

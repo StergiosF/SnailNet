@@ -604,6 +604,19 @@ As specified in §7.2. In the UI, an expandable row shows member processes; "Spl
 - Side rail and tray flyout: **Pause for 15 min / 1 h / until I resume**. Pause state is obvious (amber tray glyph, a notice with Resume).
 - **Built (2026-11-17):** `Config.pause`; while paused the plan is empty, so the engine steps aside entirely (no shaping, no blocking, no live stats) and the service reports `ServiceState::Paused { until }`. The runner ends a timed pause by itself. IPC `Pause { minutes }` / `Resume`.
 
+### 11.9 Calls go first (Smart)
+
+- **What:** a live voice or video call goes first in any app, browser or mode, with no rule: Discord, Zoom, Teams, Meet, WhatsApp. Same promise as §11.5: High *flow* priority in its own class (weight 4 in its fair queue, packets ≤ 300 B through the express lane), never a bigger share. Covers the gap the modes leave: Balanced has no call rules, and Streaming/Gaming name only Discord and Zoom, and only by app, so a call in a browser tab or an app not in front had nothing.
+- **Built (2026-11-19), decisions taken:**
+  - **Spotted by the traffic's shape, not by app name** (`snailnet-core::calls::CallWatch`, pure, simulated-time tests): a UDP flow with ≥ 20 packets a second (both directions together), mean packet ≤ 1 250 B, ≤ 6 Mbps each way, for 3 seconds running. Voice is RTP every 20 ms (~50 pps each way); video calls cap packets near 1 200 B. A game's server stream fits too, which is wanted.
+  - **Not calls:** QUIC (remote port 443 with QUIC's fixed bit `0x40` in the first byte; RTP's first byte is `10xxxxxx`, so a call relayed on 443 still counts); bulk UDP over the rate or size caps (ends a call at once); BitTorrent's uTP (an app with more than 4 call-shaped flows at once is a swarm and none count).
+  - **Ending:** a call stays one while quiet (muted listener, nobody talking: keep-alives still arrive) and ends 15 s after its last packet; idle flows are forgotten after 60 s; at most 4 096 flows watched.
+  - **Per flow, not per app:** only the call's own flow goes first, so a browser's downloads in other tabs don't ride along.
+  - **Service:** the rx threads share one `CallWatch` behind a mutex (default one rx thread, so uncontended), taken only for UDP packets of attributed apps. Both directions count when both are diverted; with only one shaped, the one seen is enough. "Never first" apps are skipped (`Plan.never_first`).
+  - `Settings.calls_first` (on by default; older configs get it on), `Plan.calls_first`; a switch in Settings → "Calls, games and the app you're using": **Put calls first**.
+  - **To the app:** `Seen.calls` (app ids) → the hub's families → `StatsTick.calls` (sorted, once each; empty while the switch is off or not shaping; skipped when empty, so older apps ignore it). The row under "Using your internet" says **"Goes first · in a call"**; a boost's time left and a game's reason win over it. `ServerMsg::Stats` now boxes its tick (clippy `large_enum_variant`); the wire format is unchanged.
+  - **Not yet:** seen with a real call through the real service (needs the elevated dev service and a call while something downloads), README and site (with the release that ships it).
+
 ---
 
 ## 12. Service ↔ app communication (IPC)
@@ -1065,7 +1078,7 @@ Not committed. Kept so good ideas don't get lost.
 - **Bufferbloat grade (A–F)** in the speed test, before/after SnailNet. Very shareable.
 - **Per-app ping:** show each game's live RTT to its server (from TCP timestamps / UDP request-response pairing).
 - **Smart suggestions:** "Steam has been using 95% for 20 min while you watched YouTube, so make a 40/60 split?"
-- **Auto-pause for calls:** when Teams/Discord/Zoom has an active call, temporarily lower downloaders.
+- **Auto-pause for calls:** when Teams/Discord/Zoom has an active call, temporarily lower downloaders. *Partly built as §11.9 (the call goes first; downloaders aren't lowered, since going first already keeps the call clear without shrinking anyone's slice).*
 - **Explorer context menu:** right-click an .exe → "Limit with SnailNet…".
 - **Stream Deck / CLI / local REST** for power users to switch profiles.
 - **Share-a-profile** as a small file/link.

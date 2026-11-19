@@ -104,6 +104,9 @@ export interface Settings {
   focus_boost: boolean;
   /** Use the Gaming mode while a game runs. */
   gaming_while_playing: boolean;
+  /** Live calls go first, spotted by their traffic (missing from older
+   *  services: on). */
+  calls_first?: boolean;
   /** Families the user says are games (missing when none). */
   games?: string[];
   /** Families the user says never go first (missing when none). */
@@ -230,6 +233,9 @@ export interface StatsTick {
   /** The games running now and why each counts as one (§11.5). Missing
    *  when there are none, or from older services. */
   games?: GameTick[];
+  /** Apps (family ids) in a live call that goes first now (§11.9).
+   *  Missing when there are none, or from older services. */
+  calls?: string[];
 }
 
 /** Why SnailNet counts a program as a game (snailnet-ipc `GameWhy`). */

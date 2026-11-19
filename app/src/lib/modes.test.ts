@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, copyName, gameWhy, liveBoost, modeName, summary, users } from "./modes";
+import { availableModes, boostLeft, copyName, gameWhy, inCall, liveBoost, modeName, summary, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -106,6 +106,18 @@ describe("summary", () => {
     const s = summary(ledger(rules, busy(), label));
     expect(s.slices.map((x) => x.name)).toEqual(["YouTube", "Brave", "Everything else"]);
     expect(s.free).toBe(1);
+  });
+});
+
+describe("in a call", () => {
+  it("is an app the service reports in a call", () => {
+    expect(inCall({ kind: "family", id: "discord" }, ["discord"], true)).toBe(true);
+    expect(inCall({ kind: "family", id: "steam" }, ["discord"], true)).toBe(false);
+    expect(inCall({ kind: "site", id: "discord" }, ["discord"], true)).toBe(false);
+    expect(inCall({ kind: "family", id: "discord" }, undefined, true)).toBe(false);
+  });
+  it("says nothing while the switch is off", () => {
+    expect(inCall({ kind: "family", id: "discord" }, ["discord"], false)).toBe(false);
   });
 });
 

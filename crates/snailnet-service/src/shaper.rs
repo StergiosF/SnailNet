@@ -23,6 +23,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use snailnet_core::calls::{CallWatch, Udp};
 use snailnet_core::classify::{
     App, AppId, Attribution, Event, FlowKey, Miss, Pending, Resolver, Source,
 };
@@ -264,6 +265,14 @@ pub trait Rules: Send + Sync + 'static {
     fn focus_pids(&self) -> &[u32] {
         &[]
     }
+    /// Live calls go first (§11.9).
+    fn calls_first(&self) -> bool {
+        false
+    }
+    /// The user said `family` never goes first.
+    fn never_first(&self, _family: &str) -> bool {
+        false
+    }
 }
 
 /// A [`Plan`] plus the domain → site matcher for its custom sites.
@@ -309,6 +318,14 @@ impl Rules for PlanRules {
 
     fn focus_pids(&self) -> &[u32] {
         &self.plan.focus
+    }
+
+    fn calls_first(&self) -> bool {
+        self.plan.calls_first
+    }
+
+    fn never_first(&self, family: &str) -> bool {
+        self.plan.never_first(family)
     }
 
     fn site_class(&self, site: &str) -> Option<ClassId> {
@@ -489,6 +506,13 @@ pub struct AppClassifier {
     /// whether each app is one of them; both renewed with the rules.
     focus: Vec<String>,
     app_focus: HashMap<AppId, bool>,
+    /// Which UDP flows are live calls (§11.9), shared by the rx threads so
+    /// both directions of a flow count together. Only UDP packets of
+    /// attributed apps take the lock.
+    calls: Arc<Mutex<CallWatch<FlowKey, AppId>>>,
+    /// Whether each app's calls may go first (not "never first"); cleared
+    /// with the rules.
+    app_calls: HashMap<AppId, bool>,
     pending: Pending,
     sites: Arc<SiteState>,
     /// Site id → stats slot, this thread's copy of [`SiteState::slot`];
@@ -512,6 +536,8 @@ impl Clone for AppClassifier {
             app_blocked: self.app_blocked.clone(),
             focus: self.focus.clone(),
             app_focus: self.app_focus.clone(),
+            calls: self.calls.clone(),
+            app_calls: self.app_calls.clone(),
             pending: self.pending.clone(),
             sites: self.sites.clone(),
             site_slots: self.site_slots.clone(),
@@ -530,6 +556,7 @@ impl AppClassifier {
             self.app_class.clear();
             self.app_blocked.clear();
             self.app_focus.clear();
+            self.app_calls.clear();
             // A focus change is rare (alt-tab, debounced): resolving its
             // few PIDs here is cheap, and cached per process after that.
             let attribution = &self.attribution;
@@ -559,6 +586,40 @@ impl AppClassifier {
             .app_focus
             .entry(app)
             .or_insert_with(|| focus.contains(&attribution.app(app).family))
+    }
+
+    /// Whether this UDP packet belongs to a live call that goes first
+    /// (§11.9). Never for an app the user keeps from going first.
+    fn in_call(
+        &mut self,
+        key: FlowKey,
+        app: AppId,
+        pkt: &[u8],
+        info: &PacketInfo,
+        outbound: bool,
+    ) -> bool {
+        if !self.rules.calls_first() || info.protocol != PROTO_UDP {
+            return false;
+        }
+        let (rules, attribution) = (&self.rules, &self.attribution);
+        let allowed = *self
+            .app_calls
+            .entry(app)
+            .or_insert_with(|| !rules.never_first(&attribution.app(app).family));
+        if !allowed {
+            return false;
+        }
+        let udp = Udp {
+            outbound,
+            len: info.len,
+            remote_port: key.remote.1,
+            first: info.payload_offset.and_then(|o| pkt.get(o).copied()),
+        };
+        let now = self.clock.now();
+        self.calls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .observe(key, app, udp, now)
     }
 
     fn class_of(&mut self, app: AppId) -> ClassId {
@@ -665,7 +726,8 @@ impl Classifier for AppClassifier {
                     Source::Socket => who.by_socket.fetch_add(1, Relaxed),
                     Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
-                focused = self.focused(owner.app);
+                focused =
+                    self.focused(owner.app) || self.in_call(key, owner.app, pkt, info, outbound);
                 (self.class_of(owner.app), Some(owner.app))
             }
             None => {
@@ -731,6 +793,8 @@ pub struct Shaper {
     rules: Arc<LiveRules>,
     /// While apps may be blocked; `None` if it couldn't start.
     refuser: Option<Refuser>,
+    calls: Arc<Mutex<CallWatch<FlowKey, AppId>>>,
+    clock: Arc<MonotonicClock>,
 }
 
 impl Shaper {
@@ -761,6 +825,7 @@ impl Shaper {
                 .context("opening the NETWORK layer")?,
         );
         let who = Arc::new(WhoCounters::default());
+        let calls = Arc::new(Mutex::new(CallWatch::new()));
         let rules = Arc::new(LiveRules::new(spec.rules));
         let refuser = if spec.blocking {
             Refuser::start(lib.clone(), attribution.clone(), rules.clone())
@@ -779,10 +844,12 @@ impl Shaper {
             app_blocked: HashMap::new(),
             focus: Vec::new(),
             app_focus: HashMap::new(),
+            calls: calls.clone(),
+            app_calls: HashMap::new(),
             pending: Pending::default(),
             sites: sites.clone(),
             site_slots: HashMap::new(),
-            clock,
+            clock: clock.clone(),
             flow_hasher: RandomState::new(),
         };
         let fast_path = FastPath::start(
@@ -808,6 +875,8 @@ impl Shaper {
             attribution,
             rules,
             refuser,
+            calls,
+            clock,
         })
     }
 
@@ -850,6 +919,15 @@ impl Shaper {
 
     pub fn who(&self) -> &WhoCounters {
         &self.who
+    }
+
+    /// The apps in a live call now (§11.9), by app id.
+    pub fn calls(&self) -> Vec<AppId> {
+        let now = self.clock.now();
+        self.calls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .apps(now)
     }
 
     /// (id, name) per site stats slot ([`tags::Site::Slot`]).
@@ -959,6 +1037,7 @@ impl runner::Running for Running {
             sites: self.shaper.site_slots(),
             names: Some(self.shaper.who().names()),
             windows,
+            calls: self.shaper.calls(),
         }
     }
 

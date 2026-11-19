@@ -155,6 +155,11 @@ export function gameWhy(target: Target, games: GameTick[] | undefined, focusBoos
   return games?.find((g) => g.family === target.id)?.why ?? null;
 }
 
+/** Whether `target` is an app in a live call that goes first (§11.9). */
+export function inCall(target: Target, calls: string[] | undefined, on: boolean): boolean {
+  return on && target.kind === "family" && (calls?.includes(target.id) ?? false);
+}
+
 /** The split in short: the slices with a share (Everything else last), and
  *  how many take only what's free. */
 export function summary(l: Ledger): { slices: Slice[]; free: number } {

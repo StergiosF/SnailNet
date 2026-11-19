@@ -11,7 +11,7 @@
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
   import { glide, ms } from "../motion";
-  import { boostLeft, gameWhy, liveBoost, users } from "../modes";
+  import { boostLeft, gameWhy, inCall, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -25,12 +25,15 @@
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
   const list = $derived(ledger ? users(ledger, live, label) : []);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
+  // Missing from older services: on.
+  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
   // The row's second line: a boost's time left, else why a game goes
-  // first, else what its slice is doing.
+  // first, else that it's in a call, else what its slice is doing.
   function sub(u: (typeof list)[number]): string {
     if (u.boosted && live) return t("who.boosted", { left: boostLeft(live, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
-    return why ? t(`who.game.${why}`) : u.status;
+    if (why) return t(`who.game.${why}`);
+    return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
   }
   // Website traffic whose name is hidden (ECH): said, never hidden.
   const hidden = $derived(ledger ? unnamed(service.stats?.down) : null);

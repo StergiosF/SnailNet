@@ -112,6 +112,8 @@
   let focusing = $state(false);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
+  // Missing from older services: on.
+  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
   const notifyNewApps = $derived(service.snapshot?.config.settings.new_apps !== "off");
   const strictNewApps = $derived(service.snapshot?.config.settings.new_apps === "strict");
   // Missing from older services: on.
@@ -253,6 +255,20 @@
         checked={focusBoost}
         disabled={!canEdit || focusing}
         onchange={(e) => void setSetting({ focus_boost: e.currentTarget.checked })}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("calls.title")}</b>
+        <span>{t("calls.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={callsFirst}
+        disabled={!canEdit || focusing}
+        onchange={(e) => void setSetting({ calls_first: e.currentTarget.checked })}
       />
     </label>
     <label class="item">

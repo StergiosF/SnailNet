@@ -46,6 +46,8 @@ pub struct Seen {
     pub names: Option<NameTick>,
     /// Families in `apps` that are parts of Windows (never "new", §11.4).
     pub windows: HashSet<String>,
+    /// App ids (indexes into `apps`) in a live call now (§11.9).
+    pub calls: Vec<u32>,
 }
 
 /// A process's app family (`None`: unknown), grouped as the user wants,
@@ -96,6 +98,8 @@ struct Inner {
     speedtest: bool,
     /// What goes first now (§11.5).
     focus: Focus,
+    /// Families in a live call, as the shaper last saw them (§11.9).
+    calls: Vec<String>,
     /// The apps met so far and the open new-app questions (§11.4).
     newcomers: Newcomers,
 }
@@ -106,6 +110,24 @@ impl Inner {
     /// The games running now, for the app (§11.5).
     fn games(&self) -> Vec<GameTick> {
         self.focus.games(&self.config.settings)
+    }
+
+    /// The apps in a live call that go first now (§11.9): none while the
+    /// switch is off, never a "never first" app, each family once, sorted.
+    fn calls(&self) -> Vec<String> {
+        let s = &self.config.settings;
+        if !s.calls_first {
+            return Vec::new();
+        }
+        let mut out: Vec<String> = self
+            .calls
+            .iter()
+            .filter(|f| !s.never_first(f))
+            .cloned()
+            .collect();
+        out.sort();
+        out.dedup();
+        out
     }
 
     fn playing(&self) -> bool {
@@ -139,6 +161,7 @@ impl Hub {
                 sites: Vec::new(),
                 speedtest: false,
                 focus: Focus::default(),
+                calls: Vec::new(),
                 newcomers: Newcomers::load(&dir.known_apps()).unwrap_or_else(|e| {
                     tracing::warn!("could not read the list of known apps: {e}");
                     Newcomers::default()
@@ -325,6 +348,7 @@ impl Hub {
                 state: i.state.clone(),
                 playing: i.playing(),
                 games: i.games(),
+                calls: i.calls(),
                 ..t.clone()
             },
             None => StatsTick {
@@ -335,6 +359,7 @@ impl Hub {
                 names: None,
                 playing: i.playing(),
                 games: i.games(),
+                calls: Vec::new(),
             },
         }
     }
@@ -348,6 +373,12 @@ impl Hub {
         let mut i = self.lock();
         let mut names = None;
         if let Some(seen) = seen {
+            i.calls = seen
+                .calls
+                .iter()
+                .filter_map(|&a| seen.apps.get(a as usize))
+                .map(|a| a.family.clone())
+                .collect();
             i.apps = seen.apps;
             i.sites = seen.sites;
             names = seen.names;
@@ -370,6 +401,7 @@ impl Hub {
                 names: names.zip(last.names).map(|(n, l)| n.since(&l)),
                 playing: i.playing(),
                 games: i.games(),
+                calls: i.calls(),
             }
         });
         if tick.is_some() {
@@ -444,6 +476,7 @@ impl Hub {
         let mut i = self.lock();
         i.last = None;
         i.tick = None;
+        i.calls.clear();
     }
 
     pub fn set_rules(&self, profile_id: &str, rules: Vec<Rule>, rev: u64) -> Result<u64, Refusal> {
@@ -1233,6 +1266,44 @@ mod tests {
         assert_eq!(hub.latest_tick().down.unwrap().classes[0].bps, 8_000_000);
         hub.clear_stats();
         assert!(hub.latest_tick().down.is_none());
+    }
+
+    #[test]
+    fn calls_reach_the_tick_unless_switched_off_or_never_first() {
+        let (_t, hub) = hub();
+        hub.set_state(ServiceState::Shaping);
+        let app = |family: &str| AppInfo {
+            family: family.into(),
+            name: family.into(),
+            exe: format!("{family}.exe"),
+        };
+        let base = Instant::now();
+        let snap = |ms: u64| EngineSnapshot {
+            taken: Some(base + std::time::Duration::from_millis(ms)),
+            down: None,
+            up: None,
+        };
+        let seen = || {
+            Some(Seen {
+                // Two Discord processes, Zoom, and an id past the list.
+                apps: vec![app("discord"), app("zoom"), app("discord"), app("obs")],
+                calls: vec![2, 1, 0, 3, 99],
+                ..Seen::default()
+            })
+        };
+        let mut c = Config::default();
+        c.settings.never_first = vec!["obs".into()];
+        hub.set_loaded(c.clone());
+        hub.publish(&snap(0), seen());
+        hub.publish(&snap(100), seen());
+        assert_eq!(hub.latest_tick().calls, ["discord", "zoom"]);
+
+        c.settings.calls_first = false;
+        hub.set_loaded(c);
+        assert!(hub.latest_tick().calls.is_empty());
+
+        hub.clear_stats();
+        assert!(hub.latest_tick().calls.is_empty());
     }
 
     #[test]
