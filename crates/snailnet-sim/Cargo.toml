@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-snailnet-core = { version = "0.0.3", path = "../snailnet-core" }
+snailnet-core = { version = "0.0.4", path = "../snailnet-core" }
 
 [lints]
 workspace = true
