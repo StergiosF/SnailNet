@@ -726,8 +726,10 @@ impl Classifier for AppClassifier {
                     Source::Socket => who.by_socket.fetch_add(1, Relaxed),
                     Source::Port => who.by_port.fetch_add(1, Relaxed),
                 };
-                focused =
-                    self.focused(owner.app) || self.in_call(key, owner.app, pkt, info, outbound);
+                // Always watch for calls, even in the app in front, so a
+                // call keeps going first when its window loses focus.
+                let call = self.in_call(key, owner.app, pkt, info, outbound);
+                focused = self.focused(owner.app) || call;
                 (self.class_of(owner.app), Some(owner.app))
             }
             None => {

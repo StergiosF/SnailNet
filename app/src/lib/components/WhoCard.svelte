@@ -4,7 +4,7 @@
   // boosted one says how long it has left, lit by the shell's green. When
   // the order changes the rows glide to their new places, so the eye can
   // follow who overtook whom.
-  import { mbps, targetLabel } from "../format";
+  import { mbps, rowMbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { unnamed, type Ledger } from "../ledger";
   import { flip } from "svelte/animate";
@@ -23,10 +23,11 @@
 
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
-  const list = $derived(ledger ? users(ledger, live, label) : []);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   // Missing from older services: on.
   const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
+  const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
+  const list = $derived(ledger ? users(ledger, live, label, 5, calls) : []);
   // The row's second line: a boost's time left, else why a game goes
   // first, else that it's in a call, else what its slice is doing.
   function sub(u: (typeof list)[number]): string {
@@ -74,7 +75,7 @@
             <b>{u.name}</b>
             <small>{sub(u)}</small>
           </span>
-          <span class="mb num">{u.bps > 0 ? mbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
+          <span class="mb num">{u.bps > 0 ? rowMbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
           <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />
         </li>
       {/each}

@@ -95,6 +95,17 @@ describe("users", () => {
     expect(twitch[0]).toMatchObject({ boosted: true, bps: 0 });
   });
 
+  it("keeps an app in a call in view, however little it moves", () => {
+    const l = ledger(rules, busy(), label);
+    const u = users(l, null, label, 2, ["discord"]);
+    expect(u.map((x) => x.name)).toEqual(["Steam", "Discord"]);
+    // Already in view: nothing moves.
+    expect(users(l, null, label, 5, ["discord"]).map((x) => x.name)).toEqual(["Steam", "YouTube", "Discord", "Brave"]);
+    // A boost still wins the last place.
+    const b = users(l, { target: { kind: "family", id: "brave" } }, label, 2, ["discord"]);
+    expect(b.map((x) => x.name)).toEqual(["Steam", "Brave"]);
+  });
+
   it("keeps a busy boosted one that falls past the cut", () => {
     const u = users(ledger(rules, busy(), label), { target: { kind: "family", id: "brave" } }, label, 2);
     expect(u.map((x) => x.name)).toEqual(["Steam", "Brave"]);
@@ -115,6 +126,7 @@ describe("in a call", () => {
     expect(inCall({ kind: "family", id: "steam" }, ["discord"], true)).toBe(false);
     expect(inCall({ kind: "site", id: "discord" }, ["discord"], true)).toBe(false);
     expect(inCall({ kind: "family", id: "discord" }, undefined, true)).toBe(false);
+    expect(inCall({ kind: "family", id: "Discord" }, ["discord"], true)).toBe(true);
   });
   it("says nothing while the switch is off", () => {
     expect(inCall({ kind: "family", id: "discord" }, ["discord"], false)).toBe(false);

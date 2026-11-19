@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { className, mbps, percent, stateKind, targetLabel } from "./format";
+import { className, mbps, percent, rowMbps, stateKind, targetLabel } from "./format";
 describe("mbps", () => {
   it("keeps one decimal below 100 and none above", () => {
     expect(mbps(36_800_000)).toBe("36.8");
@@ -10,6 +10,16 @@ describe("mbps", () => {
   });
   it("never shows a negative rate", () => {
     expect(mbps(-5)).toBe("0.0");
+  });
+});
+
+describe("row mbps", () => {
+  it("says a trickle is under 0.1, not 0.0", () => {
+    expect(rowMbps(40_000)).toBe("<0.1");
+    expect(rowMbps(49_999)).toBe("<0.1");
+    expect(rowMbps(50_000)).toBe("0.1");
+    expect(rowMbps(2_400_000)).toBe("2.4");
+    expect(rowMbps(0)).toBe("0.0");
   });
 });
 

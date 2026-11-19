@@ -112,6 +112,7 @@ export function users(
   boost: Boost | null,
   label: (t: Target) => string,
   max = 5,
+  calls: string[] = [],
 ): User[] {
   const out: User[] = [];
   for (const s of l.slices) {
@@ -128,6 +129,18 @@ export function users(
   }
   out.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
   const shown = out.slice(0, max);
+  // An app in a call stays in view however little it moves (a voice call
+  // is ~0.05 Mbps), so "in a call" is seen while a download is busy: it
+  // takes the place of the quietest app that isn't in a call.
+  const calling = (u: User) => inCall(u.target, calls, true);
+  for (const u of out) {
+    if (shown.includes(u) || !calling(u)) continue;
+    let i = shown.length - 1;
+    while (i >= 0 && calling(shown[i]!)) i--;
+    if (i < 0) break;
+    shown.splice(i, 1, u);
+  }
+  shown.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
   if (boost) {
     const hit = out.find((u) => sameTarget(u.target, boost.target));
     if (hit) {
@@ -157,7 +170,8 @@ export function gameWhy(target: Target, games: GameTick[] | undefined, focusBoos
 
 /** Whether `target` is an app in a live call that goes first (§11.9). */
 export function inCall(target: Target, calls: string[] | undefined, on: boolean): boolean {
-  return on && target.kind === "family" && (calls?.includes(target.id) ?? false);
+  const id = target.id.toLowerCase();
+  return on && target.kind === "family" && (calls?.some((c) => c.toLowerCase() === id) ?? false);
 }
 
 /** The split in short: the slices with a share (Everything else last), and

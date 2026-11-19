@@ -9,6 +9,12 @@ export function mbps(bps: number): string {
   return v < 99.95 ? v.toFixed(1) : Math.round(v).toString();
 }
 
+/** An app's speed on its row: like [`mbps`], but traffic too small to
+ *  show as 0.1 reads "<0.1", never "0.0" (a voice call is ~0.04 Mbps). */
+export function rowMbps(bps: number): string {
+  return bps > 0 && bps < 50_000 ? "<0.1" : mbps(bps);
+}
+
 /** Basis points → "45%". */
 export function percent(basisPoints: number): string {
   return `${Math.round(basisPoints / 100)}%`;
