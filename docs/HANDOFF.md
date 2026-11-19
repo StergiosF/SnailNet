@@ -2,6 +2,14 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
+## Next (2026-11-20): three wow features, planned
+
+The user asked for features that make every user say wow. Chosen and
+planned in **`docs/HANDOFF-wow.md`**: (1) the proof, ping with and without
+SnailNet plus an A–F grade; (3) the living tray snail; (2) the one-tap fix
+when an app is left waiting. Build in that order (1 → 3 → 2), one release
+each. Start with "read docs/HANDOFF-wow.md and build feature 1".
+
 ## v0.0.5 (2026-11-19): SnailNet starts by itself, no right-click menu
 
 - The installed service had stopped silently on 2026-11-19 at 02:45

@@ -1076,8 +1076,9 @@ Estimates assume one developer working with Claude Code, part-time-to-steady pac
 
 Not committed. Kept so good ideas don't get lost.
 
-- **"Why is my internet slow?" button:** one click shows who's using the line right now and offers a one-tap fix ("Give YouTube a slice?").
-- **Bufferbloat grade (A–F)** in the speed test, before/after SnailNet. Very shareable.
+- **"Why is my internet slow?" button:** one click shows who's using the line right now and offers a one-tap fix ("Give YouTube a slice?"). *Planned as "the one-tap fix", docs/HANDOFF-wow.md feature 2 (2026-11-20).*
+- **Bufferbloat grade (A–F)** in the speed test, before/after SnailNet. Very shareable. *Planned as "the proof", docs/HANDOFF-wow.md feature 1, with a live "ping with and without SnailNet" row.*
+- **Living tray snail:** the tray icon shows calm / working / struggling from the line and the ping. *Planned, docs/HANDOFF-wow.md feature 3.*
 - **Per-app ping:** show each game's live RTT to its server (from TCP timestamps / UDP request-response pairing).
 - **Smart suggestions:** "Steam has been using 95% for 20 min while you watched YouTube, so make a 40/60 split?"
 - **Auto-pause for calls:** when Teams/Discord/Zoom has an active call, temporarily lower downloaders. *Partly built as §11.9 (the call goes first; downloaders aren't lowered, since going first already keeps the call clear without shrinking anyone's slice).*
