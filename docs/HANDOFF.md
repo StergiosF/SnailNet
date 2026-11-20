@@ -2,7 +2,14 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Next (2026-11-20): three wow features, planned
+## Next (2026-11-20, later): read docs/HANDOFF-next.md
+
+Features 1 and 3 are built, feature 2 half built, the app redesigned, no
+more notifications. What's left (the drag slider the user asked for,
+the rest of feature 2, the live check, v0.0.6) is in
+**`docs/HANDOFF-next.md`**.
+
+## Earlier (2026-11-20): three wow features, planned
 
 The user asked for features that make every user say wow. Chosen and
 planned in **`docs/HANDOFF-wow.md`**: (1) the proof, ping with and without
