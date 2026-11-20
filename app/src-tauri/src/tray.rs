@@ -40,7 +40,9 @@ const RESUME_LABEL: &str = "Resume SnailNet";
 /// Name the tray menu's item for the state SnailNet is in.
 pub fn sync_pause(app: &AppHandle, paused: bool) {
     if let Some(item) = app.try_state::<PauseItem>() {
-        let _ = item.0.set_text(if paused { RESUME_LABEL } else { PAUSE_LABEL });
+        let _ = item
+            .0
+            .set_text(if paused { RESUME_LABEL } else { PAUSE_LABEL });
     }
 }
 

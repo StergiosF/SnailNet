@@ -111,7 +111,10 @@ impl TauriSink {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .feel;
-        tray::sync_pause(&self.app, matches!(state, Some(ServiceState::Paused { .. })));
+        tray::sync_pause(
+            &self.app,
+            matches!(state, Some(ServiceState::Paused { .. })),
+        );
         tray_icon::update(&self.app, &link, state.as_ref(), blocked, feel);
     }
 }
