@@ -6,6 +6,7 @@
   // never happens without that click.
   import { t } from "../i18n";
   import { updates } from "../update.svelte";
+  import Glyph from "./Glyph.svelte";
 
   const status = $derived(updates.status);
   const body = $derived.by(() => {
@@ -27,6 +28,7 @@
 </script>
 
 <div class="item">
+  <span class="ic"><Glyph name="download" size={20} /></span>
   <div class="words">
     <b>{t("settings.update")}</b>
     <span aria-live="polite" title={status.kind === "failed" ? status.message : undefined}>{body}</span>
@@ -47,10 +49,20 @@
   .item {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     min-height: 68px;
-    padding: 12px 18px;
-    border-top: 1px solid var(--surface-ground);
+    padding: 14px 18px 14px 16px;
+    border-top: 1px solid rgb(0 0 0 / 0.18);
+  }
+  .ic {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-control);
+    background: rgb(0 0 0 / 0.16);
+    color: var(--text-tertiary);
   }
   .words {
     display: flex;

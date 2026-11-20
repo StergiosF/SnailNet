@@ -44,7 +44,7 @@ describe("ledger", () => {
     const [yt, brave, other] = ledger(rules, busy(), label).slices;
     expect(yt?.status).toEqual({ kind: "all" });
     expect(brave?.status.kind).toBe("lending");
-    expect(statusText(brave!.status)).toBe("6.5 Mbps of its slice spare for others");
+    expect(statusText(brave!.status)).toBe("not using all of its share");
     expect(other?.status.kind).toBe("borrowing");
     expect(other?.kept).toBeCloseTo(5.75 * M);
   });
@@ -89,9 +89,9 @@ describe("ledger", () => {
 describe("glance", () => {
   it("names the biggest user and who still gets what they ask for", () => {
     const g = glance(ledger(rules, busy(), label), 25 * M);
-    expect(g.title).toBe("Steam is using the most of your line.");
+    expect(g.title).toBe("Steam is using most of your internet.");
     expect(g.detail).toBe(
-      "It runs on room Brave isn't using. YouTube and Discord still get all they ask for.",
+      "It's using speed Brave doesn't need right now. YouTube and Discord still get all they need.",
     );
   });
 
@@ -105,7 +105,7 @@ describe("glance", () => {
     d.sites = [{ site: "youtube", name: "YouTube", family: "brave", bps: 2 * M }];
     const g = glance(ledger(rules, d, label), 25 * M);
     expect(g.title).toBe("YouTube is using the most right now.");
-    expect(g.detail).toBe("3.0 of 25.0 Mbps in use. There's room for everyone.");
+    expect(g.detail).toBe("3.0 of 25.0 Mbps in use. There's plenty left.");
   });
 
   it("says when nothing is using the internet", () => {
@@ -118,7 +118,7 @@ describe("glance", () => {
     const d = busy();
     d.classes[0] = { name: "site:youtube", bps: 10 * M, drops: 2, queued_bytes: 40_000 };
     const g = glance(ledger(rules, d, label), 25 * M);
-    expect(g.detail).toContain("YouTube wants more room too.");
+    expect(g.detail).toContain("YouTube wants more speed too.");
   });
 
   it("says an app in Everything else is waiting once the rule caught it", () => {
@@ -136,8 +136,8 @@ describe("glance", () => {
       ["Brave", true],
     ]);
     const g = glance(l, 25 * M);
-    expect(g.title).toBe("Steam is using the most of your line.");
-    expect(g.detail).toBe("Brave wants more room too.");
+    expect(g.title).toBe("Steam is using most of your internet.");
+    expect(g.detail).toBe("Brave wants more speed too.");
     // Without the rule's word, Brave is just a smaller app.
     expect(glance(ledger([], d, label), 25 * M).detail).not.toContain("wants more room");
   });
@@ -159,7 +159,7 @@ describe("glance", () => {
     const steam: Rule = { target: { kind: "family", id: "steam" }, share: 2500, priority: "normal", enabled: true };
     const g = glance(ledger([steam], d, label, ["brave"]), 25 * M);
     expect(g.detail).not.toContain("Everything else isn't using");
-    expect(g.detail).toBe("It runs on spare room. Brave wants more room too.");
+    expect(g.detail).toBe("It's using speed nobody else needs. Brave wants more speed too.");
   });
 
   it("keeps a waiting app listed even when it moves almost nothing", () => {

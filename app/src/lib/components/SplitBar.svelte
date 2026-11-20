@@ -13,9 +13,10 @@
   // Mbps. Each handle is a slider for the keyboard. Hovering a segment, or
   // holding a handle, lights up the rows it means.
   //
-  // Live use rides along the bar's foot (DESIGN.md, Split): under each
-  // segment a thin line fills as its slice is used, so the page has one
-  // picture of the split, not a second strip above it.
+  // Live use rides inside each segment (DESIGN.md, Split): a thin line
+  // along its foot fills as its share is used, so the page has one picture
+  // of the split, not a second strip. The pointer is an open hand over a
+  // handle and a closed one while dragging.
   import { mbps } from "../format";
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
@@ -32,7 +33,6 @@
   } from "../splitDrag";
   import type { Rule } from "../types";
   import { ui } from "../ui.svelte";
-  import AppIcon from "./AppIcon.svelte";
 
   let { ledger, canEdit }: { ledger: Ledger; canEdit: boolean } = $props();
 
@@ -188,11 +188,13 @@
         onpointerleave={() => drag === null && (ui.hot = [])}
       >
         {#if fit === "full"}
-          <AppIcon target={s.target} name={s.name} size={18} />
           <span class="name">{s.name}</span>
         {/if}
         {#if fit !== "none"}
           <b>{pct(s.share)}<small>%</small></b>
+        {/if}
+        {#if ledger.shaped !== null && fill(s) !== null}
+          <span class="use"><i style:width="{(fill(s) ?? 0) * 100}%"></i></span>
         {/if}
       </div>
     {/each}
@@ -239,22 +241,6 @@
     {/if}
   </div>
 
-  {#if ledger.shaped !== null}
-    <div class="live" aria-hidden="true">
-      {#each segs as s, k (s.key)}
-        {@const first = k === 0}
-        {@const last = k === segs.length - 1}
-        {@const f = fill(s)}
-        <span
-          style:left="calc({startOf(k)}% + {first ? 0 : 2}px)"
-          style:width="max(0px, calc({(s.share ?? 0) / 100}% - {(first ? 0 : 2) + (last ? 0 : 2)}px))"
-        >
-          {#if f !== null}<i style:width="{f * 100}%" style:background={ink(s)}></i>{/if}
-        </span>
-      {/each}
-    </div>
-  {/if}
-
   {#if ticks}
     <div class="ticks" aria-hidden="true">
       {#each ticks as p, i (i)}
@@ -283,7 +269,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 12px;
+    padding: 0 14px;
     overflow: hidden;
     border-radius: 6px;
     color: var(--on-accent);
@@ -308,9 +294,6 @@
   }
   .seg.hot {
     filter: brightness(1.08);
-  }
-  .seg :global(.wrap) {
-    flex: none;
   }
   .name {
     min-width: 0;
@@ -339,11 +322,16 @@
     width: 32px;
     margin-left: -16px;
     border-radius: 10px;
-    cursor: ew-resize;
+    cursor: grab;
     transition: left 300ms var(--ease-out);
   }
   .dragging .handle {
     transition: none;
+  }
+  /* Holding a handle: a closed hand wherever the pointer goes. */
+  .bar.dragging,
+  .bar.dragging * {
+    cursor: grabbing;
   }
   .handle::before {
     content: "";
@@ -414,27 +402,24 @@
     background: var(--text-tertiary);
     opacity: 0.8;
   }
-  /* Live use along the foot: each slice's line fills as it's used. */
-  .live {
-    position: relative;
-    height: 4px;
-    margin-top: 6px;
-  }
-  .live span {
+  /* Live use, inside the segment's foot: how much of its share is used. */
+  .use {
     position: absolute;
-    top: 0;
-    height: 4px;
+    left: 10px;
+    right: 10px;
+    bottom: 7px;
+    height: 3px;
     border-radius: 2px;
-    background: rgb(255 255 255 / 0.07);
+    background: rgb(10 33 29 / 0.14);
     overflow: hidden;
   }
-  .live i {
+  .use i {
     display: block;
     height: 100%;
     border-radius: 2px;
+    background: rgb(10 33 29 / 0.5);
     transition: width 900ms var(--ease-out);
   }
-
   @media (forced-colors: active) {
     .seg {
       forced-color-adjust: none;

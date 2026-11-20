@@ -145,10 +145,10 @@ detailed spec.
   - Card and group titles: 16 bold, in plain words; never small capitals,
     never an eyebrow above a heading.
   - Body: 15–16 px. Labels and statuses: 13–14 px.
-- **Status words are short:** "full, wants more", "waiting for room",
-  "most of the line", "6.5 Mbps of its slice spare for others". The
-  vocabulary is PRODUCT.md's: slice, goes first, only when the line is
-  free, Everything else.
+- **Plain, everyday words** (the user's call, 2026-11-20): "share", not
+  "slice"; "your internet" or "speed", not "the line"; "Priority";
+  "Only use spare speed"; Everything else. Statuses are short: "using
+  all of its share", "waiting for speed", "most of your speed".
 
 ## Layout
 
@@ -159,7 +159,7 @@ detailed spec.
   - Pause, only while SnailNet is doing something;
   - the line.
 - **The top strip** is 32 px tall with the caption buttons. On Now and
-  Split it grows to 60 px to hold the mode switch at the 32 px gutter;
+  Split it grows to 76 px to hold the mode switch at the 32 px gutter;
   everything around the switch stays the window's drag region.
 - **Pages:** one column with a 32 px gutter. Now caps at 880 px. Settings
   sets a 184 px index beside groups up to 680 px wide; under 980 px the
@@ -179,7 +179,7 @@ detailed spec.
 ## Shapes
 
 - Radii: 10 px controls, 9 px segments, 16 px cards. Pills only for small
-  marks (Boosted, Playing, Goes first).
+  marks (Boosted, Playing, High priority).
 - **Icons are SnailNet's own** (`Glyph.svelte`): drawn on a 24 box with a
   1.75 stroke, round ends, in the current text colour.
   - Now: the shell's spiral. Split: a bar cut in three. Settings: two
@@ -198,8 +198,10 @@ detailed spec.
 
 ## Components
 
-- **Mode switch** (`ModeSwitch.svelte`): segmented radios with glyphs; the
-  one that's on is cream. Each mode's one line is its tooltip and
+- **Mode switch** (`ModeSwitch.svelte`): segmented radios, 44 px tall,
+  in a 76 px top strip. Each mode's mark is bold and filled, as on the
+  first mode tiles, on a small chip; the one that's on is cream spreading
+  from its mark, its chip shell green. Each mode's one line is its tooltip and
   description; Gaming says Playing while a game runs.
 - **Using your internet** (`WhoCard.svelte`): busiest first. Each row has
   its icon, name, short status, a 4 px bar of its part of the line (its
@@ -208,9 +210,23 @@ detailed spec.
 - **Drag bar** (`SplitBar.svelte`): one segment per slice, cream handles,
   live use as a 4 px line under each segment. The readout shows under the
   bar while dragging.
-- **Slice row** (`SliceRow.svelte`): icon, name, status, − % +, and
-  Settings to fold open priority, only-when-free, limit and remove. No bar
-  of its own.
+- **Share rows** (`SliceList.svelte`, `SliceRow.svelte`): one card,
+  hairlines between rows. Icon, name, status, − % +, a chevron. Priority
+  tints the row (High a shell-green wash from the left with a "High
+  priority" chip, Low a shade darker). Opened: a dark panel with one
+  control per line (Priority, Only use spare speed, Speed limit), the
+  explanation in the tooltip, Remove under it. Everything else opens to
+  its apps; one click gives an app a share.
+- **Drag bar** cursors: an open hand over a handle, a closed hand while
+  dragging. Live use is a thin line inside each segment's foot.
+- **Menus** (`.popmenu`): every item leads with a grey glyph that lights
+  on hover; hover is a cream wash, danger a coral one. No native
+  `<select>`: lists open in place, or `Dropdown.svelte`.
+- **Boost** is shell green on a soft green tile (`--shell-bright`).
+- **Settings rows** lead with a quiet grey glyph on a dark tile. The
+  speed test's grades sit side by side, With SnailNet tinted green.
+- **Internet speed** (side rail): a small card, download and upload
+  side by side as big figures over "Mbps down" and "Mbps up".
 - **Empty split:** what a slice is, "Give {app} a slice" for the apps
   using the line now, another app or website, and a 30% example in Mbps.
 - **Pause:** shown in the window while a rule is on in the mode that's on,

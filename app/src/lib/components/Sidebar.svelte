@@ -68,18 +68,22 @@
         ? t("sidebar.line.label", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
         : t("header.line.set")}
     >
-      <span class="k">{t("sidebar.line")}<i class="icon pen" aria-hidden="true">&#xE70F;</i></span>
+      <span class="k"
+        ><Glyph name="gauge" size={16} /><span class="kt">{t("sidebar.line")}</span><span class="pen"
+          ><Glyph name="pen" size={14} /></span
+        ></span
+      >
       {#if hasLine}
-        {#each [{ label: t("sidebar.down"), v: line.down_mbps }, { label: t("sidebar.up"), v: line.up_mbps }] as row (row.label)}
-          <span class="row">
-            <span class="dirname">{row.label}</span>
-            {#if row.v === undefined}
-              <span class="none">{t("line.notSet")}</span>
-            {:else}
-              <span class="v num">{fig(row.v)}<small>{t("line.unit")}</small></span>
-            {/if}
-          </span>
-        {/each}
+        <span class="dirs">
+          {#each [{ label: t("sidebar.down"), v: line.down_mbps }, { label: t("sidebar.up"), v: line.up_mbps }] as row (row.label)}
+            <span class="dir">
+              <span class="v num">
+                {#if row.v === undefined}<span class="none">{t("line.notSet")}</span>{:else}{fig(row.v)}{/if}
+              </span>
+              <span class="dirname">{row.label}</span>
+            </span>
+          {/each}
+        </span>
       {:else}
         <span class="v unset">{t("sidebar.line.none")}</span>
       {/if}
@@ -93,7 +97,7 @@
       aria-live="polite"
       onclick={() => void updates.install()}
     >
-      <i class="icon" aria-hidden="true">&#xE896;</i>{updateLabel}
+      <Glyph name="download" size={18} />{updateLabel}
     </button>
   {/if}
 </aside>
@@ -166,19 +170,25 @@
   nav button.on :global(.glyph) {
     color: var(--shell);
   }
+  /* The line as the user set it: a small card at the rail's foot, the two
+     speeds side by side, big figures over quiet labels. It opens the speed
+     dialog; the pen says so under the pointer. */
   .line {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
+    gap: 10px;
     /* At the foot of the rail; under Pause when Pause shows. */
     margin-top: auto;
-    padding: 10px 12px 12px;
+    padding: 12px 14px 12px;
     border: 0;
-    border-radius: var(--radius-control);
-    background: transparent;
+    border-radius: 14px;
+    background: var(--surface-ground);
+    box-shadow: inset 0 0 0 1px var(--stroke-card);
     text-align: left;
-    transition: background-color 120ms linear;
+    transition:
+      background-color 120ms linear,
+      box-shadow 120ms linear;
   }
   .foot {
     margin-top: auto;
@@ -187,44 +197,59 @@
     margin-top: 8px;
   }
   .line:hover {
-    background: var(--fill-subtle-hover);
+    background: var(--surface-1);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
   }
   .k {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 2px;
+    gap: 8px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-secondary);
   }
-  .row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+  .k :global(.glyph) {
+    color: var(--text-tertiary);
+  }
+  .kt {
+    flex: 1;
+  }
+  .dirs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
-  .dirname,
-  .none {
-    font-size: 13px;
-    color: var(--text-secondary);
+  .dir {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
   }
   .v {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 22px;
+    line-height: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
   }
   .v.unset {
+    font-size: 15px;
     font-weight: 600;
     color: var(--caution);
   }
-  small {
-    margin-left: 2px;
-    font-size: 13px;
-    font-weight: 400;
+  .none {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .dirname {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
     color: var(--text-secondary);
   }
   .pen {
-    font-size: 11px;
+    display: flex;
     opacity: 0;
     transition: opacity 160ms linear;
   }
@@ -251,9 +276,6 @@
   }
   .update:hover:not(:disabled) {
     background: var(--accent-hover);
-  }
-  .update .icon {
-    font-size: 13px;
   }
   .update:disabled {
     opacity: 0.7;

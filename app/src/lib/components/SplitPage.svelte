@@ -11,7 +11,6 @@
   // go back to. Changes wait in a draft until Save (SaveBar, ui.svelte.ts);
   // the mode's own buttons ask first when there are unsaved changes.
   import { copyMode, deleteMode, renameMode, resetSplit } from "../actions";
-  import { mbps } from "../format";
   import { t } from "../i18n";
   import type { Ledger } from "../ledger";
   import { isOwnMode, modeName } from "../modes";
@@ -42,11 +41,6 @@
   /** Who could have a slice: the apps in Everything else now, busiest first. */
   const offers = $derived(
     (ledger?.slices.at(-1)?.members ?? []).filter((m) => !m.fixed && m.bps >= 50_000).slice(0, 3),
-  );
-  const demo = $derived(
-    offers[0] && ledger?.shaped
-      ? t("split.empty.demo", { name: offers[0].name, kept: mbps(ledger.shaped * 0.3) })
-      : null,
   );
 
   function give(target: Target) {
@@ -103,17 +97,15 @@
 
 {#if empty}
   <section class="card empty" aria-labelledby="empty-h">
+    <span class="em-ic" aria-hidden="true"><Glyph name="split" size={22} /></span>
     <div class="words">
       <h2 id="empty-h">{t("split.empty.title")}</h2>
       <p>{t("split.empty.body")}</p>
       {#if canEdit}
-        {#if offers.length > 0}
-          <p class="k">{t("split.empty.now")}</p>
-        {/if}
         <div class="pick">
           {#each offers as m (m.key)}
             <button type="button" class="btn" onclick={() => give(m.target)}>
-              <AppIcon target={m.target} name={m.name} size={20} />{t("split.empty.give", { name: m.name })}
+              <AppIcon target={m.target} name={m.name} size={18} />{t("split.empty.give", { name: m.name })}
             </button>
           {/each}
           <button type="button" class="btn btn-quiet" onclick={() => (ui.adding = true)}>
@@ -122,15 +114,6 @@
         </div>
       {/if}
     </div>
-    {#if demo}
-      <div class="demo" aria-hidden="true">
-        <div class="dbar">
-          <span class="a"><b>30%</b></span>
-          <span class="b">{t("split.everything")}</span>
-        </div>
-        <p>{demo}</p>
-      </div>
-    {/if}
   </section>
   {#if ui.rules.length > 0}
     <SliceList {ledger} {loading} {canEdit} />
@@ -164,77 +147,49 @@
   }
   .intro {
     max-width: 62ch;
-    margin: 8px 0 0;
-    font-size: 15.5px;
+    margin: 6px 0 0;
+    font-size: 15px;
     line-height: 1.5;
     color: var(--text-secondary);
   }
   .empty {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 280px);
-    gap: 32px;
-    align-items: center;
-    margin-top: 22px;
-    padding: 28px 30px 30px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-top: 24px;
+    padding: 22px 24px 24px;
     animation: rise-in 480ms var(--ease-out) backwards;
+  }
+  .em-ic {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--shell-soft);
+    color: var(--shell-bright);
+  }
+  .words {
+    min-width: 0;
   }
   .empty h2 {
     margin: 0;
-    font-size: 21px;
-    line-height: 27px;
+    font-size: 18px;
+    line-height: 24px;
     font-weight: 800;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
   }
   .empty p {
-    max-width: 54ch;
-    margin: 10px 0 0;
+    max-width: 60ch;
+    margin: 6px 0 0;
     line-height: 1.5;
     color: var(--text-secondary);
-  }
-  .empty .k {
-    margin-top: 20px;
-    font-size: 13px;
-    font-weight: 700;
   }
   .pick {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 10px;
-  }
-  .pick .btn {
-    gap: 8px;
-  }
-  .dbar {
-    display: flex;
-    gap: 3px;
-    height: 44px;
-    border-radius: 11px;
-    overflow: hidden;
-    color: var(--on-accent);
-    font-size: 13px;
-    font-weight: 800;
-  }
-  .dbar span {
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-  }
-  .dbar .a {
-    width: 30%;
-    background: var(--ink-0);
-  }
-  .dbar .b {
-    flex: 1;
-    background: var(--stone-0);
-  }
-  .demo p {
-    margin-top: 10px;
-    font-size: 13px;
-  }
-  @media (max-width: 900px) {
-    .empty {
-      grid-template-columns: minmax(0, 1fr);
-    }
+    margin-top: 18px;
   }
 </style>

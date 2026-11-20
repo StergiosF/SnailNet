@@ -76,6 +76,14 @@
   --shell-hover: #3bbb9f;
   --on-shell: #062520;
   --shell-soft: rgb(47 168 142 / 0.16);
+  --shell-soft-hover: rgb(47 168 142 / 0.28);
+  /* The shell's green lit up, for marks on a dark surface (Boost, ticks):
+     7.4:1 on surface 2. */
+  --shell-bright: #74dcc1;
+  /* Hover on the menus and quiet rows: a breath of cream, not a grey slab. */
+  --hover-soft: rgb(239 232 214 / 0.07);
+  --hover-strong: rgb(239 232 214 / 0.11);
+  --critical-soft: rgb(242 144 126 / 0.12);
 
   --caution: #eab04e;
   --critical: #f2907e;
@@ -163,6 +171,8 @@ button:not(:disabled),
 [role="button"],
 [popovertarget],
 label:has(> input:not(:disabled)),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
 select:not(:disabled) {
   cursor: pointer;
 }
@@ -270,8 +280,29 @@ select {
   color: var(--text-secondary);
 }
 .btn-quiet:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--hover-soft);
   color: var(--text-primary);
+}
+.btn .glyph {
+  color: var(--text-tertiary);
+  transition: color 120ms linear;
+}
+.btn:hover:not(:disabled) .glyph {
+  color: currentColor;
+}
+/* Something that can't be taken back: coral, and it stays coral under the
+   pointer (a soft coral wash, never a grey one). */
+.btn-danger {
+  background: transparent;
+  color: var(--critical);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
+.btn-danger .glyph,
+.btn-danger:hover:not(:disabled) .glyph {
+  color: var(--critical);
 }
 @media (forced-colors: active) {
   .btn {
@@ -301,6 +332,54 @@ select {
 @media (forced-colors: active) {
   .field {
     border-color: CanvasText;
+  }
+}
+
+/* An on/off switch: a native checkbox with role="switch". */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  border-radius: 12px;
+  background: var(--surface-3);
+  transition: background-color 160ms linear;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms linear;
+}
+.switch:checked {
+  background: var(--shell);
+}
+.switch:checked::after {
+  transform: translateX(20px);
+  background: var(--on-shell);
+}
+.switch:disabled {
+  opacity: 0.5;
+}
+@media (forced-colors: active) {
+  .switch {
+    border: 1px solid ButtonText;
+  }
+  .switch::after {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+  .switch:checked::after {
+    background: Highlight;
   }
 }
 
@@ -387,11 +466,12 @@ select {
   }
 }
 .popmenu .title {
-  margin: 0 10px;
+  margin: 2px 10px 0;
+  font-size: 15px;
   font-weight: 700;
 }
 .popmenu .body {
-  margin: 4px 10px 8px;
+  margin: 4px 10px 10px;
   font-size: 13px;
   line-height: 1.4;
   color: var(--text-secondary);
@@ -399,20 +479,33 @@ select {
 .popmenu button {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   height: 38px;
   padding: 0 10px;
   border: 0;
   border-radius: 9px;
   background: transparent;
+  color: var(--text-primary);
   text-align: left;
   font-size: 14px;
+  transition:
+    background-color 100ms linear,
+    color 100ms linear;
+}
+/* Every item leads with its glyph, quiet grey until it's pointed at. */
+.popmenu button .glyph {
+  color: var(--text-tertiary);
+  transition: color 100ms linear;
 }
 .popmenu button:hover,
 .popmenu button:focus-visible {
-  background: var(--surface-3);
+  background: var(--hover-strong);
   outline-offset: -2px;
+}
+.popmenu button:hover .glyph,
+.popmenu button:focus-visible .glyph {
+  color: var(--text-primary);
 }
 .popmenu .icon {
   flex: none;
@@ -421,19 +514,21 @@ select {
   text-align: center;
 }
 .popmenu hr {
-  margin: 6px 4px;
+  margin: 6px 10px;
   border: 0;
   border-top: 1px solid var(--stroke-card);
 }
-.popmenu .danger {
+.popmenu .danger,
+.popmenu .danger .glyph {
   color: var(--critical);
 }
-/* Salmon on surface-3 is 3.8:1, so the danger item keeps the menu's own
-   ground under the pointer and shows hover with a ring instead. */
 .popmenu .danger:hover,
 .popmenu .danger:focus-visible {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--critical);
+  background: var(--critical-soft);
+}
+.popmenu .danger:hover .glyph,
+.popmenu .danger:focus-visible .glyph {
+  color: var(--critical);
 }
 @media (forced-colors: active) {
   .popmenu {

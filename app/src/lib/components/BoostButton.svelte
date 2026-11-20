@@ -6,7 +6,8 @@
   // that's boosted. The menu is a native popover, so Escape and a click
   // outside close it.
   import { block, boost, mergeInto, putBack, setFirstChoice, splitOut, stopBoost } from "../actions";
-  import Glyph from "./Glyph.svelte";
+  import AppIcon from "./AppIcon.svelte";
+  import Glyph, { type GlyphName } from "./Glyph.svelte";
   import { members, splitExe } from "../families";
   import { firstChoiceOf, type FirstChoice } from "../firstChoice";
   import { t } from "../i18n";
@@ -21,14 +22,15 @@
   let btn = $state<HTMLButtonElement | null>(null);
   let menu = $state<HTMLDivElement | null>(null);
 
-  const choices: { minutes: number | null; label: string }[] = [
-    { minutes: 60, label: t("boost.1h") },
-    { minutes: 240, label: t("boost.4h") },
-    { minutes: null, label: t("boost.forever") },
+  const choices: { minutes: number | null; label: string; glyph: GlyphName }[] = [
+    { minutes: 60, label: t("boost.1h"), glyph: "clock" },
+    { minutes: 240, label: t("boost.4h"), glyph: "clock" },
+    { minutes: null, label: t("boost.forever"), glyph: "infinity" },
   ];
 
   function place(e: ToggleEvent) {
     if (e.newState === "open" && btn && menu) placeMenu(btn, menu);
+    if (e.newState === "closed") merging = false;
   }
 
   function pick(minutes: number | null) {
@@ -66,15 +68,12 @@
     menu?.hidePopover();
     if (own) void putBack(own);
   }
-  // The select only picks; the button does it. Chromium on Windows fires
-  // `change` on every arrow key in a closed select, so acting on change
-  // would merge into whichever app the first key press landed on.
-  let mergeTo = $state("");
-  function merge() {
-    const into = others.find((o) => o.id === mergeTo);
-    if (!into) return;
+  // "Count it as part of": one row that opens the list of apps right in
+  // the menu; picking one does it (no separate dropdown and Move button).
+  let merging = $state(false);
+  function merge(into: { id: string; name: string }) {
     menu?.hidePopover();
-    mergeTo = "";
+    merging = false;
     void mergeInto({ id: target.id, name }, into);
   }
   function choose(choice: FirstChoice) {
@@ -105,51 +104,59 @@
     <p class="title">{t("boost.menu.title", { name })}</p>
     <p class="body">{t("boost.menu.body")}</p>
     {#each choices as c (c.label)}
-      <button type="button" role="menuitem" onclick={() => pick(c.minutes)}>{c.label}</button>
+      <button type="button" role="menuitem" onclick={() => pick(c.minutes)}
+        ><Glyph name={c.glyph} size={18} />{c.label}</button
+      >
     {/each}
     {#if target.kind === "family"}
       <hr />
-      {#each [["game", t("first.game")], ["never", t("first.never")]] as const as [choice, label] (choice)}
+      {#each [["game", t("first.game"), "gaming"], ["never", t("first.never"), "ban"]] as const as [choice, label, glyph] (choice)}
         <button
           type="button"
           role="menuitemcheckbox"
           aria-checked={first === choice}
           onclick={() => choose(choice)}
         >
+          <Glyph name={glyph} size={18} />
           <span class="lab">{label}</span>
-          {#if first === choice}<i class="icon tick" aria-hidden="true">&#xE73E;</i>{/if}
+          {#if first === choice}<span class="tick"><Glyph name="check" size={16} /></span>{/if}
         </button>
       {/each}
       <hr />
       {#if own}
-        <button type="button" role="menuitem" onclick={back}>
-          <i class="icon" aria-hidden="true">&#xE7A7;</i>{t("group.back")}
-        </button>
+        <button type="button" role="menuitem" onclick={back}><Glyph name="undo" size={18} />{t("group.back")}</button>
       {:else if programs.length > 1}
         {#each programs as exe (exe)}
           <button type="button" role="menuitem" onclick={() => split(exe)}>
-            <i class="icon" aria-hidden="true">&#xE8C6;</i><span class="exe">{t("group.split", { exe })}</span>
+            <Glyph name="unlink" size={18} /><span class="exe">{t("group.split", { exe })}</span>
           </button>
         {/each}
       {/if}
       {#if others.length > 0}
-        <div class="merge" role="group" aria-labelledby="{uid}-merge">
-          <span id="{uid}-merge">{t("group.merge")}</span>
-          <div class="row">
-            <select bind:value={mergeTo} aria-labelledby="{uid}-merge">
-              <option value="">{t("group.merge.pick")}</option>
-              {#each others as o (o.id)}
-                <option value={o.id}>{o.name}</option>
-              {/each}
-            </select>
-            <button type="button" class="go" disabled={mergeTo === ""} onclick={merge}>{t("group.merge.go")}</button>
+        <button
+          type="button"
+          role="menuitem"
+          aria-expanded={merging}
+          aria-controls="{uid}-merge"
+          onclick={() => (merging = !merging)}
+        >
+          <Glyph name="merge" size={18} /><span class="lab">{t("group.merge")}</span><span
+            class="chev"
+            class:open={merging}><Glyph name="down" size={16} /></span
+          >
+        </button>
+        {#if merging}
+          <div class="apps" id="{uid}-merge" role="group" aria-label={t("group.merge")}>
+            {#each others as o (o.id)}
+              <button type="button" role="menuitem" onclick={() => merge(o)}>
+                <AppIcon target={{ kind: "family", id: o.id }} name={o.name} size={18} /><span class="exe">{o.name}</span>
+              </button>
+            {/each}
           </div>
-        </div>
+        {/if}
       {/if}
       <hr />
-      <button type="button" role="menuitem" class="danger" onclick={blockIt}>
-        <i class="icon" aria-hidden="true">&#xE8F8;</i>{t("block")}
-      </button>
+      <button type="button" role="menuitem" class="danger" onclick={blockIt}><Glyph name="ban" size={18} />{t("block")}</button>
     {/if}
   </div>
 {/if}
@@ -160,34 +167,36 @@
     align-items: center;
     gap: 6px;
     height: 32px;
-    padding: 0 12px;
+    padding: 0 12px 0 10px;
     border: 0;
     border-radius: 9px;
-    background: var(--surface-2);
-    color: var(--text-primary);
+    background: var(--shell-soft);
+    color: var(--shell-bright);
     font-size: 13px;
     font-weight: 700;
     white-space: nowrap;
     transition:
       background-color 120ms linear,
+      color 120ms linear,
       transform 120ms var(--ease-out);
+  }
+  .b :global(.glyph) {
+    stroke-width: 2.25;
+  }
+  .b:hover:not(:disabled) {
+    background: var(--shell-soft-hover);
+    color: var(--text-primary);
   }
   .b:active:not(:disabled) {
     transform: scale(0.96);
-  }
-  .b:hover:not(:disabled) {
-    background: var(--surface-3);
   }
   .b.live {
     background: var(--shell);
     color: var(--on-shell);
   }
-  .b :global(.glyph) {
-    margin-left: -2px;
-    color: var(--shell);
-  }
   .b.live:hover:not(:disabled) {
     background: var(--shell-hover);
+    color: var(--on-shell);
   }
   .b:disabled {
     opacity: 0.5;
@@ -199,7 +208,16 @@
     min-width: 0;
   }
   .tick {
-    color: var(--shell-hover);
+    display: flex;
+    color: var(--shell-bright);
+  }
+  .chev {
+    display: flex;
+    color: var(--text-tertiary);
+    transition: transform 200ms var(--ease-out);
+  }
+  .chev.open {
+    transform: rotate(180deg);
   }
   .exe {
     min-width: 0;
@@ -207,43 +225,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .merge {
-    display: grid;
-    gap: 6px;
-    padding: 6px 10px 4px;
-    font-size: 13px;
-    color: var(--text-secondary);
-  }
-  .merge .row {
+  /* The apps to count it as part of, tucked under their row. */
+  .apps {
     display: flex;
-    gap: 6px;
+    flex-direction: column;
+    margin: 2px 0 2px 18px;
+    padding-left: 8px;
+    border-left: 1px solid var(--stroke-card);
   }
-  .merge select {
-    flex: 1;
-    min-width: 0;
+  .apps button {
     height: 34px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: 9px;
-    background: var(--surface-3);
-    color: var(--text-primary);
-    font-size: 14px;
-  }
-  .merge .go {
-    flex: none;
-    width: auto;
-    height: 34px;
-    padding: 0 12px;
-    background: var(--surface-3);
-    color: var(--text-primary);
-    font-weight: 700;
-  }
-  .merge .go:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--on-accent);
-  }
-  .merge .go:disabled {
-    opacity: 0.5;
   }
   @media (forced-colors: active) {
     .b {

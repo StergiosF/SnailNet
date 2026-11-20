@@ -62,10 +62,10 @@
     flex: none;
   }
   .titlebar.tall {
-    height: 60px;
+    height: 76px;
   }
   .tall .brand {
-    padding: 14px 0 6px var(--gutter);
+    padding: 16px 0 8px var(--gutter);
   }
   .tall .caption {
     align-self: flex-start;

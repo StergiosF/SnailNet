@@ -8,6 +8,7 @@
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
   import { ui } from "../ui.svelte";
+  import Glyph from "./Glyph.svelte";
   import SliceRow from "./SliceRow.svelte";
   import Snail from "./Snail.svelte";
 
@@ -39,7 +40,7 @@
         <p><strong>{t("list.empty.title")}</strong>{t("list.empty.body")}</p>
       </div>
     {/if}
-    <ul>
+    <ul class="card rows">
       {#each shown.slice(0, -1) as s (s.key)}
         <SliceRow slice={s} {canEdit} />
       {/each}
@@ -53,7 +54,7 @@
               <b>{t(rest.length === 1 ? "fold.title.one" : "fold.title", { count: rest.length })}</b>
               <small>{rest.map((s) => s.name).slice(0, 4).join(", ")}{rest.length > 4 ? "…" : ""}</small>
             </span>
-            <i class="icon chev" class:open={unfold} aria-hidden="true">&#xE70D;</i>
+            <span class="chev" class:open={unfold} aria-hidden="true"><Glyph name="down" size={18} /></span>
           </button>
         </li>
         {#if unfold}
@@ -68,7 +69,7 @@
     </ul>
     {#if canEdit}
       <button type="button" class="add" onclick={() => (ui.adding = true)}>
-        <span class="plus" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></span>{t("list.add.long")}
+        <span class="plus" aria-hidden="true"><Glyph name="plus" size={18} /></span>{t("list.add.long")}
       </button>
     {/if}
   {/if}
@@ -79,45 +80,51 @@
 
 <style>
   .list {
-    margin: 20px -12px 0;
+    margin-top: 24px;
     padding-bottom: 8px;
   }
+  /* The shares in one card, a hairline between rows. */
   ul {
     display: flex;
     flex-direction: column;
-    gap: 4px;
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+  .rows {
+    overflow: hidden;
+  }
+  .rows > :global(li + li) {
+    border-top: 1px solid rgb(0 0 0 / 0.2);
   }
   .fold button {
     display: flex;
     align-items: center;
     gap: 14px;
     width: 100%;
-    padding: 12px;
+    min-height: 64px;
+    padding: 12px 16px;
     border: 0;
-    border-radius: var(--radius-card);
     background: transparent;
     text-align: left;
     transition: background-color 120ms linear;
   }
   .fold button:hover {
-    background: var(--surface-1);
+    background: var(--hover-soft);
   }
   .stack {
     display: grid;
     place-items: center;
-    grid-template-columns: repeat(3, 8px);
+    grid-template-columns: repeat(3, 6px);
     gap: 4px;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: var(--radius-control);
-    background: var(--surface-1);
+    background: rgb(0 0 0 / 0.16);
   }
   .dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--text-tertiary);
   }
@@ -125,22 +132,23 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    gap: 2px;
     min-width: 0;
   }
   .words b {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
   }
   .words small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: 13.5px;
     color: var(--text-secondary);
   }
   .chev {
-    font-size: 12px;
-    color: var(--text-secondary);
+    display: flex;
+    color: var(--text-tertiary);
     transition: transform 200ms var(--ease-out);
   }
   .chev.open {
@@ -150,8 +158,8 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    height: 64px;
-    padding: 0 12px;
+    height: 68px;
+    padding: 0 16px;
   }
   .skeleton .ic {
     width: 40px;
@@ -169,18 +177,22 @@
     align-items: center;
     gap: 14px;
     width: 100%;
-    height: 56px;
-    margin-top: 4px;
-    padding: 0 12px;
+    height: 60px;
+    margin-top: 10px;
+    padding: 0 16px;
     border: 0;
     border-radius: var(--radius-card);
     background: transparent;
     color: var(--text-secondary);
+    font-weight: 600;
     text-align: left;
-    transition: background-color 120ms linear;
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.07);
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
   }
   .add:hover {
-    background: var(--surface-1);
+    background: var(--hover-soft);
     color: var(--text-primary);
   }
   .plus {
@@ -189,7 +201,12 @@
     width: 40px;
     height: 40px;
     border-radius: var(--radius-control);
-    box-shadow: inset 0 0 0 1.5px var(--surface-3);
+    background: rgb(0 0 0 / 0.16);
+    color: var(--text-secondary);
+  }
+  .add:hover .plus {
+    background: var(--accent);
+    color: var(--on-accent);
   }
   .empty {
     display: flex;
@@ -210,7 +227,7 @@
     margin: 12px 12px 0;
   }
   @media (forced-colors: active) {
-    .plus {
+    .add {
       border: 1.5px solid ButtonText;
     }
   }

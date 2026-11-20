@@ -10,7 +10,7 @@
   import { t } from "../i18n";
   import { availableModes } from "../modes";
   import { service } from "../service.svelte";
-  import Glyph, { modeGlyph } from "./Glyph.svelte";
+
 
   let { disabled }: { disabled: boolean } = $props();
 
@@ -19,6 +19,28 @@
   const picked = $derived(modes.find((m) => m.id === active));
   const uid = $props.id();
 </script>
+
+<!-- The modes' own marks, bold and filled as on the first mode tiles (the
+     user liked those better): an equals sign, a play arrow, a pad, an
+     arrow down to a tray; the user's own modes three sliders. -->
+{#snippet mark(id: string)}
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    {#if id === "balanced"}
+      <path d="M5 9h14M5 15h14" class="st" />
+    {:else if id === "streaming"}
+      <path d="M8 5.5v13l10.5-6.5z" class="fl" />
+    {:else if id === "gaming"}
+      <path
+        d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2.3 2.3 0 0 1-4 .9L14.5 15h-5l-1.6 2.1a2.3 2.3 0 0 1-4-.9l-.8-3.3A4 4 0 0 1 7 8z"
+        class="fl"
+      />
+    {:else if id === "quiet-downloads"}
+      <path d="M12 4v10m0 0-4-4m4 4 4-4M5 19.5h14" class="st" />
+    {:else}
+      <path d="M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4" class="st" />
+    {/if}
+  </svg>
+{/snippet}
 
 <div class="switch" role="radiogroup" aria-label={t("mode.label")} data-tauri-drag-region>
   <span class="k" data-tauri-drag-region>{t("mode.label")}</span>
@@ -34,7 +56,8 @@
           aria-describedby="{uid}-{m.id}"
           onchange={() => void switchMode(m.id)}
         />
-        <Glyph name={modeGlyph(m.id)} size={17} />
+        <span class="fill" aria-hidden="true"></span>
+        <span class="gl">{@render mark(m.id)}</span>
         <span class="nm">{m.name}</span>
         {#if m.id === "gaming" && service.playing}
           <span class="playing">{t("mode.playing")}</span>
@@ -67,49 +90,99 @@
     display: flex;
     gap: 2px;
     min-width: 0;
-    padding: 3px;
+    padding: 4px;
     overflow-x: auto;
     scrollbar-width: none;
-    border-radius: 12px;
+    border-radius: 14px;
     background: rgb(0 0 0 / 0.22);
     box-shadow: inset 0 0 0 1px var(--stroke-card);
   }
   .seg {
     position: relative;
+    isolation: isolate;
     display: inline-flex;
     flex: none;
     align-items: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 13px 0 11px;
-    border-radius: 9px;
+    gap: 10px;
+    height: 44px;
+    padding: 0 16px 0 7px;
+    overflow: hidden;
+    border-radius: 11px;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     white-space: nowrap;
     transition:
-      background-color 220ms var(--ease-out),
-      color 220ms linear,
+      background-color 160ms linear,
+      color 240ms linear,
       transform 120ms var(--ease-out);
   }
   .seg input {
     position: absolute;
     inset: 0;
+    z-index: 1;
     margin: 0;
     opacity: 0;
     cursor: inherit;
   }
-  .seg:hover:not(.on, .disabled) {
+  /* The cream of the mode that's on, spreading out from its mark. */
+  .fill {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(160deg, #f6f0df, var(--accent) 60%, #e6dcc4);
+    clip-path: circle(0 at 22px 50%);
+    transition: clip-path 480ms var(--ease-out);
+  }
+  .seg.on .fill {
+    clip-path: circle(150% at 22px 50%);
+  }
+  .gl {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     background: rgb(255 255 255 / 0.06);
+    color: var(--text-secondary);
+    transition:
+      background-color 240ms linear,
+      color 240ms linear;
+  }
+  .gl .st {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .gl .fl {
+    fill: currentColor;
+  }
+  .seg:hover:not(.on, .disabled) {
+    background: var(--hover-soft);
+    color: var(--text-primary);
+  }
+  .seg:hover:not(.on, .disabled) .gl {
     color: var(--text-primary);
   }
   .seg:active:not(.on, .disabled) {
     transform: scale(0.97);
   }
   .seg.on {
-    background: var(--accent);
     color: var(--on-accent);
     box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.6);
+  }
+  .seg.on .gl {
+    background: var(--shell);
+    color: var(--on-shell);
+    animation: pop 420ms var(--ease-out);
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.8) rotate(-8deg);
+    }
   }
   .seg.disabled {
     opacity: 0.55;
@@ -150,10 +223,13 @@
       white-space: nowrap;
     }
     .seg:not(.on) {
-      padding: 0 9px;
+      padding: 0 7px;
     }
   }
   @media (forced-colors: active) {
+    .fill {
+      display: none;
+    }
     .seg.on {
       forced-color-adjust: none;
       background: Highlight;

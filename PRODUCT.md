@@ -60,8 +60,9 @@ priorities and absolute limits and make the user do the arithmetic.
   speed), Retrying (failed open), Safe mode, Paused, not running.
 - Some HTTPS traffic can't be named (ECH, no SNI): "unidentified", shown
   honestly, never hidden.
-- Vocabulary: "slice", "goes first", "only when the line is free",
-  "Everything else". Never "QoS class", "token bucket", "HTB".
+- Vocabulary, in everyday words: "share", "priority", "only use spare
+  speed", "your internet", "Everything else". Never "QoS class", "token
+  bucket", "HTB" (and no longer "slice" or "the line", 2026-11-20).
 
 ## Brand Commitments
 

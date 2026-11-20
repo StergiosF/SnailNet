@@ -21,6 +21,7 @@
   import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import Dropdown from "./Dropdown.svelte";
   import Glyph, { type GlyphName } from "./Glyph.svelte";
   import UpdateRow from "./UpdateRow.svelte";
 
@@ -64,17 +65,15 @@
       hotkeyTaken = on ? { keys } : null;
     }
   }
-  async function setHotkeyKeys(select: HTMLSelectElement) {
+  async function setHotkeyKeys(keys: string) {
     if (!hotkey) return;
-    const keys = select.value;
     const kept = keysLabel(hotkey.keys);
     try {
       hotkey = await invoke<HotkeyInfo>("set_hotkey_keys", { keys });
       hotkeyTaken = null;
     } catch {
+      // The dropdown still shows the keys in use: `hotkey` didn't change.
       hotkeyTaken = { keys: keysLabel(keys), kept };
-      // Back on the keys still in use (same value, so Svelte won't).
-      select.value = hotkey.keys;
     }
   }
 
@@ -175,6 +174,7 @@
   // The switches of "What goes first", in order.
   const firstSwitches = $derived([
     {
+      glyph: "phone" as GlyphName,
       title: t("calls.title"),
       body: t("calls.body"),
       on: callsFirst,
@@ -182,6 +182,7 @@
       set: (on: boolean) => void setSetting({ calls_first: on }),
     },
     {
+      glyph: "window" as GlyphName,
       title: t("focus.title"),
       body: t("focus.body"),
       on: focusBoost,
@@ -189,6 +190,7 @@
       set: (on: boolean) => void setSetting({ focus_boost: on }),
     },
     {
+      glyph: "gaming" as GlyphName,
       title: t("gaming.title"),
       body: t("gaming.body"),
       on: gamingWhilePlaying,
@@ -196,6 +198,7 @@
       set: (on: boolean) => void setSetting({ gaming_while_playing: on }),
     },
     {
+      glyph: "bulb" as GlyphName,
       title: t("fix.setting.title"),
       body: t("fix.setting.body"),
       on: fixer.prefs.on,
@@ -215,6 +218,10 @@
   ]);
   let current = $state("set-line");
   let groupsEl = $state<HTMLDivElement | null>(null);
+  // A group picked in the index stays lit while the page scrolls to it:
+  // the last groups can't reach the top third (the page ends first), so
+  // the observer would otherwise light the one above.
+  let picked: string | null = null;
   $effect(() => {
     const el = groupsEl;
     if (!el || typeof IntersectionObserver !== "function") return;
@@ -225,7 +232,12 @@
         const seen = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (seen[0]) current = seen[0].target.id;
+        if (picked) return;
+        const main = el.closest("main");
+        // Scrolled to the very end: the last group is the one in view.
+        if (main && main.scrollTop + main.clientHeight >= main.scrollHeight - 2) {
+          current = index.at(-1)?.id ?? current;
+        } else if (seen[0]) current = seen[0].target.id;
       },
       { root: el.closest("main"), rootMargin: "0px 0px -66% 0px" },
     );
@@ -234,8 +246,18 @@
   });
   function go(id: string) {
     const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    picked = id;
     current = id;
+    const main = groupsEl?.closest("main");
+    const done = () => {
+      picked = null;
+      clearTimeout(timer);
+    };
+    // scrollend ends the pin; a group already in place never scrolls, so a
+    // timer ends it too.
+    const timer = setTimeout(done, reduce ? 100 : 1500);
+    main?.addEventListener("scrollend", done, { once: true });
+    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }
 
   async function doResetAll() {
@@ -266,6 +288,7 @@
       <h2 class="group-title" id="set-line-h"><Glyph name="line" size={18} />{t("settings.connection")}</h2>
       <div class="card group">
         <div class="item">
+          <span class="ic"><Glyph name="gauge" size={20} /></span>
           <div class="words">
             <b>{t("settings.line")}</b>
             <span class="num"
@@ -275,7 +298,7 @@
                 · {t("settings.line.network", { network: network.name })}{/if}</span
             >
             {#if metered}
-              <span class="metered"><i class="icon" aria-hidden="true">&#xE7BA;</i>{t("settings.metered")}</span>
+              <span class="metered">{t("settings.metered")}</span>
             {/if}
           </div>
           <div class="pair">
@@ -288,32 +311,32 @@
           </div>
         </div>
         {#if measured}
-          <div class="item">
+          <div class="item test">
+            <span class="ic"><Glyph name="ping" size={20} /></span>
             <div class="words">
               <b>{t("measure.last", { date: measuredOn })}</b>
               <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
               {#if grades.length > 0}
                 <ul class="grades">
                   {#each grades as g (g.key)}
-                    <li>
-                      <span class="letter g-{g.grade}"
-                        ><span class="visually-hidden">{t("proof.grade.word")} </span>{g.grade}</span
-                      >
+                    <li class:ours={g.key === "with"}>
                       <span class="who">{g.who}</span>
-                      <span class="num">{t("proof.grade.rise", { rise: g.rise })}</span>
+                      <span class="score">
+                        <span class="letter g-{g.grade}"
+                          ><span class="visually-hidden">{t("proof.grade.word")} </span>{g.grade}</span
+                        >
+                        <span class="rise num">{t("proof.grade.rise", { rise: g.rise })}</span>
+                      </span>
                     </li>
                   {/each}
                 </ul>
-                <span class="note"
-                  >{grades[0]?.grade === "A"
-                    ? `${t("proof.grade.calm")} ${t("proof.grade.what")}`
-                    : t("proof.grade.what")}</span
-                >
+                <span class="note">{grades[0]?.grade === "A" ? t("proof.grade.calm") : t("proof.grade.what")}</span>
               {/if}
             </div>
           </div>
         {/if}
         <label class="item">
+          <span class="ic"><Glyph name="auto" size={20} /></span>
           <div class="words">
             <b>{t("adapt.title")}</b>
             <span>{t("adapt.body")}</span>
@@ -330,6 +353,7 @@
         {#if others.length > 0}
           <details class="item fold">
             <summary>
+              <span class="ic"><Glyph name="line" size={20} /></span>
               <span class="words"><b>{t("settings.networks")}</b><span>{t("settings.networks.body")}</span></span>
               <span class="count">{t("settings.networks.count", { count: others.length })}<Glyph name="chevron" size={16} /></span>
             </summary>
@@ -351,6 +375,7 @@
       <div class="card group">
         {#each firstSwitches as sw (sw.title)}
           <label class="item">
+            <span class="ic"><Glyph name={sw.glyph} size={20} /></span>
             <div class="words">
               <b>{sw.title}</b>
               <span>{sw.body}</span>
@@ -368,6 +393,7 @@
         {#if choices.length > 0}
           <details class="item fold">
             <summary>
+              <span class="ic"><Glyph name="flag" size={20} /></span>
               <span class="words"><b>{t("first.list.title")}</b><span>{t("first.list.body")}</span></span>
               <span class="count">{t("settings.count", { count: choices.length })}<Glyph name="chevron" size={16} /></span>
             </summary>
@@ -397,6 +423,7 @@
         <div class="card group">
           <details class="item fold">
             <summary>
+              <span class="ic"><Glyph name="apps" size={20} /></span>
               <span class="words"><b>{t("group.list.title")}</b><span>{t("group.list.body")}</span></span>
               <span class="count">{t("settings.count", { count: grouped.length })}<Glyph name="chevron" size={16} /></span>
             </summary>
@@ -435,6 +462,7 @@
       <h2 class="group-title" id="set-start-h"><Glyph name="power" size={18} />{t("settings.windows")}</h2>
       <div class="card group">
         <label class="item">
+          <span class="ic"><Glyph name="power" size={20} /></span>
           <div class="words">
             <b>{t("settings.autostart")}</b>
             <span>{t("settings.autostart.body")}</span>
@@ -449,6 +477,7 @@
           />
         </label>
         <div class="item">
+          <span class="ic"><Glyph name="keyboard" size={20} /></span>
           <div class="words">
             <b id="set-hotkey">{t("settings.hotkey", { keys: keysLabel(hotkey?.keys ?? "ctrl+alt+s") })}</b>
             <span role="status"
@@ -461,15 +490,12 @@
           </div>
           <div class="hotkey">
             {#if hotkey?.on}
-              <select
-                aria-label={t("settings.hotkey.pick")}
+              <Dropdown
+                label={t("settings.hotkey.pick")}
+                options={hotkey.choices.map((c) => ({ value: c.keys, label: c.label }))}
                 value={hotkey.keys}
-                onchange={(e) => void setHotkeyKeys(e.currentTarget)}
-              >
-                {#each hotkey.choices as c (c.keys)}
-                  <option value={c.keys}>{c.label}</option>
-                {/each}
-              </select>
+                onchange={(k) => void setHotkeyKeys(k)}
+              />
             {/if}
             <input
               type="checkbox"
@@ -489,6 +515,7 @@
       <h2 class="group-title" id="set-about-h"><Glyph name="info" size={18} />{t("settings.about")}</h2>
       <div class="card group">
         <div class="item">
+          <span class="ic"><Glyph name="info" size={20} /></span>
           <div class="words">
             <b>{t("settings.about.version", { app: version })}</b>
             {#if serviceVersion}<span>{t("settings.about.service", { version: serviceVersion })}</span>{/if}
@@ -496,6 +523,7 @@
         </div>
         <UpdateRow />
         <label class="item">
+          <span class="ic"><Glyph name="list" size={20} /></span>
           <div class="words">
             <b>{t("packs.title")}</b>
             <span>{t("packs.body")}</span>
@@ -516,20 +544,22 @@
       <h2 class="group-title" id="set-reset-h"><Glyph name="reset" size={18} />{t("settings.reset")}</h2>
       <div class="card group">
         <div class="item">
+          <span class="ic"><Glyph name="reset" size={20} /></span>
           <div class="words">
             <b>{t("settings.resetMode", { mode })}</b>
             <span>{t("settings.resetMode.body", { mode })}</span>
           </div>
-          <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => void resetSplit()}>
+          <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
             {t("split.reset")}
           </button>
         </div>
         <div class="item">
+          <span class="ic"><Glyph name="trash" size={20} /></span>
           <div class="words">
             <b>{t("settings.resetAll")}</b>
             <span>{t("settings.resetAll.body")}</span>
           </div>
-          <button type="button" class="btn btn-quiet danger" disabled={!canEdit} onclick={() => (confirming = true)}>
+          <button type="button" class="btn btn-danger" disabled={!canEdit} onclick={() => (confirming = true)}>
             {t("settings.resetAll.button")}
           </button>
         </div>
@@ -619,7 +649,7 @@
   .fold summary {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     list-style: none;
     cursor: pointer;
   }
@@ -644,10 +674,7 @@
     color: var(--text-primary);
   }
   .fold .nets {
-    margin: 12px 0 2px;
-  }
-  .danger {
-    color: var(--critical);
+    margin: 12px 0 2px 50px;
   }
   @media (max-width: 980px) {
     .settings {
@@ -674,12 +701,29 @@
   .item {
     display: flex;
     align-items: center;
-    gap: 16px;
-    min-height: 62px;
-    padding: 12px 18px;
+    gap: 14px;
+    min-height: 68px;
+    padding: 14px 18px 14px 16px;
   }
   .item + .item {
-    border-top: 1px solid var(--surface-ground);
+    border-top: 1px solid rgb(0 0 0 / 0.18);
+  }
+  /* A row you click anywhere on says so under the pointer. */
+  label.item,
+  .fold summary {
+    transition: background-color 120ms linear;
+  }
+  label.item:hover:not(:has(input:disabled)) {
+    background: var(--hover-soft);
+  }
+  .group > :first-child {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+  .group > :last-child {
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+  }
+  .group > :only-child {
+    border-radius: var(--radius-card);
   }
   .pair {
     display: flex;
@@ -691,20 +735,6 @@
     flex: none;
     align-items: center;
     gap: 16px;
-  }
-  .hotkey select {
-    height: 34px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: 9px;
-    background: var(--surface-3);
-    color: var(--text-primary);
-    font-size: 14px;
-  }
-  @media (forced-colors: active) {
-    .hotkey select {
-      border: 1px solid ButtonText;
-    }
   }
   .words {
     display: flex;
@@ -744,46 +774,70 @@
   .nets .num {
     flex: none;
   }
-  /* The last test's grades: who, the letter, how far ping rose. The
-     letter says it; its colour only echoes it (§14.9). */
+  /* The last test's grades: without and with SnailNet side by side, each
+     its letter and how far ping rose. The letter says it; its colour only
+     echoes it (§14.9). */
   .grades {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: 14px;
-    row-gap: 6px;
-    margin: 10px 0 4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0 8px;
     padding: 0;
     list-style: none;
   }
   .grades li {
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgb(0 0 0 / 0.16);
   }
-  .grades .who {
+  .grades li.ours {
+    background: var(--shell-soft);
+  }
+  .words .who {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .grades li.ours .who {
+    color: var(--text-primary);
+  }
+  .score {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .words .rise {
+    font-size: 14px;
     color: var(--text-primary);
   }
   .words .letter {
     display: grid;
+    flex: none;
     place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
     background: var(--surface-2);
     color: var(--text-primary);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 800;
     line-height: 1;
   }
   .words .g-A,
   .words .g-B {
-    background: var(--shell-soft);
-    color: var(--shell-hover);
+    background: var(--shell);
+    color: var(--on-shell);
   }
   .words .g-C {
+    background: rgb(234 176 78 / 0.16);
     color: var(--caution);
   }
   .words .g-D,
   .words .g-F {
+    background: var(--critical-soft);
     color: var(--critical);
   }
   .words .note {
@@ -795,16 +849,23 @@
       border: 1px solid CanvasText;
     }
   }
-  .metered {
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
+  .words .metered {
     margin-top: 4px;
-  }
-  .metered .icon {
-    flex: none;
-    font-size: 12px;
     color: var(--caution);
+  }
+  /* Every setting leads with a quiet grey glyph of what it's about. */
+  .ic {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-control);
+    background: rgb(0 0 0 / 0.16);
+    color: var(--text-tertiary);
+  }
+  .item.test .ic {
+    align-self: flex-start;
   }
   .choices li {
     align-items: center;
@@ -813,53 +874,9 @@
     flex: 1;
     min-width: 0;
   }
-  .switch {
-    appearance: none;
-    position: relative;
-    flex: none;
-    width: 44px;
-    height: 24px;
-    margin: 0;
-    border-radius: 12px;
-    background: var(--surface-3);
-    transition: background-color 160ms linear;
-  }
-  .switch::after {
-    content: "";
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    transition:
-      transform 160ms var(--ease-out),
-      background-color 160ms linear;
-  }
-  .switch:checked {
-    background: var(--shell);
-  }
-  .switch:checked::after {
-    transform: translateX(20px);
-    background: var(--on-shell);
-  }
-  .switch:disabled {
-    opacity: 0.5;
-  }
   @media (forced-colors: active) {
     .item + .item {
       border-top-color: CanvasText;
-    }
-    .switch {
-      border: 1px solid ButtonText;
-    }
-    .switch::after {
-      forced-color-adjust: none;
-      background: ButtonText;
-    }
-    .switch:checked::after {
-      background: Highlight;
     }
   }
 </style>

@@ -23,7 +23,26 @@
     | "line"
     | "apps"
     | "power"
-    | "info";
+    | "info"
+    | "clock"
+    | "infinity"
+    | "ban"
+    | "unlink"
+    | "undo"
+    | "merge"
+    | "gauge"
+    | "phone"
+    | "window"
+    | "bulb"
+    | "flag"
+    | "keyboard"
+    | "download"
+    | "upload"
+    | "list"
+    | "trash"
+    | "check"
+    | "pen"
+    | "auto";
 
   /** A mode's glyph: the four built-in modes have their own, the user's
    *  own modes share one. */
@@ -109,6 +128,51 @@
     <path d="M12 3.5v8" /><path d="M7 6.5a7 7 0 1 0 10 0" />
   {:else if name === "info"}
     <circle cx="12" cy="12" r="8.5" /><path d="M12 11v5.5" /><circle class="dot" cx="12" cy="7.8" r="1.1" />
+  {:else if name === "clock"}
+    <circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" />
+  {:else if name === "infinity"}
+    <path d="M12 12c-2-2.6-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.4 5.5-4s3.6-4 5.5-4a4 4 0 0 1 0 8c-1.9 0-3.5-1.4-5.5-4z" />
+  {:else if name === "ban"}
+    <circle cx="12" cy="12" r="8.5" /><path d="m6 6 12 12" />
+  {:else if name === "unlink"}
+    <path d="M9.5 14.5 7.7 16.3a3.2 3.2 0 0 1-4.5-4.5L5 10M14.5 9.5l1.8-1.8a3.2 3.2 0 0 1 4.5 4.5L19 14M8 4l1 2.5M4 8l2.5 1M16 20l-1-2.5M20 16l-2.5-1" />
+  {:else if name === "undo"}
+    <path d="M9 7 5 11l4 4" /><path d="M5 11h9a5 5 0 0 1 0 10h-2" />
+  {:else if name === "merge"}
+    <path d="M6 4v4a4 4 0 0 0 4 4h8" /><path d="M6 20v-4a4 4 0 0 1 4-4" /><path d="m15 9 3 3-3 3" />
+  {:else if name === "gauge"}
+    <path d="M4.5 17a8.5 8.5 0 1 1 15 0" /><path d="m12 13 3.5-4" /><circle class="dot" cx="12" cy="13" r="1.4" />
+  {:else if name === "phone"}
+    <path
+      d="M6.5 4h2.6l1.4 3.6-1.8 1.2a9.5 9.5 0 0 0 4.5 4.5l1.2-1.8 3.6 1.4v2.6A2.5 2.5 0 0 1 15.5 18 11.5 11.5 0 0 1 4 6.5 2.5 2.5 0 0 1 6.5 4z"
+    />
+  {:else if name === "window"}
+    <rect x="3.5" y="5" width="17" height="14" rx="3" /><path d="M3.5 9.5h17" /><circle class="dot" cx="7" cy="7.25" r=".9" />
+  {:else if name === "bulb"}
+    <path d="M9 17.5h6M10 20.5h4" /><path d="M8.6 14.5A6 6 0 1 1 15.4 14.5c-.6.5-.9 1.2-.9 1.9v1.1h-5v-1.1c0-.7-.3-1.4-.9-1.9z" />
+  {:else if name === "flag"}
+    <path d="M5.5 21V4.5" /><path d="M5.5 5h11.5l-2.5 4 2.5 4H5.5" />
+  {:else if name === "keyboard"}
+    <rect x="2.5" y="6" width="19" height="12" rx="3" /><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8" />
+  {:else if name === "download"}
+    <path d="M12 4v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M5 20h14" />
+  {:else if name === "upload"}
+    <path d="M12 20V9" /><path d="m7.5 13.5 4.5-4.5 4.5 4.5" /><path d="M5 4h14" />
+  {:else if name === "list"}
+    <path d="M9 6.5h11M9 12h11M9 17.5h11" /><circle class="dot" cx="4.75" cy="6.5" r="1.1" /><circle
+      class="dot"
+      cx="4.75"
+      cy="12"
+      r="1.1"
+    /><circle class="dot" cx="4.75" cy="17.5" r="1.1" />
+  {:else if name === "trash"}
+    <path d="M4.5 7h15M10 4h4M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7M10 11v5M14 11v5" />
+  {:else if name === "check"}
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  {:else if name === "pen"}
+    <path d="M14.5 5.5 18.5 9.5M4.5 19.5l1-4.5L15.8 4.7a1.9 1.9 0 0 1 2.7 0l.8.8a1.9 1.9 0 0 1 0 2.7L9 18.5z" />
+  {:else if name === "auto"}
+    <path d="M19.5 12a7.5 7.5 0 0 1-13.1 5M4.5 12a7.5 7.5 0 0 1 13.1-5" /><path d="M17.8 3.5v3.7h-3.7M6.2 20.5v-3.7h3.7" />
   {/if}
 </svg>
 

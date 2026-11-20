@@ -90,10 +90,10 @@ describe("users", () => {
     const u = users(ledger(rules, busy(), label), null, label);
     expect(u.map((x) => x.name)).toEqual(["Steam", "YouTube", "Discord", "Brave"]);
     // Steam moves 10.3 of the 23 Mbps SnailNet shares out.
-    expect(u[0]?.status).toBe("a big part of the line");
+    expect(u[0]?.status).toBe("a big part of your speed");
     expect(u[0]?.part).toBeCloseTo(10.3 / 23);
     expect(u[0]?.ink).toBe(-1);
-    expect(u[1]?.status).toBe("gets all it asks for");
+    expect(u[1]?.status).toBe("getting all it needs");
     expect(u.some((x) => x.boosted)).toBe(false);
   });
 

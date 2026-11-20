@@ -22,10 +22,10 @@
     return p.until === undefined || ui.now < p.until ? p : null;
   });
 
-  const choices: { minutes: number | null; label: string }[] = [
-    { minutes: 15, label: t("pause.15m") },
-    { minutes: 60, label: t("pause.1h") },
-    { minutes: null, label: t("pause.forever") },
+  const choices: { minutes: number | null; label: string; glyph: "clock" | "infinity" }[] = [
+    { minutes: 15, label: t("pause.15m"), glyph: "clock" },
+    { minutes: 60, label: t("pause.1h"), glyph: "clock" },
+    { minutes: null, label: t("pause.forever"), glyph: "infinity" },
   ];
 
   function place(e: ToggleEvent) {
@@ -63,7 +63,9 @@
     <p class="title">{t("pause.label")}</p>
     <p class="body">{t("pause.menu.body")}</p>
     {#each choices as c (c.label)}
-      <button type="button" role="menuitem" onclick={() => pick(c.minutes)}>{c.label}</button>
+      <button type="button" role="menuitem" onclick={() => pick(c.minutes)}
+        ><Glyph name={c.glyph} size={18} />{c.label}</button
+      >
     {/each}
   </div>
 {/if}
