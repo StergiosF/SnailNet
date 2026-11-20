@@ -1,128 +1,200 @@
 # Handoff: where things stand, and what's next
 
-Written 2026-11-20. Start a session with **"read docs/HANDOFF-next.md and
-continue"**. The briefs it points to: `docs/HANDOFF-wow.md` (features 1–3),
-PLAN.md §11.10 (the proof), §11.11 (the fix), §14.3 (the split), §14.4 (the tray).
+Written 2026-11-20 (second pass, after the user looked at the UI in the
+mock preview). Start a session with **"read docs/HANDOFF-next.md and
+continue"**. Older briefs it points to: `docs/HANDOFF-wow.md` (features
+1–3), PLAN.md §11.10 (the proof), §11.11 (the fix), §14.3 (the split),
+§14.4 (the tray).
 
 ## Where things stand
 
-On `main`, pushed, all gates green (`cargo fmt`, `clippy -D warnings`,
-`cargo test --workspace` incl. `app\src-tauri`; in `app\`: `npm run check`,
-`lint`, `npx vitest run` = 134 tests, `build`). Version still **0.0.5**:
-nothing released since.
+On `main`, pushed. App gates green: in `app\` `npm run check`, `lint`,
+`npx vitest run` (174 tests), `build`. No Rust changed since `aa5a025`
+(Rust gates were green then). Version still **0.0.5**: nothing released
+since.
 
 | What | State | Left |
 |---|---|---|
-| **1 The proof**: ping with / without SnailNet, A–F grades | Built, service + app (`192b844`, `75340bc`) | **Live check** (below), the user's look |
-| **3 The living snail**: calm / working / struggling tray icon | Built (`943f11f`) | The user's look at the real tray |
-| **2 The one-tap fix** | 2.0–2.2 service (`9858dcd`, `751c480`); 2.3–2.6 app (`waiting.ts`, `fix.ts`, `fixer.svelte.ts`, `FixOffer.svelte`) | **Live check**, the user's look |
-| **The drag slider** on the Split page | Built (`splitDrag.ts`, `SplitBar.svelte`, PLAN.md §14.3) | the user's look: drag feel, label fitting, the readout |
-| No Windows notifications | Built: toasts gone, app doesn't ask for new-app events, Settings switches gone | — |
-| Measure again in the Connection speed box | Built | user's look |
-| Redesign: Now, Split, Save/Discard, boost look, real logos | Built (`75340bc`, PLAN.md §14.3) | user's look |
+| **The drag bar** on the Split page | Built (`57f4800`, `splitDrag.ts`, `SplitBar.svelte`, PLAN.md §14.3) | Goes into the redesign (below) |
+| **1 The proof**: ping with / without SnailNet | Built (`192b844`, `75340bc`) | **Live check** |
+| **2 The one-tap fix** | Built end to end (`f4c8825`, `7e4e3e4`, `e5e6e8a`): `waiting.ts`, `fix.ts`, `fixer.svelte.ts`, `FixOffer.svelte`, Settings switch | **Live check** |
+| **3 The living snail** (tray moods) | Built (`943f11f`) | The user's look at the real tray |
+| Boost menu off-screen / cut off | Fixed (`41ec569`, `popover.ts` `menuSpot`, tested) | — |
+| Windows services / Update icon | Windows glyph (`3b8d49a`) | Part of the icon work below |
 
-**Nothing UI has been seen in a real window** (no-browser rule). Every
-screen above needs the user's eyes before release.
+### The mock preview (new, use it)
 
-## Next, in order
+`cd app; npm run dev`, then open `http://localhost:5173/mock.html`
+(`?view=flyout` for the tray panel, `?mode=streaming` for a mode with
+slices). `src/mock.ts` answers the app's commands with Tauri's
+`mockIPC` from a made-up snapshot and sends stats 4×/s: Steam filling a
+25 Mbps line, Brave left waiting. Save, the fix and Undo change the
+made-up snapshot, so the pages react. Dev only: not in the build. The
+browser is allowed when the user asks for it (`no-browser-automation.md`).
 
-### 1. ~~The drag slider on the Split page~~ (built 2026-11-20; the brief below is kept for the user's look)
+## What the user asked for (2026-11-20, in their words, then the plan)
 
-"For the split design we should have the slider like the website where the
-user can drag it." The website's demo (`site/index.html` `.dbar`,
-`site/main.js` from "Dragging: the bar follows the pointer") is a bar of
-coloured segments, one per slice, with a **cream handle** between them that
-you drag; it snaps to 5 % on release; the handle is a real
-`role="slider"` with arrow keys / PageUp / PageDown / Home / End and an
-`aria-valuetext` naming both sides; a segment too narrow for its name shows
-only its percentage.
+Do these before the release. A and B are a **redesign**: follow
+`frontend-design-workflow.md` (direction first, from
+`design-taste-frontend`'s `references/app-screens.md`; then build and
+audit with `impeccable`). DESIGN.md doesn't exist yet, so write it as
+part of this. Keep the Garden (PLAN.md §14.1: the snail's greens, cream
+for what's on, Atkinson Hyperlegible) unless the user says otherwise:
+the complaint is structure and clarity, not the palette.
 
-This reverses a 2026-11-16 decision (PLAN.md §14.3: "the split bar with
-draggable dividers is gone: dividers were hard to hit, small slices were
-unreadable, and reading it took arithmetic"). Build it so those three
-problems stay solved, and record the reversal in §14.3:
+### A. Now and Split pages: complete redesign
 
-- **Where:** the top of the Split page, above the rows, as the page's main
-  control for the active direction (Download / Upload switch stays). The
-  rows with − / + stay below it: two ways to the same draft.
-- **Handles between neighbours:** dragging the handle between slice A and
-  B moves only A and B (their sum stays), so nothing else jumps. Everything
-  else is the last segment and keeps its ≥ 5 % floor; a rule's ≥ 1 % floor
-  holds (`split.ts` / `rules.ts`, §9.7). Snap to 5 % on release, follow
-  the pointer while dragging (like the site).
-- **Hard to hit → big targets:** the handle's hit area ≥ 32 px wide and the
-  bar's full height (≥ 44 px tall), with the visible cream grip narrower.
-  Pointer capture; a vertical swipe still scrolls (`touch-action: pan-y`,
-  as the site's CSS does).
-- **Small slices unreadable → labels that fit or step aside:** a segment
-  shows logo + name + %; narrower, just %; narrower still, nothing, and the
-  row below carries it. Hovering / focusing a segment highlights its row.
-- **Arithmetic → say it in Mbps too:** while dragging, a small readout over
-  the handle: "Steam 40 % · at least 8 Mbps when busy | YouTube 60 % · 12".
-- **Into the draft:** every drag changes the draft (`draft.ts`), never
-  saves; the Save bar appears as for − / +. "was 20 %" marks show on the bar
-  too (a faint tick at the saved position).
-- **"Only when the line is free" (0 %) slices** aren't on the bar (they
-  have no share); a line under it lists them.
-- **Accessibility:** each handle is its own slider ("Between Steam and
-  YouTube"), `aria-valuetext` "Steam 40 %, YouTube 60 %"; high-contrast
-  styles; reduced motion = no easing.
-- **Flyout:** unchanged (− / + only; it's the quick panel).
-- **Tests (vitest, pure):** a `splitDrag.ts` with `dragBetween(rules, i,
-  pct) → rules` (sum kept, floors held, snap), handle positions from shares,
-  label fitting (full / pct / none by width). Build with `impeccable`
-  (no browser; say what wasn't seen).
+> "I want a complete redesign on our theme on the now page and the split
+> page, they both look way too confusing and not very practical to the
+> user, a new user will get overwhelmed."
 
-### 2. ~~Finish feature 2 (the one-tap fix), app half~~ (built 2026-11-20; live check below still to do)
+What makes them confusing today (seen in the mock):
 
-`docs/HANDOFF-wow.md` 2.3–2.6, with the rule the sim settled on (PLAN.md
-§11.11), **not** the brief's first guess:
+- **The Split page says the same thing four times:** the live "Right
+  now" strip with its legend, the drag bar, a thin bar in every row, and
+  Everything else's app chips. On top: column headings, an intro
+  paragraph, a hint under the bar, "Only when the line is free: …", a
+  fold row, and the Save bar over the list.
+- **The Now page stacks five ideas:** the sentence (+ the fix button),
+  the ping proof, four mode tiles, "Using your internet" with Boost
+  buttons, and a second split card ("How Balanced shares your line")
+  with its own bar, coach and buttons.
+- Status words are long and technical-sounding ("not using 9.2 Mbps of
+  its slice, so others get it", "15.4 Mbps over its slice, from room
+  nobody needs", "using its whole slice and wants more").
+- With no rules (Balanced), the Split page is one grey bar saying
+  "Everything else 100%": nothing to do, nothing explained.
 
-- Per family, each 250 ms tick (the app subscribes at 4 Hz, `STATS_HZ`):
-  *pressed* = `acted > 0` or `queued_bytes > 0`. **Waiting** = pressed in
-  ≥ 14 of the last 20 ticks **and** it got < ½ of an equal split of what
-  the pressed apps (≥ 14) delivered in the window. Port
-  `crates/snailnet-sim/src/waiting.rs` (`RULE`, `WaitWatch`) to
-  `ledger.ts` / a `waiting.ts` with the same tests.
-- Then `FixWatch` / `offerOf` / mutes (2.4), the button on the glance
-  sentence + Undo + the Settings switch (2.5), docs (2.6). The Split page
-  now edits a draft; the fix's one click saves directly (rev-checked) and
-  must not clobber an open draft: if a draft is dirty, the offer says
-  "Save or discard your split first" instead of a button.
-- Live check: Steam (or two `curl`s with many connections) + YouTube in
-  Brave, no rules → offer within ~20 s; one click → smooth; Undo restores;
-  YouTube paused → no offer.
+Direction to propose (put it to the user; it's their product taste):
 
-### 3. The live check for feature 1 (needs the user: one UAC click)
+- **One job per page.** Now = "what's happening, and is it OK?" (the
+  sentence, the fix, who's using the line). Split = "who gets what"
+  (one control, the drag bar; rows only hold settings).
+- **One picture of the split, not four.** The drag bar is the split;
+  live use can show inside it (a fill per segment) instead of a second
+  strip; rows drop their own bars.
+- **Progressive disclosure:** priority, limits, "only when free" and
+  groups behind a row's Settings; the mode tiles smaller, or a switcher.
+- **A good empty state** for a mode with no slices: what a slice is, and
+  one button to give the app using the most right now a slice.
+- Shorter status words (§14.7 microcopy rules still hold).
+- Show 2–3 directions as real-size mockups (the user chose the Garden
+  that way, 2026-11-17), then build the chosen one 1:1.
 
-Recipe in docs/HANDOFF.md "Try it live" (scratch data dir, `--pipe
-\\.\pipe\snailnet-live`). Run Measure; `snailnet top` shows `ping:` while
-a big download runs and `(held back Nx)` on the losing app; the saved
-`measured` has `loaded_up_ms` and `with_ms`; **with clearly below
-without** on the user's line. `snailnet speedtest` now prints both grades
-and waits for `with_ms`, so the CLI alone covers it. If the line shows no
-difference, find out why before releasing: the app makes this claim in
-numbers.
+### B. Settings: revamp
 
-### 4. Release
+> "the settings tab need a revamp because they are chaotic"
 
-The plan said one release per feature; they landed together. Suggested:
-**v0.0.6** = proof + living snail + no notifications + redesign + slider,
-after the live check and the user's look; **v0.0.7** = the one-tap fix.
-Bump the version in the usual places (see the v0.0.5 commit `79ad30e`),
-release notes say what wasn't seen live.
+Today (`SettingsPage.svelte`) it's one long page of cards: Connection,
+"What goes first" (focus boost, calls first, Gaming while playing, the
+new fix switch, the first list), apps grouping, Windows, About, Reset.
+Regroup by what people come for (my line; what goes first; apps;
+startup and hotkey; help and about; start over), with fewer words per
+item and rarely used things folded. Same design pass as A.
+
+### C. Icons: a black shape in the tiles, and they don't look like the real ones
+
+> "the icons still have a black element in them… brave for example look
+> at the real icon"
+
+- **Cause:** `brands/index.ts` `markOn` draws the mark white or
+  near-black, whichever contrasts more with the brand colour. On Brave's
+  orange (#FB542B), dark wins, so the lion is drawn black. And Simple
+  Icons are one-colour silhouettes: the real Brave icon is an orange
+  lion with white, Discord's is white on blurple, and so on.
+- **Fix direction:** in the real app the **program's own .exe icon**
+  (`icon.rs`, `icons.forTarget`) is the true icon and already wins.
+  Check that it loads for every family on the user's PC (the mock has
+  none, so the mock always shows logo tiles). For the logo fallback,
+  either always draw a white mark on the brand tile (simplest, and it
+  matches most real app icons), or bundle full-colour official marks
+  where their licence allows (check each: Simple Icons is CC0, brand
+  assets often aren't). Never draw look-alikes.
+
+### D. A better icon family
+
+> "I think we can do a lot better on our icon family too"
+
+The mode tiles (Balanced, Streaming, Gaming, Quiet downloads) use
+generic Fluent glyphs in squares. Draw a small custom set in the snail's
+world (one stroke weight, authored SVG; the craft floor bans emoji and
+unicode stand-ins) for the modes, the side rail (Now, Split, Settings),
+Pause and Boost. Part of the redesign.
+
+### E. Pause only when SnailNet is doing something
+
+> "the pause button should appear only when snailnet is being used; when
+> I have not enabled any boost or any split or anything at all it should
+> not appear"
+
+- Show Pause when any of these hold: the active mode has a slice (an
+  enabled rule with share > 0), a non-normal priority or a limit; a
+  Boost is on; an app is blocked; or it's already paused (so Resume
+  stays reachable). Hide it otherwise, in the side rail
+  (`PauseControl.svelte`) and the flyout.
+- **Tell the user one thing first:** even with no rules SnailNet still
+  shapes: it keeps ping low under load (that's the A–F grade). Hiding
+  Pause then leaves no one-click "off" for that. Ask whether that's
+  fine, or whether Pause should then live in the tray menu or Settings
+  (principle 3: "one click pauses everything").
+
+### F. Show a change with something subtle
+
+> "when I change something, I give a boost or I change priority etc.,
+> it should be shown the change with something subtle visually"
+
+A short highlight on the thing that changed, where it is: the row's
+background warms for about 1 s and fades, the new number settles in, a
+boosted row's green sweeps in once (it already does in WhoCard). One
+pattern for every change (boost, priority, share, limit, mode switch,
+the fix); with `prefers-reduced-motion`, colour only. A small helper
+(e.g. `flash.ts`, keyed by slice key and what changed) so pages don't
+each invent one.
+
+### Smaller things seen in the mock (fix in the redesign)
+
+- The drag bar's readout floats over the "Right now" legend above it.
+- The glance can say "It runs on room Everything else isn't using.
+  Brave wants more room too." while Brave sits inside Everything else:
+  the two halves contradict each other.
+- **Slashed zeros:** Atkinson Hyperlegible draws 0 with a slash on
+  purpose (0 ≠ O), and the user's screenshots read it as "Ø". The font
+  has no alternate zero (every feature was tried). Either keep it or use
+  a different face for figures only. Ask the user.
+- The fix offer appeared about 11 s after load in the mock (the 12-of-15 s
+  rule). Fine, but check it live.
+
+## Still to do from before
+
+1. **Live check of the fix (feature 2):** Steam (or `curl` with many
+   connections) plus YouTube in Brave, no rules: the offer appears
+   within ~20 s; one click makes it smooth; Undo restores the split;
+   with YouTube paused, no offer. Known: the flyout can't see the main
+   window's unsaved draft (PLAN.md §11.11).
+2. **Live check of the proof (feature 1, one UAC click):** recipe in
+   docs/HANDOFF.md "Try it live" (scratch data dir, `--pipe
+   \\.\pipe\snailnet-live`). `snailnet speedtest` prints both grades.
+   The ping **with** SnailNet should be clearly below **without** on the
+   user's line; if it isn't, find out why before releasing.
+3. **The user's look** at the tray moods (100 % / 150 % scaling, light
+   and dark taskbar).
+4. **Release:** v0.0.6 after A–F and the live checks (one release for
+   everything is fine now). Bump the version as in `79ad30e`; the
+   release notes say what wasn't seen live.
 
 ## Notes for whoever picks this up
 
-- `Measured` gained fields and has `deny_unknown_fields`: an older service
-  can't read a config the new one wrote (forward-only, PLAN.md §10.1).
-- The "struggling" tray art is a coral shell, not the brief's drooping
-  stalks (unreadable at tray size). Re-render after art changes:
-  `scripts/tray-icons.cjs` (instructions at its top).
-- Logos: `simple-icons@16.37.0` (devDependency, named imports only, CC0);
-  Disney+, Prime Video, Teams, Edge, Vivaldi have no CC0 logo and keep
-  letter tiles. Credits: `app/src/lib/brands/credits.json`.
-- The boost bar's full length is inferred (the service keeps only the end
-  time): the shortest menu length (1 h / 4 h) that fits what's left.
-- `FamilyTick.acted` is per tick (diffed in the hub); a family with bytes
-  queued but none delivered is listed with `bps: 0`.
+- The installed v0.0.5 has no CLI, and the dev CLI can't talk to the
+  installed service (only programs in its folder may connect). On
+  2026-11-20 the user's internet felt slow while nothing was downloading
+  (Brave browsing, Claude Code). I suggested Pause to test whether
+  SnailNet's line speed is set too low, and to re-measure if so.
+- `Measured` has `deny_unknown_fields`: an older service can't read a
+  config the new one wrote (forward-only, PLAN.md §10.1).
+- Tray art: `scripts/tray-icons.cjs` re-renders it after changes.
+- Logos: `simple-icons@16.37.0`, named imports only, CC0; credits in
+  `app/src/lib/brands/credits.json`.
+- How the user works (memory): commit on `main` and push finished steps;
+  decide small things yourself, but put taste decisions (the redesign
+  direction) to the user with the question tool, recommended option
+  first; never Windows notifications.
