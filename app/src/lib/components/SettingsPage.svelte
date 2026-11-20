@@ -1,10 +1,11 @@
 <script lang="ts">
-  // Settings (PLAN.md §14.6), one scrolling page of groups, most used
-  // first: your internet (speed, Measure, the last test with its grades,
-  // following the line, other networks); games and the app you're using;
-  // apps (how they are grouped); Windows (start with
-  // Windows, the hotkey); version and updates; and last, starting over
-  // (this mode's split; all of SnailNet, which shows setup again).
+  // Settings (DESIGN.md, Settings): grouped by what people come for, with
+  // an index beside the groups that follows the scroll: your line (speed,
+  // Measure, the last test with its grades, following the line, other
+  // networks); what goes first (calls, the app you're using, Gaming while
+  // you play, the fix, the apps you marked); apps (how they are grouped);
+  // startup and keys; about; and last, quietly, starting over. One line per
+  // setting with a short "what it does"; lists you need once fold.
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
@@ -20,6 +21,7 @@
   import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import Glyph, { type GlyphName } from "./Glyph.svelte";
   import UpdateRow from "./UpdateRow.svelte";
 
   let { canEdit }: { canEdit: boolean } = $props();
@@ -170,6 +172,72 @@
   const mode = $derived(modeName(service.activeProfile));
   const serviceVersion = $derived(service.link.kind === "connected" ? service.link.service_version : null);
 
+  // The switches of "What goes first", in order.
+  const firstSwitches = $derived([
+    {
+      title: t("calls.title"),
+      body: t("calls.body"),
+      on: callsFirst,
+      disabled: !canEdit || focusing,
+      set: (on: boolean) => void setSetting({ calls_first: on }),
+    },
+    {
+      title: t("focus.title"),
+      body: t("focus.body"),
+      on: focusBoost,
+      disabled: !canEdit || focusing,
+      set: (on: boolean) => void setSetting({ focus_boost: on }),
+    },
+    {
+      title: t("gaming.title"),
+      body: t("gaming.body"),
+      on: gamingWhilePlaying,
+      disabled: !canEdit || focusing,
+      set: (on: boolean) => void setSetting({ gaming_while_playing: on }),
+    },
+    {
+      title: t("fix.setting.title"),
+      body: t("fix.setting.body"),
+      on: fixer.prefs.on,
+      disabled: false,
+      set: (on: boolean) => fixer.setOn(on),
+    },
+  ]);
+
+  // The index: one entry per group shown, lit for the group in view.
+  const index = $derived<{ id: string; glyph: GlyphName; label: string }[]>([
+    { id: "set-line", glyph: "line", label: t("settings.connection") },
+    { id: "set-first", glyph: "boost", label: t("settings.first") },
+    ...(grouped.length > 0 ? [{ id: "set-apps", glyph: "apps" as GlyphName, label: t("settings.apps") }] : []),
+    { id: "set-start", glyph: "power", label: t("settings.windows") },
+    { id: "set-about", glyph: "info", label: t("settings.about") },
+    { id: "set-reset", glyph: "reset", label: t("settings.reset") },
+  ]);
+  let current = $state("set-line");
+  let groupsEl = $state<HTMLDivElement | null>(null);
+  $effect(() => {
+    const el = groupsEl;
+    if (!el || typeof IntersectionObserver !== "function") return;
+    void index.length;
+    // A group is "in view" once its top passes the upper third of the page.
+    const io = new IntersectionObserver(
+      (entries) => {
+        const seen = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (seen[0]) current = seen[0].target.id;
+      },
+      { root: el.closest("main"), rootMargin: "0px 0px -66% 0px" },
+    );
+    for (const sec of el.querySelectorAll("section[id]")) io.observe(sec);
+    return () => io.disconnect();
+  });
+  function go(id: string) {
+    const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    current = id;
+  }
+
   async function doResetAll() {
     resetting = true;
     const ok = await resetAll();
@@ -179,322 +247,296 @@
   }
 </script>
 
-<h1>{t("settings.title")}</h1>
-
-<section aria-labelledby="set-conn">
-  <h2 class="group-title" id="set-conn">{t("settings.connection")}</h2>
-  <div class="card group">
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.line")}</b>
-        {#if network}
-          <span class="net">{t("settings.line.network", { network: network.name })}</span>
+<div class="settings">
+  <h1>{t("settings.title")}</h1>
+  <nav class="index" aria-label={t("settings.index")}>
+    {#each index as g (g.id)}
+      <button
+        type="button"
+        class:on={current === g.id}
+        aria-current={current === g.id ? "true" : undefined}
+        onclick={() => go(g.id)}
+      >
+        <Glyph name={g.glyph} size={17} />{g.label}
+      </button>
+    {/each}
+  </nav>
+  <div class="groups" bind:this={groupsEl}>
+    <section id="set-line" aria-labelledby="set-line-h">
+      <h2 class="group-title" id="set-line-h"><Glyph name="line" size={18} />{t("settings.connection")}</h2>
+      <div class="card group">
+        <div class="item">
+          <div class="words">
+            <b>{t("settings.line")}</b>
+            <span class="num"
+              >{hasLine
+                ? t("settings.line.value", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
+                : t("sidebar.line.none")}{#if network}
+                · {t("settings.line.network", { network: network.name })}{/if}</span
+            >
+            {#if metered}
+              <span class="metered"><i class="icon" aria-hidden="true">&#xE7BA;</i>{t("settings.metered")}</span>
+            {/if}
+          </div>
+          <div class="pair">
+            <button type="button" class="btn" disabled={!canEdit || !canMeasure()} onclick={() => void measureLine()}>
+              {measuring || ui.measuring ? t("measure.running") : t("measure.button")}
+            </button>
+            <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => lineDialog.show()}>
+              {t("settings.line.change")}
+            </button>
+          </div>
+        </div>
+        {#if measured}
+          <div class="item">
+            <div class="words">
+              <b>{t("measure.last", { date: measuredOn })}</b>
+              <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
+              {#if grades.length > 0}
+                <ul class="grades">
+                  {#each grades as g (g.key)}
+                    <li>
+                      <span class="letter g-{g.grade}"
+                        ><span class="visually-hidden">{t("proof.grade.word")} </span>{g.grade}</span
+                      >
+                      <span class="who">{g.who}</span>
+                      <span class="num">{t("proof.grade.rise", { rise: g.rise })}</span>
+                    </li>
+                  {/each}
+                </ul>
+                <span class="note"
+                  >{grades[0]?.grade === "A"
+                    ? `${t("proof.grade.calm")} ${t("proof.grade.what")}`
+                    : t("proof.grade.what")}</span
+                >
+              {/if}
+            </div>
+          </div>
         {/if}
-        <span
-          >{hasLine
-            ? t("settings.line.value", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
-            : t("sidebar.line.none")}</span
-        >
-        {#if metered}
-          <span class="metered"><i class="icon" aria-hidden="true">&#xE7BA;</i>{t("settings.metered")}</span>
-        {/if}
-      </div>
-      <div class="pair">
-        <button type="button" class="btn" disabled={!canEdit || !canMeasure()} onclick={() => void measureLine()}>
-          {measuring || ui.measuring ? t("measure.running") : t("measure.button")}
-        </button>
-        <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => lineDialog.show()}>
-          {t("settings.line.change")}
-        </button>
-      </div>
-    </div>
-    {#if measured}
-      <div class="item">
-        <div class="words">
-          <b>{t("measure.last", { date: measuredOn })}</b>
-          <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
-          {#if grades.length > 0}
-            <ul class="grades">
-              {#each grades as g (g.key)}
+        <label class="item">
+          <div class="words">
+            <b>{t("adapt.title")}</b>
+            <span>{t("adapt.body")}</span>
+          </div>
+          <input
+            type="checkbox"
+            role="switch"
+            class="switch"
+            checked={line.pinned !== true}
+            disabled={!canEdit || !hasLine || pinning}
+            onchange={(e) => void setAdapt(e.currentTarget.checked)}
+          />
+        </label>
+        {#if others.length > 0}
+          <details class="item fold">
+            <summary>
+              <span class="words"><b>{t("settings.networks")}</b><span>{t("settings.networks.body")}</span></span>
+              <span class="count">{t("settings.networks.count", { count: others.length })}<Glyph name="chevron" size={16} /></span>
+            </summary>
+            <ul class="nets">
+              {#each others as n (n.id)}
                 <li>
-                  <span class="who">{g.who}</span>
-                  <span class="letter g-{g.grade}"
-                    ><span class="visually-hidden">{t("proof.grade.word")} </span>{g.grade}</span
-                  >
-                  <span class="num">{t("proof.grade.rise", { rise: g.rise })}</span>
+                  <span class="net">{n.name}</span>
+                  <span class="num">{t("settings.line.value", { down: fig(n.line.down_mbps), up: fig(n.line.up_mbps) })}</span>
                 </li>
               {/each}
             </ul>
-            <span class="note"
-              >{grades[0]?.grade === "A"
-                ? `${t("proof.grade.calm")} ${t("proof.grade.what")}`
-                : t("proof.grade.what")}</span
-            >
-          {/if}
-        </div>
-      </div>
-    {/if}
-    <label class="item">
-      <div class="words">
-        <b>{t("adapt.title")}</b>
-        <span>{t("adapt.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={line.pinned !== true}
-        disabled={!canEdit || !hasLine || pinning}
-        onchange={(e) => void setAdapt(e.currentTarget.checked)}
-      />
-    </label>
-    {#if others.length > 0}
-      <div class="item">
-        <div class="words">
-          <b>{t("settings.networks")}</b>
-          <span>{t("settings.networks.body")}</span>
-          <ul class="nets">
-            {#each others as n (n.id)}
-              <li>
-                <span class="net">{n.name}</span>
-                <span class="num">{t("settings.line.value", { down: fig(n.line.down_mbps), up: fig(n.line.up_mbps) })}</span>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      </div>
-    {/if}
-  </div>
-</section>
-
-<section aria-labelledby="set-first">
-  <h2 class="group-title" id="set-first">{t("settings.first")}</h2>
-  <div class="card group">
-    <label class="item">
-      <div class="words">
-        <b>{t("focus.title")}</b>
-        <span>{t("focus.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={focusBoost}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ focus_boost: e.currentTarget.checked })}
-      />
-    </label>
-    <label class="item">
-      <div class="words">
-        <b>{t("calls.title")}</b>
-        <span>{t("calls.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={callsFirst}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ calls_first: e.currentTarget.checked })}
-      />
-    </label>
-    <label class="item">
-      <div class="words">
-        <b>{t("gaming.title")}</b>
-        <span>{t("gaming.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={gamingWhilePlaying}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ gaming_while_playing: e.currentTarget.checked })}
-      />
-    </label>
-    <label class="item">
-      <div class="words">
-        <b>{t("fix.setting.title")}</b>
-        <span>{t("fix.setting.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={fixer.prefs.on}
-        onchange={(e) => fixer.setOn(e.currentTarget.checked)}
-      />
-    </label>
-    {#if choices.length > 0}
-      <div class="item">
-        <div class="words">
-          <b>{t("first.list.title")}</b>
-          <span>{t("first.list.body")}</span>
-          <ul class="nets choices">
-            {#each choices as c (c.id)}
-              <li>
-                <span class="net">{c.name}</span>
-                <span>{c.kind}</span>
-                <button
-                  type="button"
-                  class="btn btn-quiet"
-                  disabled={!canEdit}
-                  aria-label={t("first.list.remove.label", { name: c.name })}
-                  onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
-                >
-              </li>
-            {/each}
-          </ul>
-        </div>
-      </div>
-    {/if}
-  </div>
-</section>
-
-{#if grouped.length > 0}
-<section aria-labelledby="set-apps">
-  <h2 class="group-title" id="set-apps">{t("settings.apps")}</h2>
-  <div class="card group">
-      <div class="item">
-        <div class="words">
-          <b>{t("group.list.title")}</b>
-          <span>{t("group.list.body")}</span>
-          <ul class="nets choices">
-            {#each grouped as g (g.key)}
-              <li>
-                <span class="net">{g.name}</span>
-                {#if g.kind === "split"}
-                  <span>{t("group.list.split")}</span>
-                  <button
-                    type="button"
-                    class="btn btn-quiet"
-                    disabled={!canEdit}
-                    aria-label={t("group.list.back.label", { name: g.name })}
-                    onclick={() => void putBack(g.exe)}>{t("group.list.back")}</button
-                  >
-                {:else}
-                  <span>{t("group.list.merge", { into: g.into })}</span>
-                  <button
-                    type="button"
-                    class="btn btn-quiet"
-                    disabled={!canEdit}
-                    aria-label={t("group.list.separate.label", { name: g.name })}
-                    onclick={() => void separate(g.from, g.name)}>{t("group.list.separate")}</button
-                  >
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        </div>
-      </div>
-  </div>
-</section>
-{/if}
-
-<section aria-labelledby="set-win">
-  <h2 class="group-title" id="set-win">{t("settings.windows")}</h2>
-  <div class="card group">
-    <label class="item">
-      <div class="words">
-        <b>{t("settings.autostart")}</b>
-        <span>{t("settings.autostart.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={autostart === true}
-        disabled={autostart === null}
-        onchange={(e) => void setAutostart(e.currentTarget.checked)}
-      />
-    </label>
-    <div class="item">
-      <div class="words">
-        <b id="set-hotkey">{t("settings.hotkey", { keys: keysLabel(hotkey?.keys ?? "ctrl+alt+s") })}</b>
-        <span role="status"
-          >{hotkeyTaken?.kept
-            ? t("settings.hotkey.kept", hotkeyTaken)
-            : hotkeyTaken
-              ? t("settings.hotkey.taken", hotkeyTaken)
-              : t("settings.hotkey.body")}</span
-        >
-      </div>
-      <div class="hotkey">
-        {#if hotkey?.on}
-          <select
-            aria-label={t("settings.hotkey.pick")}
-            value={hotkey.keys}
-            onchange={(e) => void setHotkeyKeys(e.currentTarget)}
-          >
-            {#each hotkey.choices as c (c.keys)}
-              <option value={c.keys}>{c.label}</option>
-            {/each}
-          </select>
+          </details>
         {/if}
-        <input
-          type="checkbox"
-          role="switch"
-          class="switch"
-          aria-labelledby="set-hotkey"
-          checked={hotkey?.on === true}
-          disabled={hotkey === null}
-          onchange={(e) => void setHotkey(e.currentTarget.checked)}
-        />
       </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<section aria-labelledby="set-about">
-  <h2 class="group-title" id="set-about">{t("settings.about")}</h2>
-  <div class="card group">
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.about.version", { app: version })}</b>
-        {#if serviceVersion}<span>{t("settings.about.service", { version: serviceVersion })}</span>{/if}
+    <section id="set-first" aria-labelledby="set-first-h">
+      <h2 class="group-title" id="set-first-h"><Glyph name="boost" size={18} />{t("settings.first")}</h2>
+      <div class="card group">
+        {#each firstSwitches as sw (sw.title)}
+          <label class="item">
+            <div class="words">
+              <b>{sw.title}</b>
+              <span>{sw.body}</span>
+            </div>
+            <input
+              type="checkbox"
+              role="switch"
+              class="switch"
+              checked={sw.on}
+              disabled={sw.disabled}
+              onchange={(e) => sw.set(e.currentTarget.checked)}
+            />
+          </label>
+        {/each}
+        {#if choices.length > 0}
+          <details class="item fold">
+            <summary>
+              <span class="words"><b>{t("first.list.title")}</b><span>{t("first.list.body")}</span></span>
+              <span class="count">{t("settings.count", { count: choices.length })}<Glyph name="chevron" size={16} /></span>
+            </summary>
+            <ul class="nets choices">
+              {#each choices as c (c.id)}
+                <li>
+                  <span class="net">{c.name}</span>
+                  <span>{c.kind}</span>
+                  <button
+                    type="button"
+                    class="btn btn-quiet"
+                    disabled={!canEdit}
+                    aria-label={t("first.list.remove.label", { name: c.name })}
+                    onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
+                  >
+                </li>
+              {/each}
+            </ul>
+          </details>
+        {/if}
       </div>
-    </div>
-    <UpdateRow />
-    <label class="item">
-      <div class="words">
-        <b>{t("packs.title")}</b>
-        <span>{t("packs.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={packUpdates}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ pack_updates: e.currentTarget.checked })}
-      />
-    </label>
-  </div>
-</section>
+    </section>
 
-<section aria-labelledby="set-reset">
-  <h2 class="group-title" id="set-reset">{t("settings.reset")}</h2>
-  <div class="card group">
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.resetMode", { mode })}</b>
-        <span>{t("settings.resetMode.body", { mode })}</span>
+    {#if grouped.length > 0}
+      <section id="set-apps" aria-labelledby="set-apps-h">
+        <h2 class="group-title" id="set-apps-h"><Glyph name="apps" size={18} />{t("settings.apps")}</h2>
+        <div class="card group">
+          <details class="item fold">
+            <summary>
+              <span class="words"><b>{t("group.list.title")}</b><span>{t("group.list.body")}</span></span>
+              <span class="count">{t("settings.count", { count: grouped.length })}<Glyph name="chevron" size={16} /></span>
+            </summary>
+            <ul class="nets choices">
+              {#each grouped as g (g.key)}
+                <li>
+                  <span class="net">{g.name}</span>
+                  {#if g.kind === "split"}
+                    <span>{t("group.list.split")}</span>
+                    <button
+                      type="button"
+                      class="btn btn-quiet"
+                      disabled={!canEdit}
+                      aria-label={t("group.list.back.label", { name: g.name })}
+                      onclick={() => void putBack(g.exe)}>{t("group.list.back")}</button
+                    >
+                  {:else}
+                    <span>{t("group.list.merge", { into: g.into })}</span>
+                    <button
+                      type="button"
+                      class="btn btn-quiet"
+                      disabled={!canEdit}
+                      aria-label={t("group.list.separate.label", { name: g.name })}
+                      onclick={() => void separate(g.from, g.name)}>{t("group.list.separate")}</button
+                    >
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </details>
+        </div>
+      </section>
+    {/if}
+
+    <section id="set-start" aria-labelledby="set-start-h">
+      <h2 class="group-title" id="set-start-h"><Glyph name="power" size={18} />{t("settings.windows")}</h2>
+      <div class="card group">
+        <label class="item">
+          <div class="words">
+            <b>{t("settings.autostart")}</b>
+            <span>{t("settings.autostart.body")}</span>
+          </div>
+          <input
+            type="checkbox"
+            role="switch"
+            class="switch"
+            checked={autostart === true}
+            disabled={autostart === null}
+            onchange={(e) => void setAutostart(e.currentTarget.checked)}
+          />
+        </label>
+        <div class="item">
+          <div class="words">
+            <b id="set-hotkey">{t("settings.hotkey", { keys: keysLabel(hotkey?.keys ?? "ctrl+alt+s") })}</b>
+            <span role="status"
+              >{hotkeyTaken?.kept
+                ? t("settings.hotkey.kept", hotkeyTaken)
+                : hotkeyTaken
+                  ? t("settings.hotkey.taken", hotkeyTaken)
+                  : t("settings.hotkey.body")}</span
+            >
+          </div>
+          <div class="hotkey">
+            {#if hotkey?.on}
+              <select
+                aria-label={t("settings.hotkey.pick")}
+                value={hotkey.keys}
+                onchange={(e) => void setHotkeyKeys(e.currentTarget)}
+              >
+                {#each hotkey.choices as c (c.keys)}
+                  <option value={c.keys}>{c.label}</option>
+                {/each}
+              </select>
+            {/if}
+            <input
+              type="checkbox"
+              role="switch"
+              class="switch"
+              aria-labelledby="set-hotkey"
+              checked={hotkey?.on === true}
+              disabled={hotkey === null}
+              onchange={(e) => void setHotkey(e.currentTarget.checked)}
+            />
+          </div>
+        </div>
       </div>
-      <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
-        {t("split.reset")}
-      </button>
-    </div>
-    <div class="item">
-      <div class="words">
-        <b>{t("settings.resetAll")}</b>
-        <span>{t("settings.resetAll.body")}</span>
+    </section>
+
+    <section id="set-about" aria-labelledby="set-about-h">
+      <h2 class="group-title" id="set-about-h"><Glyph name="info" size={18} />{t("settings.about")}</h2>
+      <div class="card group">
+        <div class="item">
+          <div class="words">
+            <b>{t("settings.about.version", { app: version })}</b>
+            {#if serviceVersion}<span>{t("settings.about.service", { version: serviceVersion })}</span>{/if}
+          </div>
+        </div>
+        <UpdateRow />
+        <label class="item">
+          <div class="words">
+            <b>{t("packs.title")}</b>
+            <span>{t("packs.body")}</span>
+          </div>
+          <input
+            type="checkbox"
+            role="switch"
+            class="switch"
+            checked={packUpdates}
+            disabled={!canEdit || focusing}
+            onchange={(e) => void setSetting({ pack_updates: e.currentTarget.checked })}
+          />
+        </label>
       </div>
-      <button type="button" class="btn" disabled={!canEdit} onclick={() => (confirming = true)}>
-        {t("settings.resetAll.button")}
-      </button>
-    </div>
+    </section>
+
+    <section id="set-reset" aria-labelledby="set-reset-h">
+      <h2 class="group-title" id="set-reset-h"><Glyph name="reset" size={18} />{t("settings.reset")}</h2>
+      <div class="card group">
+        <div class="item">
+          <div class="words">
+            <b>{t("settings.resetMode", { mode })}</b>
+            <span>{t("settings.resetMode.body", { mode })}</span>
+          </div>
+          <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => void resetSplit()}>
+            {t("split.reset")}
+          </button>
+        </div>
+        <div class="item">
+          <div class="words">
+            <b>{t("settings.resetAll")}</b>
+            <span>{t("settings.resetAll.body")}</span>
+          </div>
+          <button type="button" class="btn btn-quiet danger" disabled={!canEdit} onclick={() => (confirming = true)}>
+            {t("settings.resetAll.button")}
+          </button>
+        </div>
+      </div>
+    </section>
   </div>
-</section>
+</div>
 
 <ConfirmDialog
   open={confirming}
@@ -507,22 +549,123 @@
 />
 
 <style>
+  /* An index beside the groups (a map of the page), the groups in one
+     column at a reading width. */
+  .settings {
+    display: grid;
+    grid-template-columns: 184px minmax(0, 680px);
+    column-gap: 32px;
+    align-items: start;
+  }
   h1 {
-    margin: 0 0 8px;
-    font-size: 26px;
-    line-height: 32px;
+    grid-column: 1 / -1;
+    margin: 0 0 18px;
+    font-size: 28px;
+    line-height: 34px;
     font-weight: 800;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+  }
+  .index {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .index button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+    transition:
+      background-color 140ms linear,
+      color 140ms linear;
+  }
+  .index button:hover {
+    background: var(--fill-subtle-hover);
+    color: var(--text-primary);
+  }
+  .index button.on {
+    background: var(--surface-1);
+    color: var(--text-primary);
+  }
+  .index button.on :global(.glyph) {
+    color: var(--shell);
+  }
+  .groups {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    padding-bottom: 40px;
   }
   section {
-    margin-top: 20px;
+    scroll-margin-top: 8px;
+  }
+  .group-title :global(.glyph) {
+    color: var(--shell);
+  }
+  /* A list needed once: one row that opens. */
+  .item.fold {
+    display: block;
+  }
+  .fold summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    list-style: none;
+    cursor: pointer;
+  }
+  .fold summary::-webkit-details-marker {
+    display: none;
+  }
+  .count {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .count :global(.glyph) {
+    transition: transform 200ms var(--ease-out);
+  }
+  .fold[open] .count :global(.glyph) {
+    transform: rotate(90deg);
+  }
+  .fold summary:hover .count {
+    color: var(--text-primary);
+  }
+  .fold .nets {
+    margin: 12px 0 2px;
+  }
+  .danger {
+    color: var(--critical);
+  }
+  @media (max-width: 980px) {
+    .settings {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .index {
+      display: none;
+    }
   }
   .group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0 0 10px 4px;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 16px;
+    line-height: 22px;
     font-weight: 700;
-    color: var(--text-secondary);
+    color: var(--text-primary);
   }
   .group {
     display: flex;
@@ -532,7 +675,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    min-height: 68px;
+    min-height: 62px;
     padding: 12px 18px;
   }
   .item + .item {
