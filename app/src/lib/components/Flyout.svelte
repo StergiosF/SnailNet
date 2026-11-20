@@ -18,6 +18,7 @@
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
   import { pauseShown } from "../pause";
+  import { flash } from "../flash";
   import { ProofWatch, proofOf } from "../proof";
   import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
@@ -172,7 +173,7 @@
   {#if book}
     <ul aria-label={t("split.label")}>
       {#each rows as s (s.key)}
-        <li>
+        <li use:flash={`${s.share}|${s.enabled}`}>
           <AppIcon target={s.target} name={s.name} size={20} />
           <span class="who">
             <b>{s.name}</b>

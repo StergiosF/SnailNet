@@ -3,8 +3,11 @@
   // The main window's rows and the tray flyout both use it; `compact` is
   // the flyout's size. The figure is a live region, so a screen reader
   // hears the new share after a step. On the Split page a share changed
-  // but not saved yet shows what it was underneath.
+  // but not saved yet shows what it was underneath. A new figure settles
+  // in from just below (DESIGN.md, change feedback); reduced motion: at once.
+  import { fly } from "svelte/transition";
   import { t } from "../i18n";
+  import { ms } from "../motion";
 
   let {
     name,
@@ -33,7 +36,10 @@
   >
   <span class="fig">
     <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name, pct })}>
-      {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{pct}<small>%</small>{/if}
+      {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{#key pct}<span
+            class="v"
+            in:fly={{ y: 4, duration: ms(260) }}>{pct}<small>%</small></span
+          >{/key}{/if}
     </output>
     {#if was !== null && !compact}
       <span class="was" aria-label={t("row.was.label", { name, pct: was })}>{t("row.was", { pct: was })}</span>
@@ -98,6 +104,9 @@
     font-size: 26px;
     font-weight: 700;
     letter-spacing: -0.02em;
+  }
+  .n .v {
+    display: inline-block;
   }
   .n small {
     margin-left: 1px;

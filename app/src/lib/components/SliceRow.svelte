@@ -25,6 +25,7 @@
     setRuleShare,
     stepShare,
   } from "../rules";
+  import { flash } from "../flash";
   import { ui } from "../ui.svelte";
   import type { Limit, Priority } from "../types";
   import AppIcon from "./AppIcon.svelte";
@@ -96,7 +97,13 @@
   ];
 </script>
 
-<li class="slice" class:open class:hot={ui.hot.includes(slice.key)} class:off={!slice.enabled}>
+<li
+  class="slice"
+  class:open
+  class:hot={ui.hot.includes(slice.key)}
+  class:off={!slice.enabled}
+  use:flash={`${pct}|${rule?.priority}|${slice.enabled}|${JSON.stringify(rule?.ceiling ?? null)}`}
+>
   <div class="row">
     {#if rule && canEdit}
       <button

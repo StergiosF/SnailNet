@@ -13,6 +13,7 @@
   import { flip } from "svelte/animate";
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
+  import { flash } from "../flash";
   import { glide, ms } from "../motion";
   import { boostLeft, boostShare, gameWhy, inCall, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
@@ -81,7 +82,12 @@
   {:else}
     <ul>
       {#each list as u (u.key)}
-        <li class:boosted={u.boosted} animate:flip={glide()} in:fade={{ duration: ms(240) }}>
+        <li
+          class:boosted={u.boosted}
+          animate:flip={glide()}
+          in:fade={{ duration: ms(240) }}
+          use:flash={`${u.boosted}|${u.ink}`}
+        >
           <span class="ic"><AppIcon target={u.target} name={u.name} size={22} boxed /></span>
           <span class="nm">
             <span class="line1">
