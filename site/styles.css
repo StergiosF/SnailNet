@@ -1,10 +1,10 @@
-/* SnailNet's landing page, v2. The look is the app's own, "the Garden"
-   (app/src/app.css, PLAN.md §14.1): the snail's greens for the ground,
-   warm off-white type in one hyperlegible family, cream for what's on and
-   for the one strong action, the slice inks used big, as the split itself.
-   The page's rhythm comes from its grounds: deep green, one lighter band,
-   one cream section, the close on the shell's green. Tokens are copied
-   from app.css; keep them in step. Windows high contrast replaces them. */
+/* SnailNet's landing page, v3. The look is the app's own, Obsidian Jade
+   "Blend" (app/src/app.css, DESIGN.md): charcoal planes with a breath of
+   green and a soft jade light from above, so the snail's jade, the ivory
+   of "what's on" and the apps' own brand tiles carry the colour. Panels
+   are lifted softly; rows inside them are parted by hairlines; no icon
+   sits in a tinted square. Tokens are copied from app.css; keep them in
+   step. Windows high contrast replaces them. */
 
 @font-face {
   font-family: "Atkinson Hyperlegible Next Variable";
@@ -15,54 +15,89 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+/* Figures, as in the app: Atkinson slashes its zero, so digits come from
+   Windows' own Segoe UI where it is installed; elsewhere Atkinson's own. */
+@font-face {
+  font-family: "SnailNet Figures";
+  src: local("Segoe UI");
+  font-weight: 100 500;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "SnailNet Figures";
+  src: local("Segoe UI Semibold");
+  font-weight: 600;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "SnailNet Figures";
+  src: local("Segoe UI Bold");
+  font-weight: 700 900;
+  unicode-range: U+0030-0039;
+}
 
 :root {
   color-scheme: dark;
-  --font-text: "Atkinson Hyperlegible Next Variable", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-text: "SnailNet Figures", "Atkinson Hyperlegible Next Variable", "Segoe UI Variable Text", "Segoe UI", sans-serif;
 
-  --surface-side: #0a211d;
-  --surface-ground: #0e2b26;
-  --surface-1: #143831;
-  --surface-2: #1b443c;
-  --surface-3: #24524a;
-  --stroke-card: rgb(255 255 255 / 0.08);
-  --stroke-strong: rgb(255 255 255 / 0.14);
+  /* The ground and the surfaces on it, each a step lighter; the band (as
+     the app's side rail) a step darker. */
+  --surface-side: #0a1311;
+  --surface-ground: #0f1b18;
+  --surface-1: #15221e;
+  --surface-2: #1c2b27;
+  --surface-3: #253631;
+  --stroke-card: rgb(236 234 226 / 0.075);
+  --stroke-strong: rgb(236 234 226 / 0.13);
+  --hover-soft: rgb(240 236 225 / 0.06);
 
-  --text-primary: #f3eee2;
-  --text-secondary: #b8cbc4;
+  /* Type: 14.9:1, 8.9:1 and 5.5:1 on the ground. */
+  --text-primary: #efece3;
+  --text-secondary: #abbcb5;
+  --text-tertiary: #80948b;
 
-  --accent: #efe8d6;
-  --accent-hover: #fbf6ea;
-  --accent-pressed: #ddd5c1;
-  --on-accent: #0a211d;
-  --shell: #2fa88e;
-  --on-shell: #062520;
-  --shell-soft: rgb(47 168 142 / 0.18);
-  --shell-soft-hover: rgb(47 168 142 / 0.28);
-  --mint: #8fd3bf;
+  /* Ivory: what's on, and the one main action. */
+  --accent: #f0ece1;
+  --accent-hover: #fbf8ef;
+  --accent-pressed: #dcd7ca;
+  --on-accent: #121716;
+  /* Jade: the brand, and what goes first. */
+  --shell: #2db894;
+  --shell-hover: #3fcaa5;
+  --on-shell: #03241b;
+  --shell-soft: rgb(45 184 148 / 0.11);
+  --shell-soft-hover: rgb(45 184 148 / 0.2);
+  --shell-bright: #5ee0bd;
+  --shell-deep: #0f6b54;
 
-  /* Cream as a ground (the privacy section): dark ink on it. */
-  --cream-ink: #0a211d;
-  --cream-ink-2: #33493f;
-  --cream-card: #f8f4e9;
-  --cream-rule: rgb(10 33 29 / 0.12);
-  --cream-link: #1f6f64;
+  --caution: #e8b45c;
+  --critical: #f0907c;
 
-  /* Slice inks; Everything else is stone. */
+  /* Share inks; Everything else is stone. */
   --ink-0: #e8836a;
   --ink-1: #eab04e;
-  --stone-0: #a6b5ad;
-  --on-ink: #0f2420;
+  --ink-2: #9cc7e8;
+  --ink-3: #d3a0d8;
+  --ink-4: #c9c46e;
+  --ink-5: #f0a3a3;
+  --stone-0: #a3aea9;
+  --stone-1: #8d9893;
+  --on-ink: #10201b;
 
-  --focus: #efe8d6;
-  --selection: rgb(239 232 214 / 0.25);
+  --focus: #f0ece1;
+  --selection: rgb(240 236 225 / 0.25);
 
   --r-control: 10px;
   --r-card: 16px;
-  --r-frame: 24px;
+  --r-frame: 20px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.045) inset, 0 12px 32px -12px rgb(0 0 0 / 0.55);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 14px 30px -16px rgb(0 0 0 / 0.65);
   --shadow-raised: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 22px 48px -18px rgb(0 0 0 / 0.7);
+  /* The light in the room, as in the app: a soft jade lift from above and
+     a deeper pool low on the left. */
+  --ground-light:
+    radial-gradient(1100px 520px at 62% -14%, rgb(45 184 148 / 0.11), transparent 70%),
+    radial-gradient(760px 520px at -6% 110%, rgb(31 111 100 / 0.09), transparent 70%);
 
   /* One content width, the same edges all the way down. */
   --gut: 80px;
@@ -78,7 +113,7 @@
 }
 @media (max-width: 639px) {
   :root {
-    --gut: 24px;
+    --gut: 16px;
     --nav-h: 64px;
     --pad-t: 112px;
     --pad-b: 80px;
@@ -104,14 +139,12 @@
     --stroke-card: CanvasText;
     --text-primary: CanvasText;
     --text-secondary: CanvasText;
+    --text-tertiary: CanvasText;
     --accent: ButtonText;
     --on-accent: ButtonFace;
     --shell: Highlight;
+    --shell-bright: Highlight;
     --on-shell: HighlightText;
-    --cream-ink: CanvasText;
-    --cream-ink-2: CanvasText;
-    --cream-card: Canvas;
-    --cream-link: LinkText;
   }
 }
 
@@ -123,7 +156,7 @@
 
 html {
   background: var(--surface-ground);
-  scrollbar-color: var(--surface-3) var(--surface-side);
+  scrollbar-color: var(--surface-3) var(--surface-ground);
   -webkit-text-size-adjust: 100%;
 }
 
@@ -232,21 +265,21 @@ kbd {
 h1 {
   font-size: clamp(42px, 5.4vw, 74px);
   line-height: 1.04;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
 h2 {
   font-size: clamp(32px, 3.6vw, 50px);
   line-height: 1.08;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
 h3 {
   font-size: 21px;
   line-height: 1.3;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 .intro,
@@ -260,10 +293,10 @@ h3 {
   color: var(--text-secondary);
 }
 .hl {
-  color: var(--mint);
+  color: var(--shell-bright);
 }
 
-/* ---------- Buttons: cream primary, shell-tinted secondary ---------- */
+/* ---------- Buttons: ivory main action, soft secondary, as in the app ---------- */
 
 .btn {
   display: inline-flex;
@@ -273,7 +306,7 @@ h3 {
   min-height: 52px;
   padding: 0 26px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 17px;
   font-weight: 600;
   line-height: 1.2;
@@ -308,23 +341,25 @@ h3 {
   background: var(--accent-pressed);
 }
 .btn--tonal {
-  background: var(--shell-soft);
+  background: var(--surface-2);
   color: var(--text-primary);
-  box-shadow: 0 0 0 1px rgb(143 211 191 / 0.22) inset;
+  box-shadow: 0 0 0 1px var(--stroke-card) inset;
 }
 .btn--tonal:hover {
-  background: var(--shell-soft-hover);
+  background: var(--surface-3);
 }
 .btn--sm {
   min-height: 40px;
   padding: 0 16px;
+  border-radius: var(--r-control);
   font-size: 15px;
   gap: 8px;
 }
 .btn--xl {
-  min-height: 88px;
-  padding: 0 48px;
-  font-size: 30px;
+  min-height: 80px;
+  padding: 0 44px;
+  border-radius: 16px;
+  font-size: 28px;
   gap: 16px;
   letter-spacing: -0.01em;
 }
@@ -392,7 +427,7 @@ h3 {
 }
 .nav__links a {
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: var(--r-control);
   font-size: 15px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -403,11 +438,11 @@ h3 {
 }
 .nav__links a:hover {
   color: var(--text-primary);
-  background: rgb(255 255 255 / 0.06);
+  background: var(--hover-soft);
 }
 .nav__links a[aria-current] {
   color: var(--text-primary);
-  background: var(--shell-soft);
+  background: var(--surface-2);
 }
 .nav__end {
   display: flex;
@@ -420,11 +455,15 @@ h3 {
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
-  transition: background-color 160ms linear;
+  border-radius: var(--r-control);
+  color: var(--text-secondary);
+  transition:
+    background-color 160ms linear,
+    color 160ms linear;
 }
 .nav__gh:hover {
-  background: rgb(255 255 255 / 0.08);
+  background: var(--hover-soft);
+  color: var(--text-primary);
 }
 @media (max-width: 899px) {
   .nav__in {
@@ -455,36 +494,15 @@ main > section {
   position: relative;
   padding: var(--pad-t) 0 var(--pad-b);
 }
+/* The band: a step darker, as the app's side rail, faded in and out. */
 .section--band {
-  /* Secondary text a step lighter on the band, so body text keeps 7:1 on its cards. */
-  --text-secondary: #c8d8d2;
   background: linear-gradient(
     180deg,
     var(--surface-ground),
-    var(--surface-1) 200px,
-    var(--surface-1) calc(100% - 200px),
+    var(--surface-side) 200px,
+    var(--surface-side) calc(100% - 200px),
     var(--surface-ground)
   );
-}
-/* Cream as a panel set on the ground, not a full-width flip. */
-.section--cream > .wrap {
-  padding: clamp(28px, 5vw, 72px);
-  border-radius: var(--r-frame);
-  background:
-    radial-gradient(800px 420px at 12% 0%, #fbf6ea, transparent 70%),
-    var(--accent);
-  color: var(--cream-ink);
-  color-scheme: light;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 40px 80px -40px rgb(0 0 0 / 0.65);
-}
-.section--cream .intro {
-  color: var(--cream-ink-2);
-}
-.section--cream .link {
-  color: var(--cream-link);
-}
-.section--cream :focus-visible {
-  outline-color: var(--cream-ink);
 }
 
 .head {
@@ -543,44 +561,54 @@ main > section {
   background: var(--surface-1);
   box-shadow: var(--shadow-card);
 }
-.section--band .card {
-  background: var(--surface-2);
-}
 
-/* App icons on their tile, as WhoCard.svelte draws them. */
-.ico {
+
+/* Brand tiles, as AppIcon.svelte draws them: the brand's mark in white on
+   its own colour (Simple Icons, CC0); Everything else on stone. */
+.bt {
   display: grid;
   flex: none;
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: #fff;
+  border-radius: var(--r-control);
+  background: var(--bg, var(--surface-3));
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
 }
-.ico img {
-  width: 24px;
-  height: 24px;
+.bt svg {
+  width: 58%;
+  height: 58%;
 }
-.ico img.ink {
-  filter: none;
+.bt--else {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  box-shadow: none;
 }
-.ico:has(img.ink) {
-  background: #1b2838;
+.bt--else svg {
+  width: 50%;
+  height: 50%;
 }
-.ico:has(img.ink) img {
-  filter: invert(1);
+.bt--glyph {
+  background: var(--surface-2);
+  color: var(--shell-bright);
+  box-shadow: none;
 }
-.ico--stone {
-  background: var(--stone-0);
+@media (forced-colors: active) {
+  .bt {
+    forced-color-adjust: none;
+    background: Canvas;
+    color: CanvasText;
+    outline: 1px solid CanvasText;
+  }
 }
 
 /* ---------- 1. Hero ---------- */
 
 .hero {
-  --h: 1;
   padding: calc(var(--nav-h) + 40px) 0 var(--pad-b);
   overflow: hidden;
-  background: var(--surface-ground);
+  background: var(--ground-light), var(--surface-ground);
 }
 .hero__in {
   display: flex;
@@ -613,9 +641,9 @@ main > section {
   padding: 40px;
   border-radius: var(--r-frame);
   background:
-    radial-gradient(70% 90% at 50% 0%, rgb(47 168 142 / 0.34), transparent 72%),
+    radial-gradient(70% 90% at 50% 0%, rgb(45 184 148 / 0.22), transparent 72%),
     linear-gradient(180deg, var(--surface-1), var(--surface-ground) 92%);
-  box-shadow: 0 1px 0 rgb(143 211 191 / 0.22) inset;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.05) inset;
   overflow: hidden;
   text-align: left;
 }
@@ -659,423 +687,628 @@ main > section {
 }
 
 /* ---------- The app itself: its Now page, as NowPage.svelte draws it ---------- */
+/* Ported from the approved mock (.impeccable/mocks/now-blend.src.html):
+   the side rail, the mode switch in the top strip, the sentence, Last 10
+   minutes over Using your internet, and the ping and the mode's split in
+   the side column. It reflows as the app's window does. */
 
 /* .win.app: wins over .win below, so the window fills the frame. */
 .win.app {
   container: app / inline-size;
-  display: flex;
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
   width: 100%;
   margin: 0;
   border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.35;
+  background: var(--surface-ground);
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: left;
   pointer-events: none;
   user-select: none;
 }
-.app svg {
-  fill: none;
-  stroke: currentColor;
+.app .gl {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 .app__side {
   display: flex;
-  flex: none;
   flex-direction: column;
-  width: 208px;
-  padding: 12px 12px 16px;
+  padding: 14px 12px;
   background: var(--surface-side);
 }
 .app__brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px 24px;
-  font-size: 18px;
+  height: 30px;
+  margin-bottom: 22px;
+  padding: 0 8px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
-.app__brand svg {
-  stroke: none;
-}
 .app__nav {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 2px;
 }
-.app__nav > span {
+.app__nav span {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 42px;
+  gap: 11px;
+  height: 38px;
   padding: 0 12px;
   border-radius: var(--r-control);
-  font-size: 15px;
   color: var(--text-secondary);
 }
-.app__nav svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
 .app__nav .is-on {
-  background: var(--shell-soft);
+  background: var(--surface-2);
   color: var(--text-primary);
   font-weight: 700;
 }
-.app__nav .is-on svg {
-  color: var(--shell);
+.app__nav .is-on .gl {
+  color: var(--shell-bright);
+}
+.app__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
 }
 .app__pause {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 40px;
-  margin-top: auto;
-  padding: 0 14px;
-  border-radius: var(--r-control);
-  background: var(--surface-2);
-  font-size: 15px;
-  font-weight: 700;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14.5px;
+  color: var(--text-secondary);
 }
-.app__pause svg {
-  width: 16px;
-  height: 16px;
-}
-.app__line {
+.app__speed {
   display: grid;
   gap: 4px;
-  margin-top: 8px;
-  padding: 10px 12px 4px;
+  padding: 12px 12px 2px;
+  border-top: 1px solid var(--stroke-card);
   font-size: 13px;
   color: var(--text-secondary);
 }
-.app__k {
-  margin-bottom: 2px;
-  font-weight: 600;
-}
-.app__lrow {
+.app__speedrow {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
 }
-.app__lrow b {
-  font-size: 16px;
+.app__v {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
   color: var(--text-primary);
 }
-.app__lrow small,
-.awho__mb small {
-  margin-left: 3px;
+.app__v + .app__v {
+  margin-left: 8px;
+}
+.app .app__v .gl {
+  width: 14px;
+  height: 14px;
+}
+.app__v small {
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+}
+.app__speedrow u {
+  margin-left: auto;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--text-tertiary);
 }
 
 .app__main {
   container: page / inline-size;
-  flex: 1;
-  min-width: 0;
-  background:
-    radial-gradient(900px 420px at 62% -12%, rgb(47 168 142 / 0.17), transparent 70%),
-    var(--surface-ground);
-}
-.app__bar {
   display: flex;
-  height: 32px;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--ground-light);
 }
-.app__bar .win__caps i {
-  width: 46px;
+.app__top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 44px;
+  padding-left: 32px;
 }
-.app__brand--bar {
+.app__brand--top {
   display: none;
-  padding: 0 0 0 14px;
-  font-size: 13px;
-  gap: 8px;
+  height: auto;
+  margin: 0 12px 0 0;
+  padding: 0;
 }
+.modes {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-side);
+  box-shadow: inset 0 0 0 1px var(--stroke-card);
+  overflow: hidden;
+}
+.modes i {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-style: normal;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.app .modes .gl {
+  width: 16px;
+  height: 16px;
+}
+.modes .is-on {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.modes .is-on .gl {
+  color: var(--shell-deep);
+}
+.app .win__caps {
+  align-self: stretch;
+  height: auto;
+}
+
 .app__page {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 0 32px 28px;
-  isolation: isolate;
+  padding: 14px 32px 26px;
 }
+.app__head {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+/* The shell spiral, large and faint behind the sentence: the page's one
+   authored moment, as in the app. */
 .app__shell {
   position: absolute;
   z-index: -1;
-  top: -96px;
-  right: -24px;
-  width: 420px;
-  height: 420px;
-  color: var(--shell);
+  top: -64px;
+  right: 40px;
+  width: 290px;
+  height: 290px;
+  fill: none;
+  stroke: var(--shell);
   stroke-linecap: round;
 }
 .app__shell circle {
   stroke-width: 2;
-  stroke-opacity: 0.1;
-}
-.app__shell path {
-  stroke-width: 10;
   stroke-opacity: 0.09;
 }
+.app__shell path {
+  stroke-width: 9;
+  stroke-opacity: 0.08;
+}
 .app__h {
-  margin-top: 4px;
+  max-width: 26ch;
   font-size: 32px;
   line-height: 38px;
   font-weight: 800;
   letter-spacing: -0.025em;
+  text-wrap: balance;
 }
-.app__tiles {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-.atile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 132px;
-  padding: 16px 16px 18px;
-  border-radius: var(--r-card);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 70%), var(--surface-1);
-  box-shadow: var(--shadow-card);
-}
-.atile b {
-  font-size: 16px;
-}
-.atile__body {
-  font-size: 13px;
+.app__detail {
+  max-width: 60ch;
+  font-size: 17px;
   color: var(--text-secondary);
-}
-.atile__gl {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 6px;
-  border-radius: var(--r-control);
-  background: var(--surface-2);
-}
-.atile__gl svg {
-  width: 20px;
-  height: 20px;
-  stroke: none;
-}
-.atile.is-on {
-  background: linear-gradient(160deg, #f6f0df, var(--accent) 60%, #e6dcc4);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-raised);
-}
-.atile.is-on .atile__body {
-  color: #2f4a43;
-}
-.atile.is-on .atile__gl {
-  background: var(--shell);
-  color: var(--on-shell);
-}
-.atile__flag {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--on-accent);
-  color: var(--accent);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
 }
 .app__cols {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 316px;
+  gap: 18px 24px;
   align-items: start;
 }
-.acard {
+.app__col {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.apanel {
   min-width: 0;
   border-radius: var(--r-card);
   background: var(--surface-1);
   box-shadow: var(--shadow-card);
 }
-.acard__t {
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 700;
-}
-.acard--who {
-  gap: 8px;
-  padding: 16px 12px 10px;
-}
-.acard--who .acard__t {
-  padding: 0 6px 4px;
-}
-.awho {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+.apanel__h {
+  display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 52px;
-  padding: 6px;
+  min-height: 34px;
+  padding: 14px 18px 0;
 }
-.awho .ico {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-control);
+.apanel__h b {
+  font-size: 16px;
 }
-.awho .ico img {
-  width: 22px;
-  height: 22px;
-}
-.awho__nm {
-  display: grid;
-  min-width: 0;
-}
-.awho__nm b {
-  font-size: 15px;
-}
-.awho__nm small {
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.apanel__aside {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
-.awho__mb {
-  font-size: 15px;
-  font-weight: 700;
-  white-space: nowrap;
+.apanel__aside strong {
+  color: var(--text-primary);
 }
-.aboost {
-  display: grid;
-  place-items: center;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 9px;
-  background: var(--surface-2);
-  font-size: 13px;
-  font-weight: 700;
-}
-.acard--split {
-  gap: 12px;
-  padding: 16px 18px;
-}
-.asbar {
+.adir {
   display: flex;
   gap: 2px;
-  height: 28px;
-  border-radius: 8px;
-  overflow: hidden;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface-side);
+  box-shadow: inset 0 0 0 1px var(--stroke-card);
 }
-.asbar i {
+.adir i {
   display: flex;
   align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-style: normal;
+}
+.app .adir .gl {
+  width: 14px;
+  height: 14px;
+}
+.adir .is-on {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Last 10 minutes: one stacked band per app, your speed dashed over them. */
+.apanel__chart {
+  padding: 8px 18px 12px;
+}
+.tl {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.tl__grid {
+  stroke: var(--stroke-card);
+}
+.tl__fill {
+  fill-opacity: 0.5;
+}
+.tl__edge {
+  fill: none;
+  stroke-width: 1.5;
+}
+.tl__ceil {
+  stroke: var(--text-tertiary);
+  stroke-dasharray: 3 4;
+}
+.tl__ceil-t,
+.tl__x,
+.tl__ev text {
+  font-family: var(--font-text);
+  font-size: 11.5px;
+  fill: var(--text-tertiary);
+}
+.tl__ev text {
+  fill: var(--text-secondary);
+}
+.tl__ev line {
+  stroke: var(--accent);
+  stroke-opacity: 0.38;
+  stroke-dasharray: 2 3;
+}
+.tl__ev rect {
+  fill: var(--surface-1);
+}
+.tl__ev circle {
+  fill: var(--accent);
+}
+
+/* Using your internet: icon, name, status, a thin bar in its band's ink. */
+.awho {
+  display: grid;
+  padding: 6px 8px 8px;
+}
+.arow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 10px;
+}
+.arow + .arow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 10px;
+  left: 52px;
+  height: 1px;
+  background: var(--stroke-card);
+}
+.arow .bt {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.arow__nm {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.arow__nm b {
+  font-size: 15px;
+}
+.arow__nm small {
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+.arow__nm small.first {
+  color: var(--shell-bright);
+}
+.use {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--stroke-card);
+  overflow: hidden;
+}
+.use i {
+  display: block;
   width: calc(var(--w) * 1%);
-  padding-left: 8px;
+  height: 100%;
+  border-radius: 2px;
   background: var(--c);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+}
+.arow__mb {
+  min-width: 70px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+}
+.arow__mb small,
+.pbar__l small,
+.ashare > b small {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.aboost {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.app .aboost .gl {
+  width: 16px;
+  height: 16px;
+}
+.amore {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-tertiary);
+}
+
+/* The side column: the ping, then how the mode shares your internet. */
+.apanel__body {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px 18px;
+}
+.pbar {
+  display: block;
+  margin-bottom: 12px;
+}
+.pbar__l {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pbar__l b {
+  font-size: 20px;
+  color: var(--text-primary);
+}
+.pbar__t {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.pbar__t i {
+  display: block;
+  width: calc(var(--w) * 1%);
+  height: 100%;
+  border-radius: 4px;
+  background: var(--c);
+}
+.anote {
+  margin-bottom: 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.apanel__body > .anote:last-child {
+  margin-bottom: 0;
+}
+.asbar,
+.fbar {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  margin: 2px 0 12px;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.asbar i,
+.fbar i {
+  display: flex;
+  flex: var(--w) 1 0;
+  align-items: center;
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  background: var(--c);
   color: var(--on-ink);
   font-size: 12px;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 700;
+  white-space: nowrap;
 }
-.asrow {
+.asbar .else,
+.fbar .else {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.ashare {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto 40px;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--stroke-card);
+  font-size: 14px;
 }
-.asrow i {
-  width: 10px;
-  height: 10px;
+.asbar + .ashare {
+  border-top: 0;
+}
+.ashare > i {
+  width: 9px;
+  height: 9px;
   border-radius: 3px;
   background: var(--c);
 }
-.asrow span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ashare small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
 }
-.asrow small {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.asrow b {
+.ashare > b {
   text-align: right;
 }
-.acard__btns {
-  display: flex;
-  gap: 8px;
-  padding-top: 4px;
+.ashare > b small {
+  display: block;
+  margin: 0;
+}
+.ashare + .anote {
+  margin-top: 6px;
 }
 .abtn {
-  display: grid;
-  place-items: center;
-  min-height: 36px;
-  padding: 0 16px;
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
   border-radius: var(--r-control);
   background: var(--surface-2);
+  font-size: 13.5px;
+  font-weight: 700;
 }
-.abtn--quiet {
-  background: transparent;
-  color: var(--text-secondary);
+.app .abtn .gl {
+  width: 15px;
+  height: 15px;
 }
+
 /* Narrower windows, as the app itself reflows. */
-@container app (max-width: 760px) {
+@container app (max-width: 980px) {
+  .win.app {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .app__side {
     display: none;
   }
-  .app__brand--bar {
+  .app__brand--top {
     display: flex;
   }
-}
-@container page (max-width: 760px) {
-  .app__tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .atile {
-    min-height: 0;
+  .app__top {
+    padding-left: 16px;
   }
 }
-@container page (max-width: 620px) {
+@container page (max-width: 820px) {
   .app__cols {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The split goes under the list, at the list's width. */
 }
-@container page (max-width: 480px) {
+@container page (max-width: 640px) {
   .app__page {
     gap: 14px;
-    padding: 0 14px 18px;
+    padding: 10px 16px 18px;
   }
   .app__h {
     font-size: 24px;
     line-height: 30px;
   }
+  .app__detail {
+    font-size: 15px;
+  }
   .app__shell {
-    width: 260px;
-    height: 260px;
-    top: -60px;
+    top: -40px;
+    right: -20px;
+    width: 200px;
+    height: 200px;
   }
-  .atile {
-    padding: 12px;
-  }
-  .atile__body {
+  .app .modes .gl,
+  .apanel__aside > span:first-child,
+  .aboost,
+  .amore {
     display: none;
   }
-  .atile__flag {
-    top: 10px;
-    right: 10px;
-  }
-  .acard--split {
+  /* On a small screen the split would repeat the list: it steps aside. */
+  .app__col--side {
     display: none;
   }
 }
+@container page (max-width: 480px) {
+  .app .win__caps,
+  .modes i:last-child {
+    display: none;
+  }
+  .modes i {
+    padding: 0 9px;
+    font-size: 12.5px;
+  }
+}
 @media (forced-colors: active) {
-  .atile,
-  .acard {
+  .apanel {
     border: 1px solid CanvasText;
   }
-  .atile.is-on {
+  .modes .is-on {
     forced-color-adjust: none;
     background: Highlight;
     color: HighlightText;
@@ -1093,7 +1326,7 @@ main > section {
   width: min(100%, 1200px);
   margin-inline: auto;
   border-radius: 14px;
-  background: var(--surface-ground);
+  background: var(--ground-light), var(--surface-ground);
   box-shadow:
     0 0 0 1px var(--stroke-strong),
     0 40px 80px -30px rgb(0 0 0 / 0.8);
@@ -1136,7 +1369,7 @@ main > section {
   height: 10px;
   fill: none;
   stroke: var(--text-secondary);
-  stroke-width: 1;
+  stroke-width: 1.1;
 }
 .win__body {
   display: grid;
@@ -1346,8 +1579,8 @@ main > section {
   align-items: center;
   gap: 4px;
   padding: 3px;
-  border-radius: 999px;
-  background: var(--surface-1);
+  border-radius: 12px;
+  background: var(--surface-side);
   box-shadow: 0 0 0 1px var(--stroke-card) inset;
 }
 .stepper b {
@@ -1362,7 +1595,7 @@ main > section {
   width: 36px;
   height: 36px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 9px;
   background: transparent;
   cursor: pointer;
   transition:
@@ -1432,19 +1665,13 @@ main > section {
 }
 .beats .beats__ic {
   position: absolute;
-  left: 0;
-  top: 15px;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--shell-soft);
-  color: var(--mint);
+  left: 4px;
+  top: 17px;
+  color: var(--shell-bright);
 }
 .beats__ic svg {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
 }
 .beats b {
   font-size: 17px;
@@ -1488,10 +1715,10 @@ main > section {
   border-radius: 2px;
 }
 .sw--without {
-  background: var(--ink-0);
+  background: var(--critical);
 }
 .sw--with {
-  background: var(--mint);
+  background: var(--shell-bright);
   height: 5px;
 }
 .trace {
@@ -1518,7 +1745,7 @@ main > section {
   fill: var(--text-secondary);
 }
 .trace__label {
-  fill: var(--mint);
+  fill: var(--shell-bright);
   font-weight: 700;
 }
 @media (max-width: 767px) {
@@ -1534,11 +1761,11 @@ main > section {
   stroke-linecap: round;
 }
 .trace__line--without {
-  stroke: var(--ink-0);
+  stroke: var(--critical);
   stroke-width: 2.5;
 }
 .trace__line--with {
-  stroke: var(--mint);
+  stroke: var(--shell-bright);
   stroke-width: 4;
 }
 @media (forced-colors: active) {
@@ -1562,45 +1789,21 @@ main > section {
 .steps {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-/* Each card spans four shared rows, so the three panels start level. */
+/* Each card spans three shared rows (heading, words, picture), so the
+   three pictures start level. */
 .stepcard {
   display: grid;
-  grid-row: span 4;
+  grid-row: span 3;
   grid-template-rows: subgrid;
   row-gap: 10px;
   padding: 28px 28px 0;
   overflow: hidden;
 }
+/* The step's number leads its heading, in jade; no tile. */
 .stepcard__n {
-  position: relative;
-  display: grid;
-  place-items: center;
-  justify-self: start;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 6px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.stepcard__n svg {
-  width: 22px;
-  height: 22px;
-}
-.stepcard__n b {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--shell);
-  color: var(--on-shell);
-  font-size: 12px;
+  margin-right: 10px;
+  color: var(--shell-bright);
   font-weight: 800;
-  box-shadow: 0 0 0 3px var(--surface-2);
 }
 .stepcard p {
   color: var(--text-secondary);
@@ -1618,9 +1821,7 @@ main > section {
   background: var(--surface-ground);
   border-top: 1px solid var(--stroke-card);
 }
-.section--band .panel {
-  background: var(--surface-1);
-}
+
 .srow {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -1633,13 +1834,10 @@ main > section {
 .srow b {
   font-weight: 700;
 }
-.srow .ico {
+.srow .bt {
   width: 34px;
   height: 34px;
-}
-.srow .ico img {
-  width: 20px;
-  height: 20px;
+  border-radius: 9px;
 }
 .srow__step {
   display: inline-flex;
@@ -1652,7 +1850,7 @@ main > section {
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-3);
   font-style: normal;
   font-weight: 600;
@@ -1761,17 +1959,14 @@ main > section {
 .frow__mb {
   font-weight: 700;
 }
-.frow .ico {
+.frow .bt {
   width: 36px;
   height: 36px;
-}
-.frow .ico img {
-  width: 22px;
-  height: 22px;
+  border-radius: 9px;
 }
 .pill-sm {
   padding: 3px 12px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-3);
   font-size: 15px;
   font-weight: 700;
@@ -1783,27 +1978,39 @@ main > section {
   font-size: 13px;
   font-weight: 600;
 }
-.frow--boosted {
-  box-shadow: 0 0 0 1px rgb(143 211 191 / 0.4) inset;
-  background: linear-gradient(90deg, rgb(47 168 142 / 0.22), var(--surface-1) 70%);
+/* Boosted: a jade wash from the left and a Boosted tag, as in the app. */
+.fx__stage .frow--boosted {
+  background: linear-gradient(90deg, rgb(45 184 148 / 0.2), transparent 70%), var(--surface-2);
+}
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--shell);
+  color: var(--on-shell);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 800;
+  vertical-align: 2px;
 }
 .frow--boosted .frow__nm small {
-  color: var(--mint);
+  color: var(--shell-bright);
 }
+/* A notice tinted by its tone (caution), its glyph in full colour. */
 .notice {
   display: flex;
   gap: 12px;
   align-items: flex-start;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgb(234 176 78 / 0.14);
-  box-shadow: 0 0 0 1px rgb(234 176 78 / 0.35) inset;
+  background: rgb(232 180 92 / 0.12);
 }
 .notice svg {
   flex: none;
   width: 22px;
   height: 22px;
-  color: var(--ink-1);
+  color: var(--caution);
 }
 .notice span {
   display: grid;
@@ -1813,125 +2020,131 @@ main > section {
   color: var(--text-secondary);
 }
 
-/* The four modes, as the Now page's tiles: the one that's on is cream. */
-.tiles {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+/* The four modes, as the app's mode switch: compact segments, each named
+   with its glyph; the one that's on is ivory. Under it, what that mode
+   does and how it shares your internet (modes.rs templates). No script:
+   the checked radio picks the picture. */
+.fmodes {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
   border: 0;
-  border-top: 1px solid var(--stroke-card);
 }
-.tile {
-  position: relative;
-  isolation: isolate;
+.seg {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 2px;
-  padding: 14px 14px 16px;
-  border-radius: 14px;
-  background: var(--surface-1);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--surface-side);
+  box-shadow: inset 0 0 0 1px var(--stroke-card);
+}
+.seg label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 15px;
+  white-space: nowrap;
+  color: var(--text-secondary);
   cursor: pointer;
   transition:
     background-color 160ms linear,
-    color 320ms linear,
-    transform 220ms var(--ease-out),
-    box-shadow 220ms var(--ease-out);
+    color 160ms linear;
 }
-.tile b {
-  font-size: 16px;
-  font-weight: 700;
+.seg label:hover {
+  background: var(--hover-soft);
+  color: var(--text-primary);
 }
-.tile__body {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-secondary);
-  transition: color 320ms linear;
-}
-.tile__gl {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 6px;
-  border-radius: var(--r-control);
-  background: var(--surface-2);
-  transition:
-    background-color 240ms linear,
-    color 240ms linear;
-}
-.tile__gl svg {
-  width: 18px;
-  height: 18px;
-}
-.fill {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(160deg, #f6f0df, var(--accent) 60%, #e6dcc4);
-  clip-path: circle(0 at 31px 31px);
-  transition: clip-path 560ms var(--ease-out);
-}
-.tile:has(input:checked) .fill {
-  clip-path: circle(160% at 31px 31px);
-}
-.tile:has(input:checked) {
-  color: var(--on-accent);
-  box-shadow: var(--shadow-raised);
-}
-.tile:has(input:checked) .tile__body {
-  color: #2f4a43;
-}
-.tile:has(input:checked) .tile__gl {
-  background: var(--shell);
-  color: var(--on-shell);
-}
-.tile input {
+.seg input {
   position: absolute;
   inset: 0;
   margin: 0;
   opacity: 0;
   cursor: pointer;
 }
-.tile:hover:not(:has(input:checked)) {
-  background: var(--surface-2);
-  transform: translateY(-2px);
+.seg .gl {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
-.tile:active:not(:has(input:checked)) {
-  transform: scale(0.985);
+.seg label:has(input:checked) {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
 }
-.tile:has(input:focus-visible) {
+.seg label:has(input:checked) .gl {
+  color: var(--shell-deep);
+}
+.seg label:has(input:focus-visible) {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+.fmode {
+  display: none;
+  gap: 10px;
+  width: 100%;
+  text-align: center;
+}
+.fmodes:has(input[value="balanced"]:checked) .fmode[data-mode="balanced"],
+.fmodes:has(input[value="streaming"]:checked) .fmode[data-mode="streaming"],
+.fmodes:has(input[value="gaming"]:checked) .fmode[data-mode="gaming"],
+.fmodes:has(input[value="quiet"]:checked) .fmode[data-mode="quiet"] {
+  display: grid;
+  animation: fx-in 420ms var(--ease-out);
+}
+@supports not selector(:has(*)) {
+  .fmode[data-mode="gaming"] {
+    display: grid;
+  }
+}
+.fmode b {
+  font-size: 17px;
+}
+.fmode .fbar {
+  height: 40px;
+  margin: 4px 0 0;
+  border-radius: var(--r-control);
+}
+.fmode .fbar i {
+  padding: 0 10px;
+  font-size: 13px;
+}
+.fmode__note {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
 @media (forced-colors: active) {
-  .fill {
-    display: none;
-  }
-  .tile:has(input:checked) {
+  .seg label:has(input:checked) {
     forced-color-adjust: none;
-    background: Highlight;
-    color: HighlightText;
-  }
-  .tile:has(input:checked) .tile__body,
-  .tile:has(input:checked) .tile__gl {
     background: Highlight;
     color: HighlightText;
   }
 }
 @media (max-width: 479px) {
-  .tile__body {
+  .seg label {
+    padding: 0 10px;
+    font-size: 14px;
+  }
+  .seg .gl {
     display: none;
   }
 }
 
-/* ---------- 5. Privacy, on cream ---------- */
+/* ---------- 5. Privacy, on the band ---------- */
 
 .conns {
   padding: 32px;
   border-radius: var(--r-card);
-  background: var(--cream-card);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.8) inset, 0 18px 40px -24px rgb(10 33 29 / 0.35);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
 }
 .conns__title {
   margin-bottom: 8px;
@@ -1943,7 +2156,7 @@ main > section {
   align-items: center;
   gap: 18px;
   padding: 18px 0;
-  border-bottom: 1px solid var(--cream-rule);
+  border-bottom: 1px solid var(--stroke-card);
 }
 .conns li:last-child {
   border-bottom: 0;
@@ -1959,26 +2172,16 @@ main > section {
 .conns small {
   font-size: 15px;
   line-height: 1.45;
-  color: var(--cream-ink-2);
+  color: var(--text-secondary);
 }
-.conns .ico {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 0 0 1px var(--cream-rule) inset;
+.conns .bt {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
 }
-.conns .ico img {
-  width: 28px;
-  height: 28px;
-}
-.conns .ico--wide img {
-  width: 34px;
-}
-.ico--glyph svg {
-  width: 26px;
-  height: 26px;
-  color: var(--cream-link);
+.conns .bt--glyph svg {
+  width: 24px;
+  height: 24px;
 }
 .reads {
   display: grid;
@@ -1990,14 +2193,14 @@ main > section {
   display: grid;
   gap: 4px;
   padding: 16px 0;
-  border-top: 1px solid var(--cream-rule);
+  border-top: 1px solid var(--stroke-card);
 }
 .reads dt {
   font-weight: 700;
 }
 .reads dd {
   margin: 0;
-  color: var(--cream-ink-2);
+  color: var(--text-secondary);
 }
 @media (max-width: 479px) {
   .conns {
@@ -2012,28 +2215,15 @@ main > section {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap);
 }
+.faq {
+  row-gap: 0;
+}
 .faq__item {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
-  padding: 28px 28px 32px;
-  border-radius: var(--r-card);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 60%), var(--surface-1);
-  box-shadow: var(--shadow-card);
-}
-.faq__ic {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 6px;
-  border-radius: 12px;
-  background: var(--shell-soft);
-  color: var(--mint);
-}
-.faq__ic svg {
-  width: 22px;
-  height: 22px;
+  padding: 24px 0 32px;
+  border-top: 1px solid var(--stroke-card);
 }
 .faq__item h3 {
   font-size: 20px;
@@ -2053,12 +2243,12 @@ main > section {
   }
 }
 
-/* ---------- 7. The close and the footer, on the shell's green ---------- */
+/* ---------- 7. The close and the footer ---------- */
 
 .closing {
   padding: var(--pad-t) 0 40px;
 }
-/* The shell's green as a panel on the ground, the snail on its trail. */
+/* One panel lit from above, the snail on its jade trail. */
 .close-panel {
   position: relative;
   display: grid;
@@ -2067,13 +2257,11 @@ main > section {
   padding: clamp(28px, 5vw, 64px);
   border-radius: var(--r-frame);
   background:
-    radial-gradient(900px 500px at 20% 0%, rgb(255 255 255 / 0.16), transparent 70%),
-    radial-gradient(600px 400px at 100% 100%, rgb(6 37 32 / 0.22), transparent 70%),
-    var(--shell);
-  color: var(--on-shell);
-  color-scheme: light;
+    radial-gradient(900px 520px at 30% -10%, rgb(45 184 148 / 0.2), transparent 70%),
+    radial-gradient(600px 420px at 100% 110%, rgb(31 111 100 / 0.16), transparent 70%),
+    var(--surface-1);
   overflow: hidden;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.3) inset, 0 40px 80px -40px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-raised);
 }
 .close__art {
   align-self: end;
@@ -2084,8 +2272,8 @@ main > section {
 }
 .close__trail {
   fill: none;
-  stroke: var(--on-shell);
-  stroke-opacity: 0.3;
+  stroke: var(--shell);
+  stroke-opacity: 0.5;
   stroke-width: 6;
   stroke-linecap: round;
   stroke-dasharray: 2 18;
@@ -2101,25 +2289,14 @@ main > section {
 }
 .close__line {
   font-size: 19px;
+  color: var(--text-secondary);
 }
 .closing .btn--primary {
   margin-top: 14px;
-  background: var(--surface-side);
-  color: var(--accent);
-  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.45);
-}
-.closing .btn--primary:hover {
-  background: #071a17;
-}
-.closing .btn--primary:active {
-  background: #040f0d;
-}
-.close-panel :focus-visible {
-  outline-color: var(--on-shell);
 }
 .release {
   font-size: 15px;
-  font-weight: 500;
+  color: var(--text-secondary);
 }
 .install {
   grid-column: 1 / -1;
@@ -2131,11 +2308,9 @@ main > section {
 .install li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  padding: 18px 20px 20px;
-  border-radius: 14px;
-  background: rgb(6 37 32 / 0.1);
-  box-shadow: inset 0 0 0 1px rgb(6 37 32 / 0.14);
+  gap: 12px;
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--stroke-strong);
 }
 .install li > span:last-child {
   display: grid;
@@ -2148,17 +2323,14 @@ main > section {
 .install small {
   font-size: 15px;
   line-height: 1.45;
+  color: var(--text-secondary);
   text-wrap: pretty;
 }
 .install__n {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background: var(--on-shell);
-  color: var(--mint);
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.6;
+  color: var(--shell-bright);
 }
 .foot {
   display: grid;
@@ -2225,7 +2397,7 @@ main > section {
     gap: 10px;
   }
   .install li {
-    padding: 16px;
+    padding: 16px 0 4px;
   }
   .close-panel {
     grid-template-columns: minmax(0, 1fr);
@@ -2383,12 +2555,12 @@ main > section {
 }
 /* Now, on the line with SnailNet: a dot, and a slow ring from it. */
 .trace__now {
-  fill: var(--mint);
+  fill: var(--shell-bright);
   stroke: var(--surface-1);
   stroke-width: 3;
 }
 .trace__ping {
-  fill: var(--mint);
+  fill: var(--shell-bright);
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
@@ -2416,23 +2588,9 @@ main > section {
 }
 .reads dt svg {
   flex: none;
-  width: 20px;
-  height: 20px;
-  color: var(--cream-link);
-}
-
-/* The mode that's on says so, as in the app. */
-.tile:has(input:checked)::after {
-  content: "On";
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--on-accent);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
+  width: 22px;
+  height: 22px;
+  color: var(--shell-bright);
 }
 
 /* ---------- Features: menus come from the button that opens them ---------- */
@@ -2449,8 +2607,7 @@ main > section {
   width: calc(var(--left) * 1%);
   height: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--mint);
-  opacity: 0.75;
+  background: var(--shell);
 }
 .fbtn {
   display: inline-flex;
@@ -2468,16 +2625,17 @@ main > section {
   width: 14px;
   height: 14px;
 }
-.fbtn--live,
+.fbtn--live {
+  background: var(--shell-soft);
+  color: var(--shell-bright);
+}
 .fbtn--on {
-  background: var(--shell);
-  color: var(--on-shell);
-  box-shadow: 0 0 0 4px var(--shell-soft);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 @media (forced-colors: active) {
-  .faq__item,
   .close-panel,
-  .section--cream > .wrap {
+  .conns {
     border: 1px solid CanvasText;
   }
 }
@@ -2485,16 +2643,13 @@ main > section {
 /* ---------- Wrapping: no lone words, no split numbers ---------- */
 
 h3,
-.acard__t,
 .conns__title {
   text-wrap: balance;
 }
 p,
 li,
 dd,
-small,
-.tile__body,
-.atile__body {
+small {
   text-wrap: pretty;
 }
 .nowrap,
@@ -2505,14 +2660,14 @@ kbd {
 
 /* Privacy: the connections card stands as tall as the words beside it,
    its four rows spread down it. */
-.section--cream .split {
+.section--privacy .split {
   align-items: stretch;
 }
-.section--cream .conns {
+.section--privacy .conns {
   display: flex;
   flex-direction: column;
 }
-.section--cream .conns ul {
+.section--privacy .conns ul {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -2561,31 +2716,27 @@ kbd {
     box-shadow 200ms linear;
 }
 .fx__tab:hover {
-  background: rgb(255 255 255 / 0.03);
+  background: var(--hover-soft);
 }
 .fx__tab[aria-selected="true"] {
   background: var(--surface-1);
   box-shadow: var(--shadow-card);
 }
+/* A quiet glyph, no tile; jade on the tab that's open, as the app's rail. */
 .fx__ic {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  color: var(--text-secondary);
-  transition:
-    background-color 200ms linear,
-    color 200ms linear;
+  width: 24px;
+  height: 28px;
+  color: var(--text-tertiary);
+  transition: color 200ms linear;
 }
 .fx__ic svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 .fx__tab[aria-selected="true"] .fx__ic {
-  background: var(--shell);
-  color: var(--on-shell);
+  color: var(--shell-bright);
 }
 .fx__txt {
   display: grid;
@@ -2609,9 +2760,9 @@ kbd {
   padding: clamp(24px, 4vw, 48px);
   border-radius: var(--r-frame);
   background:
-    radial-gradient(70% 80% at 50% 0%, rgb(47 168 142 / 0.2), transparent 72%),
+    radial-gradient(70% 80% at 50% 0%, rgb(45 184 148 / 0.13), transparent 72%),
     var(--surface-1);
-  box-shadow: 0 1px 0 rgb(143 211 191 / 0.18) inset, var(--shadow-card);
+  box-shadow: var(--shadow-card);
 }
 /* With the script, the pictures share one place and the chosen one shows. */
 [data-fx="on"] .fx__panel {
@@ -2640,12 +2791,8 @@ kbd {
   width: min(100%, 500px);
   justify-self: center;
 }
-.fx__stage .frow,
-.fx__stage .tile {
+.fx__stage .frow {
   background: var(--surface-2);
-}
-.fx__stage .tiles {
-  border-top: 0;
 }
 .frow--after {
   opacity: 0.55;
@@ -2661,8 +2808,9 @@ kbd {
 .fx__seg {
   display: inline-flex;
   padding: 3px;
-  border-radius: 10px;
-  background: var(--surface-2);
+  border-radius: 11px;
+  background: var(--surface-side);
+  box-shadow: inset 0 0 0 1px var(--stroke-card);
 }
 .fx__seg i {
   padding: 6px 12px;
@@ -2721,8 +2869,7 @@ kbd {
 }
 @media (max-width: 479px) {
   .fx__ic {
-    width: 34px;
-    height: 34px;
+    width: 20px;
   }
   .fx__txt b {
     font-size: 15px;
@@ -2744,38 +2891,7 @@ kbd {
   stroke-width: 1.8;
   stroke-linecap: round;
 }
-/* Everything else wears the app's four squares. */
-.ico--stone {
-  display: grid;
-  place-items: center;
-  color: var(--on-ink);
-}
-.ico--stone svg {
-  width: 20px;
-  height: 20px;
-}
 
-/* ---------- The hero window, a little taller, its cards filling it ---------- */
-
-@media (min-width: 1024px) {
-  .win.app {
-    min-height: 600px;
-  }
-}
-.app__main {
-  display: flex;
-  flex-direction: column;
-}
-.app__page {
-  flex: 1;
-}
-.app__cols {
-  flex: 1;
-  align-items: stretch;
-}
-.acard__btns {
-  margin-top: auto;
-}
 
 /* ---------- Nav links glide to their section ---------- */
 

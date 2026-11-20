@@ -7,7 +7,7 @@
 <meta name="description" content="SnailNet shares your Windows PC's internet between apps and websites by percentage, so the game download and YouTube both keep going. Free and open source.">
 <meta name="page-type" content="software">
 <meta name="site-kind" content="software">
-<meta name="theme-color" content="#0e2b26">
+<meta name="theme-color" content="#0f1b18">
 <meta name="color-scheme" content="dark">
 <link rel="canonical" href="https://stergiosf.github.io/SnailNet/">
 <meta property="og:type" content="website">
@@ -29,20 +29,18 @@
 </head>
 <body>
 <!--
-  v2 (2026-11-18), a redesign; docs/HANDOFF-site.md has the brief.
-  Kind: software. Deal (design-taste-frontend 2.5): hero centred (the
-  headline over one window: here the app's Now page, drawn from its
-  components; the live split to try sits under How it works); nav-centre (re-dealt from nav-mega: four words, no menus
-  to put in a panel); buttons tonal (cream primary, shell-tinted secondary);
-  features-2x2; close-type. Rhythm and footer follow the brief over the
-  deal: deep green, one lighter band (how it works), one cream section
-  (privacy), the close and footer on the shell's green.
-  Palette and type: the app's own Garden tokens and Atkinson Hyperlegible
-  Next (PRODUCT.md, fixed). No effect, scene or scroll moment: the one
-  motion is the split bar itself, which moves when you move it.
-  Product visuals are HTML drawn from the app's components with demo data
-  (no screenshots supplied). The ping picture has no numbers on purpose:
-  the user chose an illustration over the measured result.
+  v3 (2026-11-20): the app's own look, Obsidian Jade "Blend" (DESIGN.md,
+  app/src/app.css), so the site and the app match. Charcoal planes with a
+  breath of green and a soft jade light from above; ivory for what's on
+  and the one main action; jade for "goes first" and the brand; panels
+  lifted softly, rows parted by hairlines; no icon in a tinted square.
+  Glyphs are the app's (Glyph.svelte), brand marks are Simple Icons (CC0)
+  in white on the brand's tile, as AppIcon.svelte draws them. Words are
+  the app's: "share", "your internet", "speed".
+  The hero is the Now page as the app draws it (NowPage.svelte, from the
+  approved mock .impeccable/mocks/now-blend.src.html), with demo data.
+  Its ping panel is left out on purpose: the user chose no measured ping
+  numbers on the page, so ping stays the unnumbered sketch under it.
 -->
 <a class="skip" href="#main">Skip to content</a>
 
@@ -59,7 +57,7 @@
       <a href="#questions">Questions</a>
     </nav>
     <div class="nav__end">
-      <a class="nav__gh" href="https://github.com/StergiosF/SnailNet" aria-label="SnailNet on GitHub"><img class="ink" src="assets/icons/github.svg" alt="" width="20" height="20"></a>
+      <a class="nav__gh" href="https://github.com/StergiosF/SnailNet" aria-label="SnailNet on GitHub"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#b-github"/></svg></a>
       <a class="btn btn--primary btn--sm" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
     </div>
   </div>
@@ -67,61 +65,99 @@
 
 <main id="main">
 
-<!-- Hero: the tagline, one plain sentence, two actions, then the app itself, its Now page. -->
+<!-- Hero: the tagline, one plain sentence, two actions, then the app itself, its Now page as the app draws it today (NowPage.svelte, the Blend look). -->
 <section class="hero" id="top" aria-labelledby="hero-h">
   <div class="wrap hero__in">
     <h1 id="hero-h">Put the bandwidth hogs in the <span class="hl">slow lane</span>.</h1>
     <p class="lead">Split your PC's internet between apps by percentage, so a download never wrecks your game, stream or call.</p>
     <div class="actions">
       <a class="btn btn--primary" data-download href="https://github.com/StergiosF/SnailNet/releases"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#g-download"/></svg><span data-download-label>Download for Windows</span></a>
-      <a class="btn btn--tonal" href="https://github.com/StergiosF/SnailNet"><img class="ink" src="assets/icons/github.svg" alt="" width="18" height="18">See the code on GitHub</a>
+      <a class="btn btn--tonal" href="https://github.com/StergiosF/SnailNet"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#b-github"/></svg>See the code on GitHub</a>
     </div>
 
     <div class="stage">
-      <figure class="win app" role="img" aria-label="SnailNet's main window, the Now page: Balanced mode is on; YouTube, a Steam download and Discord are using the internet; the split gives YouTube 55%, Steam 40% and everything else 5%.">
-        <span class="app__side" aria-hidden="true">
-          <span class="app__brand"><svg viewBox="0 0 512 512" width="28" height="28"><use href="#snail-light"/></svg>SnailNet</span>
-          <span class="app__nav">
-            <span class="is-on"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z" stroke-linejoin="round"/></svg>Now</span>
-            <span><svg viewBox="0 0 24 24"><path d="M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4"/></svg>Split</span>
-            <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>Settings</span>
-          </span>
-          <span class="app__pause"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span>
-          <span class="app__line">
-            <span class="app__k">Your line</span>
-            <span class="app__lrow">Download <b>25<small>Mbps</small></b></span>
-            <span class="app__lrow">Upload <b>5<small>Mbps</small></b></span>
-          </span>
-        </span>
-        <span class="app__main" aria-hidden="true">
-          <span class="app__bar"><span class="app__brand app__brand--bar"><svg viewBox="0 0 512 512" width="18" height="18"><use href="#snail-light"/></svg>SnailNet</span><span class="win__caps"><i><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></i><i><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" rx="1"/></svg></i><i><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0 0 10"/></svg></i></span></span>
-          <span class="app__page">
-            <svg class="app__shell" viewBox="0 0 512 512"><circle cx="224" cy="250" r="150"/><path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0"/></svg>
-            <span class="app__h">What matters right now?</span>
-            <span class="app__tiles">
-              <span class="atile is-on"><span class="atile__gl"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="atile__body">Every app gets a fair share.</span><i class="atile__flag">On</i></span>
-              <span class="atile"><span class="atile__gl"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="atile__body">Videos and calls stay smooth. Downloads wait.</span></span>
-              <span class="atile"><span class="atile__gl"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="atile__body">Your game and voice chat come first.</span></span>
-              <span class="atile"><span class="atile__gl"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="atile__body">Downloads never slow anything else down.</span></span>
+      <figure class="win app" role="img" aria-label="SnailNet's main window, the Now page. Streaming mode is on. The heading says Steam is using the most right now, with speed nobody else needs, while YouTube, Twitch and Discord still get all they need. A chart of the last 10 minutes shows Steam starting and the switch to Streaming; beside it, how Streaming shares the internet.">
+        <div class="app__side" aria-hidden="true">
+          <div class="app__brand"><svg viewBox="0 0 512 512" width="28" height="28"><use href="#snail-light"/></svg>SnailNet</div>
+          <div class="app__nav">
+            <span class="is-on"><svg class="gl" viewBox="0 0 24 24"><use href="#n-now"/></svg>Now</span>
+            <span><svg class="gl" viewBox="0 0 24 24"><use href="#n-split"/></svg>Split</span>
+            <span><svg class="gl" viewBox="0 0 24 24"><use href="#n-settings"/></svg>Settings</span>
+          </div>
+          <div class="app__foot">
+            <span class="app__pause"><svg class="gl" viewBox="0 0 24 24"><use href="#n-pause"/></svg>Pause SnailNet</span>
+            <div class="app__speed">
+              <span>Your internet speed</span>
+              <span class="app__speedrow"><span class="app__v"><svg class="gl" viewBox="0 0 24 24"><use href="#g-down"/></svg>25</span><span class="app__v"><svg class="gl" viewBox="0 0 24 24"><use href="#g-up"/></svg>5 <small>Mbps</small></span><u>Change</u></span>
+            </div>
+          </div>
+        </div>
+        <div class="app__main" aria-hidden="true">
+          <div class="app__top">
+            <span class="app__brand app__brand--top"><svg viewBox="0 0 512 512" width="20" height="20"><use href="#snail-light"/></svg></span>
+            <span class="modes">
+              <i><svg class="gl" viewBox="0 0 24 24"><use href="#m-balanced"/></svg>Balanced</i>
+              <i class="is-on"><svg class="gl" viewBox="0 0 24 24"><use href="#m-streaming"/></svg>Streaming</i>
+              <i><svg class="gl" viewBox="0 0 24 24"><use href="#m-gaming"/></svg>Gaming</i>
+              <i><svg class="gl" viewBox="0 0 24 24"><use href="#m-quiet"/></svg>Quiet downloads</i>
             </span>
-            <span class="app__cols">
-              <span class="acard acard--who">
-                <span class="acard__t">Using your internet</span>
-                <span class="awho"><span class="ico"><img width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="awho__nm"><b>YouTube</b><small>gets all it asks for</small></span><span class="awho__mb">12.4<small>Mbps</small></span><span class="aboost">Boost</span></span>
-                <span class="awho"><span class="ico"><img width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><span class="awho__nm"><b>Steam</b><small>0.7&nbsp;Mbps of it is spare room</small></span><span class="awho__mb">10.2<small>Mbps</small></span><span class="aboost">Boost</span></span>
-                <span class="awho"><span class="ico"><img width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="awho__nm"><b>Discord</b><small>in Everything else</small></span><span class="awho__mb">0.3<small>Mbps</small></span><span class="aboost">Boost</span></span>
-              </span>
-              <span class="acard acard--split">
-                <span class="acard__t">The split</span>
-                <span class="asbar"><i style="--w: 55; --c: var(--ink-0)">55%</i><i style="--w: 40; --c: var(--ink-1)">40%</i><i style="--w: 5; --c: var(--stone-0)"></i></span>
-                <span class="asrow"><i style="--c: var(--ink-0)"></i><span>YouTube</span><small>12.4 / 13.1&nbsp;Mbps</small><b>55%</b></span>
-                <span class="asrow"><i style="--c: var(--ink-1)"></i><span>Steam</span><small>10.2 / 9.5&nbsp;Mbps</small><b>40%</b></span>
-                <span class="asrow"><i style="--c: var(--stone-0)"></i><span>Everything else</span><small>0.6 / 1.2&nbsp;Mbps</small><b>5%</b></span>
-                <span class="acard__btns"><span class="abtn">Fine-tune</span><span class="abtn abtn--quiet">Reset split</span></span>
-              </span>
-            </span>
-          </span>
-        </span>
+            <span class="win__caps"><i><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></i><i><svg viewBox="0 0 10 10"><rect x="1.2" y="1.2" width="7.6" height="7.6" rx="1"/></svg></i><i><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></i></span>
+          </div>
+          <div class="app__page">
+            <div class="app__head">
+              <svg class="app__shell" viewBox="0 0 512 512"><circle cx="224" cy="250" r="150"/><path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0"/></svg>
+              <span class="app__h">Steam is using the most right now.</span>
+              <span class="app__detail">It's using speed nobody else needs. YouTube, Twitch and Discord still get all they need.</span>
+            </div>
+            <div class="app__cols">
+              <div class="app__col">
+                <div class="apanel">
+                  <div class="apanel__h"><b>Last 10 minutes</b><span class="apanel__aside"><span><strong>22.4</strong> of 25 Mbps now</span><span class="adir"><i class="is-on"><svg class="gl" viewBox="0 0 24 24"><use href="#g-down"/></svg>Download</i><i><svg class="gl" viewBox="0 0 24 24"><use href="#g-up"/></svg>Upload</i></span></span></div>
+                  <div class="apanel__chart">
+<svg class="tl" viewBox="0 0 520 166">
+<line class="tl__grid" x1="0" x2="520" y1="146" y2="146"/>
+<line class="tl__grid" x1="0" x2="520" y1="85.6" y2="85.6"/>
+<g class="tl__layer"><path class="tl__fill" fill="var(--stone-0)" d="M0.0,146.0L4.3,146.0L8.7,146.0L13.0,146.0L17.3,146.0L21.7,146.0L26.0,146.0L30.3,146.0L34.7,146.0L39.0,146.0L43.3,146.0L47.7,146.0L52.0,146.0L56.3,129.6L60.7,113.1L65.0,96.7L69.3,79.6L73.7,61.8L78.0,61.4L82.3,62.2L86.7,63.1L91.0,63.3L95.3,63.3L99.7,64.1L104.0,65.6L108.3,66.7L112.7,66.5L117.0,65.9L121.3,65.9L125.7,66.2L130.0,65.7L134.3,64.2L138.7,62.6L143.0,62.1L147.3,62.2L151.7,61.9L156.0,61.0L160.3,60.6L164.7,61.4L169.0,62.7L173.3,63.3L177.7,63.1L182.0,63.2L186.3,64.1L190.7,64.8L195.0,64.3L199.3,63.0L203.7,62.0L208.0,61.8L212.3,61.5L216.7,60.4L221.0,59.1L225.3,58.7L229.7,59.5L234.0,60.2L238.3,60.3L242.7,60.4L247.0,61.4L251.3,63.0L255.7,64.0L260.0,63.9L264.3,63.6L268.7,63.9L273.0,64.4L277.3,64.0L281.7,62.7L286.0,61.6L290.3,61.5L294.7,61.8L299.0,61.7L303.3,61.1L307.7,61.2L312.0,82.7L316.3,84.2L320.7,84.9L325.0,85.0L329.3,85.5L333.7,86.7L338.0,87.5L342.3,87.0L346.7,85.8L351.0,85.1L355.3,85.1L359.7,84.7L364.0,83.4L368.3,82.1L372.7,81.9L377.0,82.6L381.3,83.1L385.7,82.9L390.0,82.8L394.3,87.5L398.7,92.7L403.0,97.0L407.3,100.3L411.7,99.7L416.0,99.9L420.3,100.0L424.7,99.1L429.0,97.4L433.3,96.1L437.7,95.9L442.0,95.9L446.3,95.3L450.7,94.4L455.0,94.4L459.3,95.6L463.7,96.8L468.0,97.2L472.3,97.2L476.7,97.8L481.0,99.0L485.3,99.5L489.7,98.9L494.0,97.8L498.3,97.4L502.7,97.5L507.0,97.1L511.3,95.9L515.7,94.9L520.0,95.1L520.0,146.0L515.7,146.0L511.3,146.0L507.0,146.0L502.7,146.0L498.3,146.0L494.0,146.0L489.7,146.0L485.3,146.0L481.0,146.0L476.7,146.0L472.3,146.0L468.0,146.0L463.7,146.0L459.3,146.0L455.0,146.0L450.7,146.0L446.3,146.0L442.0,146.0L437.7,146.0L433.3,146.0L429.0,146.0L424.7,146.0L420.3,146.0L416.0,146.0L411.7,146.0L407.3,146.0L403.0,146.0L398.7,146.0L394.3,146.0L390.0,146.0L385.7,146.0L381.3,146.0L377.0,146.0L372.7,146.0L368.3,146.0L364.0,146.0L359.7,146.0L355.3,146.0L351.0,146.0L346.7,146.0L342.3,146.0L338.0,146.0L333.7,146.0L329.3,146.0L325.0,146.0L320.7,146.0L316.3,146.0L312.0,146.0L307.7,146.0L303.3,146.0L299.0,146.0L294.7,146.0L290.3,146.0L286.0,146.0L281.7,146.0L277.3,146.0L273.0,146.0L268.7,146.0L264.3,146.0L260.0,146.0L255.7,146.0L251.3,146.0L247.0,146.0L242.7,146.0L238.3,146.0L234.0,146.0L229.7,146.0L225.3,146.0L221.0,146.0L216.7,146.0L212.3,146.0L208.0,146.0L203.7,146.0L199.3,146.0L195.0,146.0L190.7,146.0L186.3,146.0L182.0,146.0L177.7,146.0L173.3,146.0L169.0,146.0L164.7,146.0L160.3,146.0L156.0,146.0L151.7,146.0L147.3,146.0L143.0,146.0L138.7,146.0L134.3,146.0L130.0,146.0L125.7,146.0L121.3,146.0L117.0,146.0L112.7,146.0L108.3,146.0L104.0,146.0L99.7,146.0L95.3,146.0L91.0,146.0L86.7,146.0L82.3,146.0L78.0,146.0L73.7,146.0L69.3,146.0L65.0,146.0L60.7,146.0L56.3,146.0L52.0,146.0L47.7,146.0L43.3,146.0L39.0,146.0L34.7,146.0L30.3,146.0L26.0,146.0L21.7,146.0L17.3,146.0L13.0,146.0L8.7,146.0L4.3,146.0L0.0,146.0Z"/><path class="tl__edge" stroke="var(--stone-0)" d="M0.0,146.0L4.3,146.0L8.7,146.0L13.0,146.0L17.3,146.0L21.7,146.0L26.0,146.0L30.3,146.0L34.7,146.0L39.0,146.0L43.3,146.0L47.7,146.0L52.0,146.0L56.3,129.6L60.7,113.1L65.0,96.7L69.3,79.6L73.7,61.8L78.0,61.4L82.3,62.2L86.7,63.1L91.0,63.3L95.3,63.3L99.7,64.1L104.0,65.6L108.3,66.7L112.7,66.5L117.0,65.9L121.3,65.9L125.7,66.2L130.0,65.7L134.3,64.2L138.7,62.6L143.0,62.1L147.3,62.2L151.7,61.9L156.0,61.0L160.3,60.6L164.7,61.4L169.0,62.7L173.3,63.3L177.7,63.1L182.0,63.2L186.3,64.1L190.7,64.8L195.0,64.3L199.3,63.0L203.7,62.0L208.0,61.8L212.3,61.5L216.7,60.4L221.0,59.1L225.3,58.7L229.7,59.5L234.0,60.2L238.3,60.3L242.7,60.4L247.0,61.4L251.3,63.0L255.7,64.0L260.0,63.9L264.3,63.6L268.7,63.9L273.0,64.4L277.3,64.0L281.7,62.7L286.0,61.6L290.3,61.5L294.7,61.8L299.0,61.7L303.3,61.1L307.7,61.2L312.0,82.7L316.3,84.2L320.7,84.9L325.0,85.0L329.3,85.5L333.7,86.7L338.0,87.5L342.3,87.0L346.7,85.8L351.0,85.1L355.3,85.1L359.7,84.7L364.0,83.4L368.3,82.1L372.7,81.9L377.0,82.6L381.3,83.1L385.7,82.9L390.0,82.8L394.3,87.5L398.7,92.7L403.0,97.0L407.3,100.3L411.7,99.7L416.0,99.9L420.3,100.0L424.7,99.1L429.0,97.4L433.3,96.1L437.7,95.9L442.0,95.9L446.3,95.3L450.7,94.4L455.0,94.4L459.3,95.6L463.7,96.8L468.0,97.2L472.3,97.2L476.7,97.8L481.0,99.0L485.3,99.5L489.7,98.9L494.0,97.8L498.3,97.4L502.7,97.5L507.0,97.1L511.3,95.9L515.7,94.9L520.0,95.1"/></g>
+<g class="tl__layer"><path class="tl__fill" fill="var(--ink-2)" d="M0.0,113.6L4.3,114.4L8.7,116.3L13.0,117.6L17.3,117.8L21.7,117.9L26.0,118.9L30.3,120.1L34.7,120.1L39.0,118.7L43.3,117.3L47.7,116.8L52.0,116.6L56.3,101.6L60.7,85.8L65.0,70.8L69.3,56.6L73.7,42.2L78.0,41.9L82.3,42.3L86.7,43.7L91.0,45.6L95.3,46.9L99.7,47.6L104.0,48.3L108.3,49.1L112.7,49.3L117.0,48.4L121.3,46.6L125.7,45.0L130.0,43.7L134.3,42.4L138.7,40.7L143.0,39.2L147.3,38.8L151.7,39.5L156.0,40.4L160.3,41.2L164.7,42.2L169.0,43.8L173.3,45.7L177.7,46.9L182.0,47.0L186.3,46.6L190.7,46.4L195.0,45.9L199.3,44.6L203.7,42.7L208.0,41.0L212.3,40.2L216.7,40.0L221.0,39.8L225.3,39.8L229.7,40.6L234.0,42.4L238.3,44.5L242.7,46.1L247.0,47.1L251.3,48.3L255.7,49.5L260.0,50.0L264.3,49.3L268.7,47.9L273.0,46.6L277.3,45.7L281.7,44.5L286.0,43.0L290.3,41.8L294.7,41.7L299.0,42.6L303.3,43.6L307.7,44.4L312.0,43.9L316.3,45.5L320.7,46.8L325.0,47.4L329.3,47.6L333.7,47.9L338.0,48.0L342.3,47.4L346.7,45.9L351.0,44.4L355.3,43.4L359.7,42.7L364.0,41.8L368.3,40.8L372.7,40.5L377.0,41.1L381.3,42.2L385.7,43.0L390.0,43.6L394.3,48.2L398.7,53.1L403.0,57.6L407.3,61.2L411.7,60.4L416.0,59.6L420.3,58.9L424.7,57.9L429.0,56.4L433.3,54.9L437.7,54.2L442.0,54.3L446.3,54.5L450.7,54.6L455.0,55.1L459.3,56.4L463.7,58.1L468.0,59.3L472.3,59.9L476.7,60.3L481.0,60.8L485.3,61.1L489.7,60.5L494.0,59.2L498.3,58.0L502.7,57.3L507.0,56.8L511.3,56.1L515.7,55.4L520.0,55.5L520.0,95.1L515.7,94.9L511.3,95.9L507.0,97.1L502.7,97.5L498.3,97.4L494.0,97.8L489.7,98.9L485.3,99.5L481.0,99.0L476.7,97.8L472.3,97.2L468.0,97.2L463.7,96.8L459.3,95.6L455.0,94.4L450.7,94.4L446.3,95.3L442.0,95.9L437.7,95.9L433.3,96.1L429.0,97.4L424.7,99.1L420.3,100.0L416.0,99.9L411.7,99.7L407.3,100.3L403.0,97.0L398.7,92.7L394.3,87.5L390.0,82.8L385.7,82.9L381.3,83.1L377.0,82.6L372.7,81.9L368.3,82.1L364.0,83.4L359.7,84.7L355.3,85.1L351.0,85.1L346.7,85.8L342.3,87.0L338.0,87.5L333.7,86.7L329.3,85.5L325.0,85.0L320.7,84.9L316.3,84.2L312.0,82.7L307.7,61.2L303.3,61.1L299.0,61.7L294.7,61.8L290.3,61.5L286.0,61.6L281.7,62.7L277.3,64.0L273.0,64.4L268.7,63.9L264.3,63.6L260.0,63.9L255.7,64.0L251.3,63.0L247.0,61.4L242.7,60.4L238.3,60.3L234.0,60.2L229.7,59.5L225.3,58.7L221.0,59.1L216.7,60.4L212.3,61.5L208.0,61.8L203.7,62.0L199.3,63.0L195.0,64.3L190.7,64.8L186.3,64.1L182.0,63.2L177.7,63.1L173.3,63.3L169.0,62.7L164.7,61.4L160.3,60.6L156.0,61.0L151.7,61.9L147.3,62.2L143.0,62.1L138.7,62.6L134.3,64.2L130.0,65.7L125.7,66.2L121.3,65.9L117.0,65.9L112.7,66.5L108.3,66.7L104.0,65.6L99.7,64.1L95.3,63.3L91.0,63.3L86.7,63.1L82.3,62.2L78.0,61.4L73.7,61.8L69.3,79.6L65.0,96.7L60.7,113.1L56.3,129.6L52.0,146.0L47.7,146.0L43.3,146.0L39.0,146.0L34.7,146.0L30.3,146.0L26.0,146.0L21.7,146.0L17.3,146.0L13.0,146.0L8.7,146.0L4.3,146.0L0.0,146.0Z"/><path class="tl__edge" stroke="var(--ink-2)" d="M0.0,113.6L4.3,114.4L8.7,116.3L13.0,117.6L17.3,117.8L21.7,117.9L26.0,118.9L30.3,120.1L34.7,120.1L39.0,118.7L43.3,117.3L47.7,116.8L52.0,116.6L56.3,101.6L60.7,85.8L65.0,70.8L69.3,56.6L73.7,42.2L78.0,41.9L82.3,42.3L86.7,43.7L91.0,45.6L95.3,46.9L99.7,47.6L104.0,48.3L108.3,49.1L112.7,49.3L117.0,48.4L121.3,46.6L125.7,45.0L130.0,43.7L134.3,42.4L138.7,40.7L143.0,39.2L147.3,38.8L151.7,39.5L156.0,40.4L160.3,41.2L164.7,42.2L169.0,43.8L173.3,45.7L177.7,46.9L182.0,47.0L186.3,46.6L190.7,46.4L195.0,45.9L199.3,44.6L203.7,42.7L208.0,41.0L212.3,40.2L216.7,40.0L221.0,39.8L225.3,39.8L229.7,40.6L234.0,42.4L238.3,44.5L242.7,46.1L247.0,47.1L251.3,48.3L255.7,49.5L260.0,50.0L264.3,49.3L268.7,47.9L273.0,46.6L277.3,45.7L281.7,44.5L286.0,43.0L290.3,41.8L294.7,41.7L299.0,42.6L303.3,43.6L307.7,44.4L312.0,43.9L316.3,45.5L320.7,46.8L325.0,47.4L329.3,47.6L333.7,47.9L338.0,48.0L342.3,47.4L346.7,45.9L351.0,44.4L355.3,43.4L359.7,42.7L364.0,41.8L368.3,40.8L372.7,40.5L377.0,41.1L381.3,42.2L385.7,43.0L390.0,43.6L394.3,48.2L398.7,53.1L403.0,57.6L407.3,61.2L411.7,60.4L416.0,59.6L420.3,58.9L424.7,57.9L429.0,56.4L433.3,54.9L437.7,54.2L442.0,54.3L446.3,54.5L450.7,54.6L455.0,55.1L459.3,56.4L463.7,58.1L468.0,59.3L472.3,59.9L476.7,60.3L481.0,60.8L485.3,61.1L489.7,60.5L494.0,59.2L498.3,58.0L502.7,57.3L507.0,56.8L511.3,56.1L515.7,55.4L520.0,55.5"/></g>
+<g class="tl__layer"><path class="tl__fill" fill="var(--ink-3)" d="M0.0,113.6L4.3,114.4L8.7,116.3L13.0,117.6L17.3,117.8L21.7,117.9L26.0,118.9L30.3,120.1L34.7,120.1L39.0,118.7L43.3,117.3L47.7,116.8L52.0,116.6L56.3,101.6L60.7,85.8L65.0,70.8L69.3,56.6L73.7,42.2L78.0,41.9L82.3,42.3L86.7,43.7L91.0,45.6L95.3,46.9L99.7,47.6L104.0,48.3L108.3,49.1L112.7,49.3L117.0,48.4L121.3,46.6L125.7,45.0L130.0,43.7L134.3,42.4L138.7,40.7L143.0,39.2L147.3,38.8L151.7,39.5L156.0,40.4L160.3,41.2L164.7,42.2L169.0,43.8L173.3,45.7L177.7,46.9L182.0,47.0L186.3,46.6L190.7,46.4L195.0,45.9L199.3,44.6L203.7,42.7L208.0,41.0L212.3,40.2L216.7,40.0L221.0,39.8L225.3,39.8L229.7,40.6L234.0,42.4L238.3,44.5L242.7,46.1L247.0,47.1L251.3,48.3L255.7,49.5L260.0,50.0L264.3,49.3L268.7,47.9L273.0,46.6L277.3,45.7L281.7,44.5L286.0,43.0L290.3,41.8L294.7,41.7L299.0,42.6L303.3,43.6L307.7,44.4L312.0,43.9L316.3,45.5L320.7,46.8L325.0,47.4L329.3,47.6L333.7,47.9L338.0,48.0L342.3,47.4L346.7,45.9L351.0,44.4L355.3,43.4L359.7,42.7L364.0,41.8L368.3,40.8L372.7,40.5L377.0,41.1L381.3,42.2L385.7,43.0L390.0,43.6L394.3,44.5L398.7,45.8L403.0,46.6L407.3,46.2L411.7,45.3L416.0,44.6L420.3,43.9L424.7,42.5L429.0,40.5L433.3,39.0L437.7,38.5L442.0,38.6L446.3,38.8L450.7,39.0L455.0,39.9L459.3,41.8L463.7,43.7L468.0,45.0L472.3,45.7L476.7,46.3L481.0,47.0L485.3,47.2L489.7,46.2L494.0,44.6L498.3,43.3L502.7,42.6L507.0,41.8L511.3,40.8L515.7,40.1L520.0,40.5L520.0,55.5L515.7,55.4L511.3,56.1L507.0,56.8L502.7,57.3L498.3,58.0L494.0,59.2L489.7,60.5L485.3,61.1L481.0,60.8L476.7,60.3L472.3,59.9L468.0,59.3L463.7,58.1L459.3,56.4L455.0,55.1L450.7,54.6L446.3,54.5L442.0,54.3L437.7,54.2L433.3,54.9L429.0,56.4L424.7,57.9L420.3,58.9L416.0,59.6L411.7,60.4L407.3,61.2L403.0,57.6L398.7,53.1L394.3,48.2L390.0,43.6L385.7,43.0L381.3,42.2L377.0,41.1L372.7,40.5L368.3,40.8L364.0,41.8L359.7,42.7L355.3,43.4L351.0,44.4L346.7,45.9L342.3,47.4L338.0,48.0L333.7,47.9L329.3,47.6L325.0,47.4L320.7,46.8L316.3,45.5L312.0,43.9L307.7,44.4L303.3,43.6L299.0,42.6L294.7,41.7L290.3,41.8L286.0,43.0L281.7,44.5L277.3,45.7L273.0,46.6L268.7,47.9L264.3,49.3L260.0,50.0L255.7,49.5L251.3,48.3L247.0,47.1L242.7,46.1L238.3,44.5L234.0,42.4L229.7,40.6L225.3,39.8L221.0,39.8L216.7,40.0L212.3,40.2L208.0,41.0L203.7,42.7L199.3,44.6L195.0,45.9L190.7,46.4L186.3,46.6L182.0,47.0L177.7,46.9L173.3,45.7L169.0,43.8L164.7,42.2L160.3,41.2L156.0,40.4L151.7,39.5L147.3,38.8L143.0,39.2L138.7,40.7L134.3,42.4L130.0,43.7L125.7,45.0L121.3,46.6L117.0,48.4L112.7,49.3L108.3,49.1L104.0,48.3L99.7,47.6L95.3,46.9L91.0,45.6L86.7,43.7L82.3,42.3L78.0,41.9L73.7,42.2L69.3,56.6L65.0,70.8L60.7,85.8L56.3,101.6L52.0,116.6L47.7,116.8L43.3,117.3L39.0,118.7L34.7,120.1L30.3,120.1L26.0,118.9L21.7,117.9L17.3,117.8L13.0,117.6L8.7,116.3L4.3,114.4L0.0,113.6Z"/><path class="tl__edge" stroke="var(--ink-3)" d="M0.0,113.6L4.3,114.4L8.7,116.3L13.0,117.6L17.3,117.8L21.7,117.9L26.0,118.9L30.3,120.1L34.7,120.1L39.0,118.7L43.3,117.3L47.7,116.8L52.0,116.6L56.3,101.6L60.7,85.8L65.0,70.8L69.3,56.6L73.7,42.2L78.0,41.9L82.3,42.3L86.7,43.7L91.0,45.6L95.3,46.9L99.7,47.6L104.0,48.3L108.3,49.1L112.7,49.3L117.0,48.4L121.3,46.6L125.7,45.0L130.0,43.7L134.3,42.4L138.7,40.7L143.0,39.2L147.3,38.8L151.7,39.5L156.0,40.4L160.3,41.2L164.7,42.2L169.0,43.8L173.3,45.7L177.7,46.9L182.0,47.0L186.3,46.6L190.7,46.4L195.0,45.9L199.3,44.6L203.7,42.7L208.0,41.0L212.3,40.2L216.7,40.0L221.0,39.8L225.3,39.8L229.7,40.6L234.0,42.4L238.3,44.5L242.7,46.1L247.0,47.1L251.3,48.3L255.7,49.5L260.0,50.0L264.3,49.3L268.7,47.9L273.0,46.6L277.3,45.7L281.7,44.5L286.0,43.0L290.3,41.8L294.7,41.7L299.0,42.6L303.3,43.6L307.7,44.4L312.0,43.9L316.3,45.5L320.7,46.8L325.0,47.4L329.3,47.6L333.7,47.9L338.0,48.0L342.3,47.4L346.7,45.9L351.0,44.4L355.3,43.4L359.7,42.7L364.0,41.8L368.3,40.8L372.7,40.5L377.0,41.1L381.3,42.2L385.7,43.0L390.0,43.6L394.3,44.5L398.7,45.8L403.0,46.6L407.3,46.2L411.7,45.3L416.0,44.6L420.3,43.9L424.7,42.5L429.0,40.5L433.3,39.0L437.7,38.5L442.0,38.6L446.3,38.8L450.7,39.0L455.0,39.9L459.3,41.8L463.7,43.7L468.0,45.0L472.3,45.7L476.7,46.3L481.0,47.0L485.3,47.2L489.7,46.2L494.0,44.6L498.3,43.3L502.7,42.6L507.0,41.8L511.3,40.8L515.7,40.1L520.0,40.5"/></g>
+<g class="tl__layer"><path class="tl__fill" fill="var(--ink-0)" d="M0.0,111.0L4.3,111.8L8.7,113.5L13.0,114.9L17.3,115.1L21.7,115.0L26.0,115.9L30.3,117.1L34.7,117.2L39.0,115.8L43.3,114.4L47.7,113.9L52.0,113.8L56.3,98.8L60.7,83.1L65.0,68.1L69.3,53.9L73.7,39.5L78.0,39.2L82.3,39.5L86.7,40.8L91.0,42.5L95.3,43.8L99.7,44.5L104.0,45.2L108.3,45.9L112.7,46.1L117.0,45.3L121.3,43.6L125.7,42.0L130.0,40.7L134.3,39.4L138.7,37.8L143.0,36.4L147.3,36.0L151.7,36.5L156.0,37.4L160.3,38.2L164.7,39.2L169.0,40.7L173.3,42.5L177.7,43.7L182.0,43.9L186.3,43.6L190.7,43.3L195.0,42.8L199.3,41.7L203.7,39.9L208.0,38.3L212.3,37.5L216.7,37.3L221.0,37.1L225.3,37.1L229.7,37.9L234.0,39.6L238.3,41.6L242.7,43.2L247.0,44.3L251.3,45.3L255.7,46.5L260.0,47.0L264.3,46.4L268.7,45.1L273.0,43.9L277.3,43.0L281.7,41.9L286.0,40.4L290.3,39.3L294.7,39.1L299.0,39.9L303.3,40.8L307.7,41.6L312.0,41.0L316.3,42.5L320.7,43.7L325.0,44.3L329.3,44.5L333.7,44.8L338.0,44.9L342.3,44.3L346.7,43.0L351.0,41.6L355.3,40.6L359.7,39.8L364.0,38.9L368.3,38.0L372.7,37.7L377.0,38.2L381.3,39.2L385.7,39.9L390.0,40.5L394.3,41.3L398.7,42.6L403.0,43.3L407.3,43.0L411.7,42.2L416.0,41.6L420.3,40.9L424.7,39.5L429.0,37.7L433.3,36.3L437.7,35.8L442.0,35.9L446.3,36.0L450.7,36.1L455.0,37.1L459.3,38.9L463.7,40.7L468.0,42.0L472.3,42.6L476.7,43.3L481.0,44.1L485.3,44.2L489.7,43.3L494.0,41.8L498.3,40.7L502.7,40.0L507.0,39.2L511.3,38.2L515.7,37.5L520.0,37.9L520.0,40.5L515.7,40.1L511.3,40.8L507.0,41.8L502.7,42.6L498.3,43.3L494.0,44.6L489.7,46.2L485.3,47.2L481.0,47.0L476.7,46.3L472.3,45.7L468.0,45.0L463.7,43.7L459.3,41.8L455.0,39.9L450.7,39.0L446.3,38.8L442.0,38.6L437.7,38.5L433.3,39.0L429.0,40.5L424.7,42.5L420.3,43.9L416.0,44.6L411.7,45.3L407.3,46.2L403.0,46.6L398.7,45.8L394.3,44.5L390.0,43.6L385.7,43.0L381.3,42.2L377.0,41.1L372.7,40.5L368.3,40.8L364.0,41.8L359.7,42.7L355.3,43.4L351.0,44.4L346.7,45.9L342.3,47.4L338.0,48.0L333.7,47.9L329.3,47.6L325.0,47.4L320.7,46.8L316.3,45.5L312.0,43.9L307.7,44.4L303.3,43.6L299.0,42.6L294.7,41.7L290.3,41.8L286.0,43.0L281.7,44.5L277.3,45.7L273.0,46.6L268.7,47.9L264.3,49.3L260.0,50.0L255.7,49.5L251.3,48.3L247.0,47.1L242.7,46.1L238.3,44.5L234.0,42.4L229.7,40.6L225.3,39.8L221.0,39.8L216.7,40.0L212.3,40.2L208.0,41.0L203.7,42.7L199.3,44.6L195.0,45.9L190.7,46.4L186.3,46.6L182.0,47.0L177.7,46.9L173.3,45.7L169.0,43.8L164.7,42.2L160.3,41.2L156.0,40.4L151.7,39.5L147.3,38.8L143.0,39.2L138.7,40.7L134.3,42.4L130.0,43.7L125.7,45.0L121.3,46.6L117.0,48.4L112.7,49.3L108.3,49.1L104.0,48.3L99.7,47.6L95.3,46.9L91.0,45.6L86.7,43.7L82.3,42.3L78.0,41.9L73.7,42.2L69.3,56.6L65.0,70.8L60.7,85.8L56.3,101.6L52.0,116.6L47.7,116.8L43.3,117.3L39.0,118.7L34.7,120.1L30.3,120.1L26.0,118.9L21.7,117.9L17.3,117.8L13.0,117.6L8.7,116.3L4.3,114.4L0.0,113.6Z"/><path class="tl__edge" stroke="var(--ink-0)" d="M0.0,111.0L4.3,111.8L8.7,113.5L13.0,114.9L17.3,115.1L21.7,115.0L26.0,115.9L30.3,117.1L34.7,117.2L39.0,115.8L43.3,114.4L47.7,113.9L52.0,113.8L56.3,98.8L60.7,83.1L65.0,68.1L69.3,53.9L73.7,39.5L78.0,39.2L82.3,39.5L86.7,40.8L91.0,42.5L95.3,43.8L99.7,44.5L104.0,45.2L108.3,45.9L112.7,46.1L117.0,45.3L121.3,43.6L125.7,42.0L130.0,40.7L134.3,39.4L138.7,37.8L143.0,36.4L147.3,36.0L151.7,36.5L156.0,37.4L160.3,38.2L164.7,39.2L169.0,40.7L173.3,42.5L177.7,43.7L182.0,43.9L186.3,43.6L190.7,43.3L195.0,42.8L199.3,41.7L203.7,39.9L208.0,38.3L212.3,37.5L216.7,37.3L221.0,37.1L225.3,37.1L229.7,37.9L234.0,39.6L238.3,41.6L242.7,43.2L247.0,44.3L251.3,45.3L255.7,46.5L260.0,47.0L264.3,46.4L268.7,45.1L273.0,43.9L277.3,43.0L281.7,41.9L286.0,40.4L290.3,39.3L294.7,39.1L299.0,39.9L303.3,40.8L307.7,41.6L312.0,41.0L316.3,42.5L320.7,43.7L325.0,44.3L329.3,44.5L333.7,44.8L338.0,44.9L342.3,44.3L346.7,43.0L351.0,41.6L355.3,40.6L359.7,39.8L364.0,38.9L368.3,38.0L372.7,37.7L377.0,38.2L381.3,39.2L385.7,39.9L390.0,40.5L394.3,41.3L398.7,42.6L403.0,43.3L407.3,43.0L411.7,42.2L416.0,41.6L420.3,40.9L424.7,39.5L429.0,37.7L433.3,36.3L437.7,35.8L442.0,35.9L446.3,36.0L450.7,36.1L455.0,37.1L459.3,38.9L463.7,40.7L468.0,42.0L472.3,42.6L476.7,43.3L481.0,44.1L485.3,44.2L489.7,43.3L494.0,41.8L498.3,40.7L502.7,40.0L507.0,39.2L511.3,38.2L515.7,37.5L520.0,37.9"/></g>
+<line class="tl__ceil" x1="0" x2="520" y1="25.2" y2="25.2"/>
+<text class="tl__ceil-t" x="520" y="20.2" text-anchor="end">25 Mbps · your speed</text>
+<g class="tl__ev"><line x1="52.0" x2="52.0" y1="14" y2="146"/><circle cx="52.0" cy="14" r="2.5"/><rect x="56.0" y="5" width="93.9" height="17" rx="5"/><text x="62.0" y="18">Steam started</text></g>
+<g class="tl__ev"><line x1="312.0" x2="312.0" y1="14" y2="146"/><circle cx="312.0" cy="14" r="2.5"/><rect x="163.7" y="5" width="144.3" height="17" rx="5"/><text x="169.7" y="18">Switched to Streaming</text></g>
+<text class="tl__x" x="0" y="161">10 min ago</text>
+<text class="tl__x" x="260" y="161" text-anchor="middle">5 min ago</text>
+<text class="tl__x" x="520" y="161" text-anchor="end">now</text>
+</svg>
+                  </div>
+                </div>
+                <div class="apanel">
+                  <div class="apanel__h"><b>Using your internet</b><span class="apanel__aside">busiest first</span></div>
+                  <div class="awho">
+                    <span class="arow"><span class="bt" style="--bg: #1b2838"><svg viewBox="0 0 24 24"><use href="#b-steam"/></svg></span><span class="arow__nm"><b>Steam</b><small>only uses spare speed</small><span class="use"><i style="--w: 42; --c: var(--stone-0)"></i></span></span><span class="arow__mb">10.5<small>Mbps</small></span><span class="aboost"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span><span class="amore"><svg class="gl" viewBox="0 0 24 24"><use href="#g-more"/></svg></span></span>
+                    <span class="arow"><span class="bt" style="--bg: #ff0000"><svg viewBox="0 0 24 24"><use href="#b-youtube"/></svg></span><span class="arow__nm"><b>YouTube</b><small>getting all it needs</small><span class="use"><i style="--w: 32.8; --c: var(--ink-2)"></i></span></span><span class="arow__mb">8.2<small>Mbps</small></span><span class="aboost"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span><span class="amore"><svg class="gl" viewBox="0 0 24 24"><use href="#g-more"/></svg></span></span>
+                    <span class="arow"><span class="bt" style="--bg: #9146ff"><svg viewBox="0 0 24 24"><use href="#b-twitch"/></svg></span><span class="arow__nm"><b>Twitch</b><small>getting all it needs</small><span class="use"><i style="--w: 12.4; --c: var(--ink-3)"></i></span></span><span class="arow__mb">3.1<small>Mbps</small></span><span class="aboost"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span><span class="amore"><svg class="gl" viewBox="0 0 24 24"><use href="#g-more"/></svg></span></span>
+                    <span class="arow"><span class="bt" style="--bg: #5865f2"><svg viewBox="0 0 24 24"><use href="#b-discord"/></svg></span><span class="arow__nm"><b>Discord</b><small class="first">Goes first · in a call</small><span class="use"><i style="--w: 2; --c: var(--ink-0)"></i></span></span><span class="arow__mb">0.5<small>Mbps</small></span><span class="aboost"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg>Boost</span><span class="amore"><svg class="gl" viewBox="0 0 24 24"><use href="#g-more"/></svg></span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="app__col app__col--side">
+                <div class="apanel">
+                  <div class="apanel__h"><b>How Streaming shares it</b></div>
+                  <div class="apanel__body">
+                    <span class="asbar"><i style="--w: 10; --c: var(--ink-0)"></i><i style="--w: 10; --c: var(--ink-1)"></i><i style="--w: 30; --c: var(--ink-2)">YouTube 30%</i><i style="--w: 15; --c: var(--ink-3)">Twitch 15%</i><i style="--w: 15; --c: var(--ink-4)"></i><i class="else" style="--w: 20">Everything else 20%</i></span>
+                    <span class="ashare"><i style="--c: var(--ink-0)"></i><span>Discord · 10%<small>High priority · at least 2.5 Mbps</small></span><b>0.5<small>Mbps now</small></b></span>
+                    <span class="ashare"><i style="--c: var(--ink-2)"></i><span>YouTube · 30%<small>at least 7.5 Mbps</small></span><b>8.2<small>Mbps now</small></b></span>
+                    <span class="ashare"><i style="--c: var(--ink-3)"></i><span>Twitch · 15%<small>at least 3.8 Mbps</small></span><b>3.1<small>Mbps now</small></b></span>
+                    <span class="ashare"><i style="--c: var(--stone-1)"></i><span>Everything else · 20%<small>every other app, fairly</small></span><b>10.5<small>Mbps now</small></b></span>
+                    <span class="anote">Steam, Epic Games and 3 more only use spare speed.</span>
+                    <span class="abtn">Change the split<svg class="gl" viewBox="0 0 24 24"><use href="#g-chevron"/></svg></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </figure>
     </div>
   </div>
@@ -132,11 +168,11 @@
   <div class="wrap split">
     <div class="split__text">
       <h2 id="why-h">Ping stays low while Steam downloads</h2>
-      <p class="intro">A big download takes the whole line and ping jumps. SnailNet keeps every app to its slice.</p>
+      <p class="intro">A big download takes all your speed and ping jumps. SnailNet keeps every app to its share.</p>
       <ol class="beats">
-        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-download"/></svg></span><b>A game download starts</b><span>Steam gets its slice, plus any spare room.</span></li>
-        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
-        <li><span class="beats__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#g-down"/></svg></span><b>A game download starts</b><span>Steam gets its share, plus any spare speed.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>The stream keeps playing</b><span>YouTube keeps the share you gave it.</span></li>
+        <li><span class="beats__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Your game stays quick</b><span>The queue stays on your PC, not in your router.</span></li>
       </ol>
     </div>
 
@@ -172,37 +208,34 @@
   <div class="wrap">
     <div class="head">
       <h2 id="how-h">How the split works, in 3 steps</h2>
-      <p class="intro">A slice is a minimum, never a cap. On a 20&nbsp;Mbps line:</p>
+      <p class="intro">A share is a minimum, never a cap. With 20&nbsp;Mbps of internet:</p>
     </div>
     <div class="grid steps" data-reveal>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-slice"/></svg><b>1</b></span>
-        <h3>Give each app a slice</h3>
+        <h3><span class="stepcard__n">1</span>Give each app a share</h3>
         <p>Steam 40%, YouTube 60%. Everything else never drops under 5%.</p>
         <div class="panel" data-ui aria-hidden="true">
-          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><b>Steam</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>40%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
-          <span class="srow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><b>YouTube</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>60%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
-          <span class="srow srow--rest"><span class="ico ico--stone"><svg viewBox="0 0 20 20"><use href="#g-rest"/></svg></span><b>Everything else</b><span class="srow__step">5%</span></span>
+          <span class="srow"><span class="bt" style="--bg: #1b2838"><svg viewBox="0 0 24 24"><use href="#b-steam"/></svg></span><b>Steam</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>40%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
+          <span class="srow"><span class="bt" style="--bg: #ff0000"><svg viewBox="0 0 24 24"><use href="#b-youtube"/></svg></span><b>YouTube</b><span class="srow__step"><i><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></i>60%<i><svg viewBox="0 0 16 16"><path d="M3.5 8h9M8 3.5v9"/></svg></i></span></span>
+          <span class="srow srow--rest"><span class="bt bt--else"><svg viewBox="0 0 20 20"><use href="#g-rest"/></svg></span><b>Everything else</b><span class="srow__step">5%</span></span>
         </div>
       </article>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-busy"/></svg><b>2</b></span>
-        <h3>A busy line keeps every slice</h3>
+        <h3><span class="stepcard__n">2</span>When it's busy, every share holds</h3>
         <p>Both want more: Steam gets 8&nbsp;Mbps, YouTube&nbsp;12.</p>
         <div class="panel" data-ui aria-hidden="true">
           <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b" style="--w: 60">60%</i></span>
-          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>8.0&nbsp;Mbps · using its whole slice, wants more</small></span>
-          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>12.0&nbsp;Mbps · using its whole slice, wants more</small></span>
+          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>8.0&nbsp;Mbps · using all of its share</small></span>
+          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>12.0&nbsp;Mbps · using all of its share</small></span>
         </div>
       </article>
       <article class="card stepcard">
-        <span class="stepcard__n" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-spare"/></svg><b>3</b></span>
-        <h3>Spare room goes where it's needed</h3>
-        <p>Pause the video and Steam gets it all. Press play and YouTube's slice comes back.</p>
+        <h3><span class="stepcard__n">3</span>Spare speed goes where it's needed</h3>
+        <p>Pause the video and Steam gets it all. Press play and YouTube's share comes back.</p>
         <div class="panel" data-ui aria-hidden="true">
-          <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b mbar__b--lent" style="--w: 60">lent</i></span>
-          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>20.0&nbsp;Mbps · 12.0&nbsp;Mbps of it is spare room</small></span>
-          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>quiet right now · lending 12.0&nbsp;Mbps it isn't using</small></span>
+          <span class="mbar"><i class="mbar__a" style="--w: 40">40%</i><i class="mbar__b mbar__b--lent" style="--w: 60">spare</i></span>
+          <span class="mrow"><i class="sw sw--a"></i><b>Steam</b><small>20.0&nbsp;Mbps · also using 12.0&nbsp;Mbps of spare speed</small></span>
+          <span class="mrow"><i class="sw sw--b"></i><b>YouTube</b><small>idle · Steam uses its share meanwhile</small></span>
         </div>
       </article>
     </div>
@@ -215,34 +248,34 @@
           </div>
           <div class="win__body">
             <div class="demo__head">
-              <p class="demo__title">Try the split <span>on a 20&nbsp;Mbps line</span></p>
-              <p class="demo__hint"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-drag"/></svg>Drag the cream handle</p>
+              <p class="demo__title">Try the split <span>with 20&nbsp;Mbps of internet</span></p>
+              <p class="demo__hint"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-drag"/></svg>Drag the handle</p>
               <button type="button" class="btn btn--tonal btn--sm" data-pause aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#g-pause" data-pause-icon/></svg><span data-pause-label>Pause the video</span></button>
             </div>
   
             <div class="dbar" data-bar>
               <div class="dbar__seg dbar__seg--a" data-seg="a"><span class="dbar__label"><span class="dbar__name">Steam</span> <b data-pct="a">40%</b></span></div>
               <div class="dbar__seg dbar__seg--b" data-seg="b"><i class="dbar__lent"></i><span class="dbar__label"><span class="dbar__name">YouTube</span> <b data-pct="b">60%</b></span></div>
-              <div class="dbar__handle" data-handle role="slider" tabindex="0" aria-label="Steam's slice of the line" aria-valuemin="5" aria-valuemax="95" aria-valuenow="40" aria-valuetext="Steam 40%, YouTube 60%"></div>
+              <div class="dbar__handle" data-handle role="slider" tabindex="0" aria-label="Steam's share" aria-valuemin="5" aria-valuemax="95" aria-valuenow="40" aria-valuetext="Steam 40%, YouTube 60%"></div>
             </div>
   
             <div class="drows">
               <div class="drow">
-                <span class="ico"><img width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span>
-                <span class="drow__nm"><b>Steam</b><small data-status="a">11.0&nbsp;Mbps · 3.0&nbsp;Mbps of it is spare room</small></span>
+                <span class="bt" style="--bg: #1b2838"><svg viewBox="0 0 24 24"><use href="#b-steam"/></svg></span>
+                <span class="drow__nm"><b>Steam</b><small data-status="a">11.0&nbsp;Mbps · also using 3.0&nbsp;Mbps of spare speed</small></span>
                 <span class="stepper">
-                  <button type="button" class="step" data-step="a" data-dir="-1" aria-label="Smaller slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+                  <button type="button" class="step" data-step="a" data-dir="-1" aria-label="Smaller share for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
                   <b data-pct="a">40%</b>
-                  <button type="button" class="step" data-step="a" data-dir="1" aria-label="Bigger slice for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+                  <button type="button" class="step" data-step="a" data-dir="1" aria-label="Bigger share for Steam"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
                 </span>
               </div>
               <div class="drow">
-                <span class="ico"><img width="24" height="24" src="assets/icons/youtube.svg" alt=""></span>
-                <span class="drow__nm"><b>YouTube</b><small data-status="b">9.0&nbsp;Mbps · lending 3.0&nbsp;Mbps it isn't using</small></span>
+                <span class="bt" style="--bg: #ff0000"><svg viewBox="0 0 24 24"><use href="#b-youtube"/></svg></span>
+                <span class="drow__nm"><b>YouTube</b><small data-status="b">9.0&nbsp;Mbps · not using all of its share</small></span>
                 <span class="stepper">
-                  <button type="button" class="step" data-step="b" data-dir="-1" aria-label="Smaller slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+                  <button type="button" class="step" data-step="b" data-dir="-1" aria-label="Smaller share for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
                   <b data-pct="b">60%</b>
-                  <button type="button" class="step" data-step="b" data-dir="1" aria-label="Bigger slice for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+                  <button type="button" class="step" data-step="b" data-dir="1" aria-label="Bigger share for YouTube"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
                 </span>
               </div>
             </div>
@@ -265,19 +298,19 @@
     <div class="fx" data-fx>
       <div class="fx__list" role="tablist" aria-label="Features" aria-orientation="vertical">
         <button type="button" class="fx__tab" role="tab" id="fx-t-sites" aria-controls="fx-p-sites" aria-selected="true">
-          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-globe"/></svg></span>
-          <span class="fx__txt"><b>Websites get their own slice</b><small>YouTube, Twitch or Netflix, in every browser.</small></span>
+          <span class="fx__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#q-globe"/></svg></span>
+          <span class="fx__txt"><b>Websites get their own share</b><small>YouTube, Twitch or Netflix, in every browser.</small></span>
         </button>
         <button type="button" class="fx__tab" role="tab" id="fx-t-boost" aria-controls="fx-p-boost" aria-selected="false" tabindex="-1">
-          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg></span>
+          <span class="fx__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg></span>
           <span class="fx__txt"><b>Games and calls go first</b><small>Calls on their own. Boost any app for an hour.</small></span>
         </button>
         <button type="button" class="fx__tab" role="tab" id="fx-t-modes" aria-controls="fx-p-modes" aria-selected="false" tabindex="-1">
-          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#s-busy"/></svg></span>
+          <span class="fx__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span>
           <span class="fx__txt"><b>Whole setups in one click</b><small>Four modes, from the tray or <span class="nowrap"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd></span>.</small></span>
         </button>
         <button type="button" class="fx__tab" role="tab" id="fx-t-safe" aria-controls="fx-p-safe" aria-selected="false" tabindex="-1">
-          <span class="fx__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span>
+          <span class="fx__ic" aria-hidden="true"><svg class="gl" viewBox="0 0 24 24"><use href="#g-shield"/></svg></span>
           <span class="fx__txt"><b>Never breaks your internet</b><small>If anything fails, traffic flows straight through.</small></span>
         </button>
       </div>
@@ -285,37 +318,59 @@
       <div class="fx__stage">
         <div class="fx__panel" role="tabpanel" id="fx-p-sites" aria-labelledby="fx-t-sites" data-ui>
           <div class="fx__show" aria-hidden="true">
-            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
-            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/twitch.svg" alt=""></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
-            <span class="frow"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/netflix.svg" alt=""></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">When the line is free</span></span>
+            <span class="frow"><span class="bt" style="--bg: #ff0000"><svg viewBox="0 0 24 24"><use href="#b-youtube"/></svg></span><span class="frow__nm"><b>YouTube</b><small>Website · every browser</small></span><span class="pill-sm">30%</span></span>
+            <span class="frow"><span class="bt" style="--bg: #9146ff"><svg viewBox="0 0 24 24"><use href="#b-twitch"/></svg></span><span class="frow__nm"><b>Twitch</b><small>Website · every browser</small></span><span class="pill-sm">20%</span></span>
+            <span class="frow"><span class="bt" style="--bg: #e50914"><svg viewBox="0 0 24 24"><use href="#b-netflix"/></svg></span><span class="frow__nm"><b>Netflix</b><small>Website · every browser</small></span><span class="pill-sm pill-sm--free">Only spare speed</span></span>
           </div>
           <p class="fx__cap">A rule goes by the site's name, so it holds in Chrome, Edge, Firefox or any other.</p>
         </div>
 
         <div class="fx__panel" role="tabpanel" id="fx-p-boost" aria-labelledby="fx-t-boost" data-ui>
           <div class="fx__show" aria-hidden="true">
-            <span class="frow frow--boosted frow--btn"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/discord.svg" alt=""></span><span class="frow__nm"><b>Discord</b><small>Boosted · 52&nbsp;min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg viewBox="0 0 24 24"><use href="#g-bolt"/></svg>Boost</span><i class="frow__left" style="--left: 87"></i></span>
-            <span class="frow frow--after"><span class="ico"><img loading="lazy" width="24" height="24" class="ink" src="assets/icons/steam.svg" alt=""></span><span class="frow__nm"><b>Steam</b><small>Sends after Discord</small></span><span class="frow__mb">10.2 <small>Mbps</small></span></span>
-            <span class="frow frow--after"><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/youtube.svg" alt=""></span><span class="frow__nm"><b>YouTube</b><small>Sends after Discord</small></span><span class="frow__mb">8.9 <small>Mbps</small></span></span>
+            <span class="frow frow--boosted frow--btn"><span class="bt" style="--bg: #5865f2"><svg viewBox="0 0 24 24"><use href="#b-discord"/></svg></span><span class="frow__nm"><b>Discord <em class="tag">Boosted</em></b><small>Goes first · 52&nbsp;min left</small></span><span class="frow__mb">0.4 <small>Mbps</small></span><span class="fbtn fbtn--live"><svg class="gl" viewBox="0 0 24 24"><use href="#g-boost"/></svg>Stop</span><i class="frow__left" style="--left: 87"></i></span>
+            <span class="frow frow--after"><span class="bt" style="--bg: #1b2838"><svg viewBox="0 0 24 24"><use href="#b-steam"/></svg></span><span class="frow__nm"><b>Steam</b><small>Sends after Discord</small></span><span class="frow__mb">10.2 <small>Mbps</small></span></span>
+            <span class="frow frow--after"><span class="bt" style="--bg: #ff0000"><svg viewBox="0 0 24 24"><use href="#b-youtube"/></svg></span><span class="frow__nm"><b>YouTube</b><small>Sends after Discord</small></span><span class="frow__mb">8.9 <small>Mbps</small></span></span>
           </div>
-          <p class="fx__cap">A voice or video call goes first while it lasts, in any app. A boosted app gets at least half your line, then everything goes back by itself.</p>
+          <p class="fx__cap">A voice or video call goes first while it lasts, in any app. A boosted app gets at least half your speed, then everything goes back by itself.</p>
         </div>
 
         <div class="fx__panel" role="tabpanel" id="fx-p-modes" aria-labelledby="fx-t-modes" data-ui>
-          <fieldset class="fx__show tiles">
+          <fieldset class="fx__show fmodes">
             <legend class="visually-hidden">Try a mode</legend>
-            <label class="tile"><input type="radio" name="mode" value="balanced"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-balanced"/></svg></span><b>Balanced</b><span class="tile__body">Every app gets a fair share.</span></label>
-            <label class="tile"><input type="radio" name="mode" value="streaming"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-streaming"/></svg></span><b>Streaming</b><span class="tile__body">Videos and calls stay smooth. Downloads wait.</span></label>
-            <label class="tile"><input type="radio" name="mode" value="gaming" checked><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-gaming"/></svg></span><b>Gaming</b><span class="tile__body">Your game and voice chat come first.</span></label>
-            <label class="tile"><input type="radio" name="mode" value="quiet"><span class="fill" aria-hidden="true"></span><span class="tile__gl" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#m-quiet"/></svg></span><b>Quiet downloads</b><span class="tile__body">Downloads never slow anything else down.</span></label>
+            <span class="seg">
+              <label><input type="radio" name="mode" value="balanced"><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-balanced"/></svg>Balanced</label>
+              <label><input type="radio" name="mode" value="streaming"><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-streaming"/></svg>Streaming</label>
+              <label><input type="radio" name="mode" value="gaming" checked><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-gaming"/></svg>Gaming</label>
+              <label><input type="radio" name="mode" value="quiet"><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#m-quiet"/></svg>Quiet downloads</label>
+            </span>
+            <span class="fmode" data-mode="balanced">
+              <b>Every app gets a fair share.</b>
+              <span class="fbar"><i class="else" style="--w: 100">Everything else 100%</i></span>
+              <span class="fmode__note">No app has a share of its own: each gets a fair turn.</span>
+            </span>
+            <span class="fmode" data-mode="streaming">
+              <b>Videos and calls stay smooth. Downloads wait.</b>
+              <span class="fbar"><i style="--w: 10; --c: var(--ink-0)"></i><i style="--w: 10; --c: var(--ink-1)"></i><i style="--w: 30; --c: var(--ink-2)">YouTube 30%</i><i style="--w: 15; --c: var(--ink-3)">Twitch</i><i style="--w: 15; --c: var(--ink-4)">Netflix</i><i class="else" style="--w: 20">Else 20%</i></span>
+              <span class="fmode__note">Steam, Epic Games and 3 more only use spare speed.</span>
+            </span>
+            <span class="fmode" data-mode="gaming">
+              <b>Your game and voice chat come first.</b>
+              <span class="fbar"><i style="--w: 10; --c: var(--ink-0)"></i><i style="--w: 20; --c: var(--ink-1)">YouTube 20%</i><i style="--w: 10; --c: var(--ink-2)"></i><i class="else" style="--w: 60">Everything else 60%</i></span>
+              <span class="fmode__note">Steam, Epic Games and 3 more only use spare speed.</span>
+            </span>
+            <span class="fmode" data-mode="quiet">
+              <b>Downloads never slow anything else down.</b>
+              <span class="fbar"><i class="else" style="--w: 100">Everything else 100%</i></span>
+              <span class="fmode__note">Steam, Epic Games and 3 more only use spare speed.</span>
+            </span>
           </fieldset>
           <p class="fx__cap">Try one: each mode changes the whole split at once.</p>
         </div>
 
         <div class="fx__panel" role="tabpanel" id="fx-p-safe" aria-labelledby="fx-t-safe" data-ui>
           <div class="fx__show" aria-hidden="true">
-            <span class="notice"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
-            <span class="fx__pause"><span class="fbtn fbtn--on"><svg viewBox="0 0 24 24"><use href="#g-pause"/></svg>Pause</span><span class="fx__seg"><i>15 min</i><i class="is-on">1 hour</i><i>Until I resume</i></span></span>
+            <span class="notice"><svg class="gl" viewBox="0 0 24 24"><use href="#g-shield"/></svg><span><b>Traffic control stepped aside</b><small>Your internet works normally. SnailNet tries again in a moment.</small></span></span>
+            <span class="fx__pause"><span class="fbtn fbtn--on"><svg class="gl" viewBox="0 0 24 24"><use href="#n-pause"/></svg>Pause</span><span class="fx__seg"><i>15 min</i><i class="is-on">1 hour</i><i>Until I resume</i></span></span>
           </div>
           <p class="fx__cap">And Pause stops everything in one click, for as long as you choose.</p>
         </div>
@@ -326,25 +381,25 @@
   </div>
 </section>
 
-<!-- Privacy, on cream. -->
-<section class="section section--cream" id="privacy" aria-labelledby="privacy-h">
+<!-- Privacy, on the band. -->
+<section class="section section--band section--privacy" id="privacy" aria-labelledby="privacy-h">
   <div class="wrap split">
     <div class="split__text">
       <h2 id="privacy-h">Nothing about you leaves your PC</h2>
       <p class="intro">No account, no telemetry, no analytics.</p>
       <dl class="reads">
-        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye"/></svg>Reads, on your PC only</dt><dd>Which app owns each connection, and the site it goes to.</dd></div>
-        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye-off"/></svg>Never reads</dt><dd>What you send or receive.</dd></div>
+        <div><dt><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye"/></svg>Reads, on your PC only</dt><dd>Which app owns each connection, and the site it goes to.</dd></div>
+        <div><dt><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#g-eye-off"/></svg>Never reads</dt><dd>What you send or receive.</dd></div>
       </dl>
       <a class="link" href="https://github.com/StergiosF/SnailNet#privacy">Read the full privacy notes</a>
     </div>
     <div class="conns" data-ui>
       <h3 class="conns__title">The only connections SnailNet makes</h3>
       <ul>
-        <li><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/github.svg" alt=""></span><span><b>Update check</b><small>To GitHub when SnailNet starts and every six hours. Nothing installs until you click.</small></span></li>
-        <li><span class="ico"><img loading="lazy" width="24" height="24" src="assets/icons/github.svg" alt=""></span><span><b>Website and game lists</b><small>From GitHub once a day, signed. You can turn it off.</small></span></li>
-        <li><span class="ico ico--wide"><img loading="lazy" width="24" height="24" src="assets/icons/cloudflare.svg" alt=""></span><span><b>Speed test</b><small>To Cloudflare, only when you click Measure</small></span></li>
-        <li><span class="ico ico--glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#g-router"/></svg></span><span><b>Pings</b><small>To your router and 1.1.1.1 while shaping, to stay just below your line speed</small></span></li>
+        <li><span class="bt" style="--bg: #24292f"><svg viewBox="0 0 24 24"><use href="#b-github"/></svg></span><span><b>Update check</b><small>To GitHub when SnailNet starts and every six hours. Nothing installs until you click.</small></span></li>
+        <li><span class="bt" style="--bg: #24292f"><svg viewBox="0 0 24 24"><use href="#b-github"/></svg></span><span><b>Website and game lists</b><small>From GitHub once a day, signed. You can turn it off.</small></span></li>
+        <li><span class="bt" style="--bg: #f38020"><svg viewBox="0 0 24 24"><use href="#b-cloudflare"/></svg></span><span><b>Speed test</b><small>To Cloudflare, only when you click Measure</small></span></li>
+        <li><span class="bt bt--glyph"><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><use href="#g-router"/></svg></span><span><b>Pings</b><small>To your router and 1.1.1.1 while shaping, to stay just below your internet speed</small></span></li>
       </ul>
     </div>
   </div>
@@ -360,27 +415,27 @@
     </div>
     <div class="faq">
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-service"/></svg></span><h3>If I close the window, does it stop?</h3>
+        <h3>If I close the window, does it stop?</h3>
         <p>No. A Windows service keeps your rules running. Use Pause to stop.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-speed"/></svg></span><h3>Will it make my internet slower?</h3>
-        <p>Only a sliver. It stays just under your line speed, which keeps ping low.</p>
+        <h3>Will it make my internet slower?</h3>
+        <p>Only a sliver. It stays just under your internet speed, which keeps ping low.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-globe"/></svg></span><h3>Does it work in every browser?</h3>
-        <p>Yes, any browser. Sites that hide their name count toward the browser's slice.</p>
+        <h3>Does it work in every browser?</h3>
+        <p>Yes, any browser. Sites that hide their name count toward the browser's share.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#g-shield"/></svg></span><h3>Does it work with my game's anti&#8209;cheat?</h3>
+        <h3>Does it work with my game's anti&#8209;cheat?</h3>
         <p>Not tested yet. If a game complains, pause SnailNet and open an issue.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-upload"/></svg></span><h3>Does it shape uploads too?</h3>
+        <h3>Does it shape uploads too?</h3>
         <p>Yes, once you set an upload speed. Leave it empty to skip uploads.</p>
       </div>
       <div class="faq__item">
-        <span class="faq__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#q-free"/></svg></span><h3>Does it cost anything?</h3>
+        <h3>Does it cost anything?</h3>
         <p>No. It's free and open source (GPL&#8209;3.0).</p>
       </div>
     </div>
@@ -389,7 +444,7 @@
 
 </main>
 
-<!-- The close and the footer: one section on the shell's green. -->
+<!-- The close and the footer: one panel lit from above, the snail on its trail. -->
 <footer class="closing" id="download" aria-labelledby="close-h">
   <div class="wrap">
     <div class="close-panel">
@@ -401,7 +456,7 @@
       </div>
       <svg class="close__art" viewBox="0 0 520 360" aria-hidden="true">
         <path class="close__trail" d="M10 318C120 318 160 300 250 304"/>
-        <use href="#snail-dark" x="200" y="20" width="320" height="320"/>
+        <use href="#snail-light" x="200" y="20" width="320" height="320"/>
       </svg>
       <ol class="install">
         <li><span class="install__n" aria-hidden="true">1</span><span><b>Run the installer</b><small>Allow it once, to add the service.</small></span></li>
@@ -446,14 +501,26 @@
       <circle cx="224" cy="250" r="150" fill="#2FA88E"/>
       <path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0" stroke="#0E3B35" stroke-width="20" stroke-linecap="round" fill="none"/>
     </symbol>
-    <symbol id="snail-dark" viewBox="0 0 512 512">
-      <path d="M64 404c0-18 14-30 34-30h300c34 0 58-26 62-62l4-34c2-16 26-14 26 2v52c0 54-42 98-96 98H98c-20 0-34-10-34-26z" fill="#0a211d"/>
-      <path d="M470 276 442 192M484 276l4-86" stroke="#0a211d" stroke-width="16" stroke-linecap="round" fill="none"/>
-      <circle cx="440" cy="182" r="17" fill="#0a211d"/>
-      <circle cx="488" cy="182" r="17" fill="#0a211d"/>
-      <circle cx="224" cy="250" r="150" fill="#efe8d6"/>
-      <path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0" stroke="#0E3B35" stroke-width="20" stroke-linecap="round" fill="none"/>
-    </symbol>
+    <symbol id="n-now" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 1 4 0a4 4 0 1 1-8 0a6 6 0 1 1 12 0a8 8 0 0 1-8 8"/></g></symbol>
+    <symbol id="n-split" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="3"/><path d="M10 7v10M15 7v10"/></g></symbol>
+    <symbol id="n-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h5M13 8h7M4 16h9M17 16h3"/><circle cx="11" cy="8" r="2"/><circle cx="15" cy="16" r="2"/></g></symbol>
+    <symbol id="n-pause" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6v12M15 6v12"/></g></symbol>
+    <symbol id="g-boost" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12.5 12 7.5l5 5M7 17.5l5-5 5 5"/></g></symbol>
+    <symbol id="g-down" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 20h14"/></g></symbol>
+    <symbol id="g-up" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="m7.5 13.5 4.5-4.5 4.5 4.5"/><path d="M5 4h14"/></g></symbol>
+    <symbol id="g-chevron" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></g></symbol>
+    <symbol id="g-more" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle fill="currentColor" stroke="none" cx="6" cy="12" r="1.5"/><circle fill="currentColor" stroke="none" cx="12" cy="12" r="1.5"/><circle fill="currentColor" stroke="none" cx="18" cy="12" r="1.5"/></g></symbol>
+    <symbol id="m-balanced" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 12V3.5M12 12l7.4 4.25M12 12l-7.4 4.25"/></g></symbol>
+    <symbol id="m-streaming" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="13" rx="3"/><path d="M10.5 9.25v5.5l4.25-2.75z"/><path d="M9 21h6"/></g></symbol>
+    <symbol id="m-gaming" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8h9a4 4 0 0 1 3.9 3.1l.8 3.7a2.2 2.2 0 0 1-3.8 1.9L15.6 15H8.4l-1.8 1.7a2.2 2.2 0 0 1-3.8-1.9l.8-3.7A4 4 0 0 1 7.5 8z"/><path d="M8.5 10.5v3M7 12h3"/><circle fill="currentColor" stroke="none" cx="15.5" cy="11" r="1"/><circle fill="currentColor" stroke="none" cx="17.3" cy="13" r="1"/></g></symbol>
+    <symbol id="m-quiet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9" stroke-dasharray="1.5 2.6"/><path d="M8.5 10.5 12 14l3.5-3.5"/><path d="M4.5 15.5v2a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-2"/></g></symbol>
+    <symbol id="b-steam" viewBox="0 0 24 24"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z" fill="currentColor"/></symbol>
+    <symbol id="b-youtube" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="currentColor"/></symbol>
+    <symbol id="b-discord" viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" fill="currentColor"/></symbol>
+    <symbol id="b-twitch" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z" fill="currentColor"/></symbol>
+    <symbol id="b-netflix" viewBox="0 0 24 24"><path d="m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z" fill="currentColor"/></symbol>
+    <symbol id="b-github" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" fill="currentColor"/></symbol>
+    <symbol id="b-cloudflare" viewBox="0 0 24 24"><path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727" fill="currentColor"/></symbol>
     <symbol id="g-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="g-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
     <symbol id="g-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
@@ -463,20 +530,8 @@
     <symbol id="g-router" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01M12 13V9M8.5 7.5a5 5 0 0 1 7 0M6 5a8.5 8.5 0 0 1 12 0"/></g></symbol>
     <symbol id="g-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
     <symbol id="g-eye-off" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.6 3.4M6.6 7.4C4 9.2 2.5 12 2.5 12S6 18.5 12 18.5c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2M4 4l16 16"/></g></symbol>
-    <symbol id="g-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z" fill="currentColor"/></symbol>
-    <symbol id="s-slice" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><circle cx="11" cy="13" r="8"/><path d="M14 2.5a8.5 8.5 0 0 1 7.5 7.5H14z" fill="currentColor"/></g></symbol>
-    <symbol id="s-busy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="10" rx="2.5"/><path d="M10 7v10"/><path d="M5.5 12h1.5M13.5 12h4.5" stroke-width="2.4"/></g></symbol>
-    <symbol id="s-spare" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h13m-4.5-4.5L16 12l-4.5 4.5M20.5 5v14"/></g></symbol>
-    <symbol id="q-service" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="13" rx="2.5"/><path d="M3 8.5h18M8 21h8M12 17.5V21"/><path d="m10 11.5 4 3m0-3-4 3"/></g></symbol>
-    <symbol id="q-speed" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.4" fill="currentColor"/></g></symbol>
     <symbol id="q-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/></g></symbol>
-    <symbol id="q-upload" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9m0 0-4.5 4.5M12 9l4.5 4.5M5 4h14"/></g></symbol>
-    <symbol id="q-free" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10z"/></g></symbol>
     <symbol id="g-rest" viewBox="0 0 20 20"><g fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="6" height="6" rx="1.5"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.5"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.5"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.5"/></g></symbol>
-    <symbol id="m-balanced" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
-    <symbol id="m-streaming" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
-    <symbol id="m-gaming" viewBox="0 0 24 24"><path d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2.3 2.3 0 0 1-4 .9L14.5 15h-5l-1.6 2.1a2.3 2.3 0 0 1-4-.9l-.8-3.3A4 4 0 0 1 7 8z" fill="currentColor"/></symbol>
-    <symbol id="m-quiet" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
   </defs>
 </svg>
 </body>

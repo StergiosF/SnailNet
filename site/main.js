@@ -193,8 +193,8 @@
   }
 
   // ---------- The split demo ----------
-  // A 20 Mbps line (5% is 1 Mbps) between a Steam download (wants all it can get) and
-  // YouTube (a stream wanting about 9 Mbps). Each slice is a guarantee when
+  // 20 Mbps of internet (5% is 1 Mbps) between a Steam download (wants all it can get) and
+  // YouTube (a stream wanting about 9 Mbps). Each share is a guarantee when
   // both are busy; what YouTube leaves unused, Steam gets. Words are the
   // app's own (app/src/lib/i18n/en.json, status.*).
 
@@ -238,13 +238,13 @@
 
     const steam =
       steamGets > keepA + 0.05
-        ? `${f(steamGets)}\u00a0Mbps · ${f(steamGets - keepA)}\u00a0Mbps of it is spare room`
-        : `${f(steamGets)}\u00a0Mbps · using its whole slice, wants more`;
+        ? `${f(steamGets)}\u00a0Mbps · also using ${f(steamGets - keepA)}\u00a0Mbps of spare speed`
+        : `${f(steamGets)}\u00a0Mbps · using all of its share`;
     let video;
-    if (paused) video = `quiet right now · lending ${f(keepB)}\u00a0Mbps it isn't using`;
-    else if (videoGets < VIDEO_WANTS - 0.05) video = `${f(videoGets)}\u00a0Mbps · using its whole slice, wants more`;
-    else if (lent > 0.05) video = `${f(videoGets)}\u00a0Mbps · lending ${f(lent)}\u00a0Mbps it isn't using`;
-    else video = `${f(videoGets)}\u00a0Mbps · gets all it asks for`;
+    if (paused) video = "idle · Steam uses its share meanwhile";
+    else if (videoGets < VIDEO_WANTS - 0.05) video = `${f(videoGets)}\u00a0Mbps · using all of its share`;
+    else if (lent > 0.05) video = `${f(videoGets)}\u00a0Mbps · not using all of its share`;
+    else video = `${f(videoGets)}\u00a0Mbps · getting all it needs`;
     demo.querySelector('[data-status="a"]').textContent = steam;
     demo.querySelector('[data-status="b"]').textContent = video;
 

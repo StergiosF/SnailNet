@@ -1,5 +1,37 @@
 # Handoff: revamp the SnailNet landing page
 
+## Done: v3, the app's look (2026-11-20)
+
+The site now wears the app's own look, Obsidian Jade "Blend" (DESIGN.md,
+`app/src/app.css`), so the two match. Same sections and words as v2,
+restyled:
+
+- **Tokens** copied from `app.css` (charcoal ground `#0f1b18`, the band a
+  step darker like the side rail, ivory for the main action, jade for
+  "goes first", `SnailNet Figures` for digits). The cream privacy panel
+  and the green closing panel are gone: privacy sits on the band, the
+  close is a dark panel lit from above with the snail on a jade trail.
+- **The hero** is the Now page as the app draws it today, ported from
+  `.impeccable/mocks/now-blend.src.html`: side rail, the mode switch in
+  the top strip, the sentence over the shell spiral, Last 10 minutes
+  (static SVG made with the mock's maths), Using your internet with its
+  thin ink bars, and "How Streaming shares it". The ping panel is left
+  out, so v2's choice of no measured ping numbers still holds.
+- **Glyphs** are the app's (Glyph.svelte); brand marks are Simple Icons
+  in white on the brand's tile, as AppIcon.svelte draws them. No icon
+  sits in a tinted square; the FAQ lost its icons and cards (hairline
+  rows instead).
+- **Modes** in the features picker are the app's segmented switch, with
+  each mode's line and its real split (modes.rs) under it, no script.
+- **Words** follow PRODUCT.md: "share", "your internet", "speed" instead
+  of "slice" and "the line"; the demo's statuses are the app's own.
+- **Not done:** `og.png` and the README pictures (`docs/images/*.svg`,
+  made by `scripts/readme-images.cjs`) still show the Garden look.
+- **Checked:** in code only (no browser, by the user's standing rule):
+  tag balance, every `var()` defined, every `<use>` symbol present,
+  `node --check site/main.js`, impeccable's detector (one "tight line
+  height" warning it can't locate). Not seen in a real browser.
+
 ## Done: v2 shipped (2026-11-18)
 
 The revamp below is built and live; the rest of this file is the brief it
