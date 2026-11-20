@@ -97,6 +97,10 @@ pub struct FastPathConfig {
     /// The classifier may block apps: start even with no direction to
     /// shape, and divert both directions for that.
     pub blocking: bool,
+    /// Run first on the scheduler and receive threads. The service raises
+    /// their priority with it, so a PC busy on every core doesn't wake
+    /// them late and slow the line (PLAN.md §6.5).
+    pub on_thread_start: Option<fn()>,
 }
 
 impl Default for FastPathConfig {
@@ -110,6 +114,7 @@ impl Default for FastPathConfig {
             stall_limit: Duration::from_millis(500),
             shape_lan: false,
             blocking: false,
+            on_thread_start: None,
         }
     }
 }
@@ -337,19 +342,28 @@ impl<E: PacketEngine + 'static> FastPath<E> {
         let result = (|| {
             {
                 let (engine, shared) = (fp.engine.clone(), fp.shared.clone());
-                fp.threads.push(
-                    std::thread::Builder::new()
-                        .name("scheduler".into())
-                        .spawn(move || schedule_loop(&*engine, &shared, rx, down, up, nap))?,
-                );
+                let start = config.on_thread_start;
+                fp.threads
+                    .push(std::thread::Builder::new().name("scheduler".into()).spawn(
+                        move || {
+                            if let Some(f) = start {
+                                f();
+                            }
+                            schedule_loop(&*engine, &shared, rx, down, up, nap);
+                        },
+                    )?);
             }
             for n in 0..config.rx_threads.clamp(1, 2) {
                 let (engine, shared, pool) =
                     (fp.engine.clone(), fp.shared.clone(), fp.pool.clone());
                 let (tx, classifier) = (tx.clone(), classifier.clone());
+                let start = config.on_thread_start;
                 fp.threads
                     .push(std::thread::Builder::new().name(format!("rx-{n}")).spawn(
                         move || {
+                            if let Some(f) = start {
+                                f();
+                            }
                             rx_loop(&*engine, &shared, &pool, classifier, shaped, tx);
                         },
                     )?);

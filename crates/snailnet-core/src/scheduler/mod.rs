@@ -40,7 +40,10 @@ mod token_bucket;
 #[cfg(test)]
 mod tests;
 
-pub use config::{ClassConfig, ConfigError, LiveConfig, Priority, SchedulerConfig};
+pub use config::{
+    ClassConfig, ConfigError, LiveConfig, Priority, ROOT_BURST_MS, SchedulerConfig,
+    root_burst_bytes,
+};
 pub use token_bucket::TokenBucket;
 
 use std::collections::VecDeque;

@@ -67,6 +67,22 @@ impl ClassConfig {
     }
 }
 
+/// How long the root's burst lasts at its rate (PLAN.md §9.1, §6.5).
+///
+/// The scheduler thread naps until the root has credit again; Windows wakes
+/// it late when the PC is busy, and credit beyond the burst is lost. With
+/// 2 ms of burst a thread waking 3 ms late gave a lone download 59% of the
+/// rate in the simulator: SnailNet made the line slower. 10 ms covers the
+/// lateness of a loaded PC and adds at most 10 ms of queue at the modem
+/// after an idle moment.
+pub const ROOT_BURST_MS: u64 = 10;
+
+/// The root's burst for a direction shaped at `rate` bytes per second:
+/// [`ROOT_BURST_MS`] of it, and never less than two full-size packets.
+pub fn root_burst_bytes(rate: u64) -> u64 {
+    (rate * ROOT_BURST_MS / 1000).max(2 * 1514)
+}
+
 /// One direction's tree (PLAN.md §9.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchedulerConfig {

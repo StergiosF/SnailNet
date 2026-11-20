@@ -864,6 +864,7 @@ impl Shaper {
                 rx_threads: spec.rx_threads,
                 shape_lan: spec.shape_lan,
                 blocking: spec.blocking,
+                on_thread_start: Some(snailnet_win::thread::raise_priority),
                 ..FastPathConfig::default()
             },
         )

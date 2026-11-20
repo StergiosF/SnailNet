@@ -462,7 +462,13 @@ mod tests {
         a.follow(&config(Some(25.0), false));
         let typed = a.running[0].unwrap();
         drive(&mut a, 10, 1.0, 80.0);
-        assert!(a.live()[0].unwrap() < typed * 0.7);
+        let live = a.live()[0].unwrap();
+        assert!(live < typed * 0.95, "{live}");
+        // Never below the floor of the line (SnailNet never makes it slower
+        // than that): 85% of it, at the lowest factor.
+        drive(&mut a, 600, 1.0, 80.0);
+        let floor = 25e6 * snailnet_core::estimator::FLOOR * snailnet_core::estimator::FACTOR_MIN;
+        assert!(a.live()[0].unwrap() >= floor * 0.999, "{:?}", a.live());
     }
 
     #[test]

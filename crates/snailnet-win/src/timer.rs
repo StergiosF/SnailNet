@@ -8,7 +8,7 @@
 //! measured 2026-11-18). Most of the shaper's CPU is kernel time per
 //! WinDivert send call, so fewer, fuller sends are what save CPU; spinning
 //! for microsecond accuracy buys nothing, because the scheduler's root
-//! bucket holds 2 ms of credit and a wake-up a little late just releases
+//! bucket holds 10 ms of credit (`ROOT_BURST_MS`) and a wake-up late just releases
 //! what came due meanwhile, at the same rate.
 
 use std::io;
@@ -22,7 +22,7 @@ use windows_sys::Win32::System::Threading::{
 
 /// Shorter naps are stretched to this, so a busy shaper wakes about a
 /// thousand times a second and each send carries several packets. With
-/// the timer's lateness it stays inside the root bucket's 2 ms of credit.
+/// the timer's lateness it stays well inside the root bucket's 10 ms of credit.
 pub const MIN_NAP: Duration = Duration::from_millis(1);
 
 pub struct HighResTimer {

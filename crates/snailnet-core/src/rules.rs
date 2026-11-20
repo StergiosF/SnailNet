@@ -746,8 +746,7 @@ impl Config {
             classes.push(ClassConfig::new(OTHER_CLASS, bp[rules.len()]));
             Some(SchedulerConfig {
                 rate_bytes_per_sec: rate.max(1),
-                // ~2 ms of line rate keeps the release smooth.
-                burst_bytes: (rate / 500).max(2 * 1514),
+                burst_bytes: crate::scheduler::root_burst_bytes(rate),
                 classes,
             })
         };

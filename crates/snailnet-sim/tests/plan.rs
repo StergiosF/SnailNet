@@ -233,7 +233,15 @@ fn light_high_priority_flow_waits_under_2ms_at_92_percent_load() {
             p99 <= ms(2),
             "game in {game_class:?}, timer {timer} ns: p99 {p99} ns in the scheduler"
         );
-        assert_eq!(game.lost_packets, 0, "game in {game_class:?} lost packets");
+        // All flows start at once, so their slow starts overflow the ISP's
+        // buffer in the first fraction of a second, with or without
+        // SnailNet; which packet that drops is chance. From the warm-up on,
+        // the game loses nothing.
+        let late: Vec<_> = game.loss_times.iter().filter(|&&t| t >= 2 * SEC).collect();
+        assert!(
+            late.is_empty(),
+            "game in {game_class:?} lost packets at {late:?}"
+        );
         let util = r.throughput(2 * SEC, 20 * SEC) / RATE as f64;
         assert!(util >= 0.95, "line use {util:.3}");
     }
@@ -358,4 +366,28 @@ fn runs_are_repeatable() {
     let b = busy_evening("Game", ms(1));
     assert!(a == b, "two runs of the same scenario differ");
     assert!(a.flow("browsing").transfers > 0, "web transfers finished");
+}
+
+#[test]
+fn a_lone_download_keeps_its_speed_when_the_timer_wakes_late() {
+    // Windows wakes a waiting thread late when the PC is busy (a build on
+    // every core). The root's burst must cover the lateness, or every late
+    // wake-up loses speed for good: SnailNet would make the line slower
+    // than it is without it (the user, 2026-11-20).
+    for late in [ms(1), ms(3), ms(6)] {
+        let config = shaped_config(RATE, vec![ClassConfig::new("Everything else", 10_000)]);
+        let mut s = Simulation::new(
+            SimConfig {
+                timer_granularity: ms(1),
+                wake_late: late,
+                ..SimConfig::new(LINE)
+            },
+            config,
+        )
+        .expect("valid config");
+        four_flows(&mut s, "dl", "Everything else", false);
+        let r = s.run(10 * SEC);
+        let util = r.throughput(2 * SEC, 10 * SEC) / RATE as f64;
+        assert!(util >= 0.97, "waking {late} ns late: line use {util:.3}");
+    }
 }

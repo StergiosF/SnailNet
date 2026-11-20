@@ -32,6 +32,10 @@ pub struct SimConfig {
     /// The scheduler thread's timer: wake-ups are rounded up to a multiple
     /// of this. 0 means exact.
     pub timer_granularity: Nanos,
+    /// How late the scheduler thread wakes from a nap (a busy PC). While
+    /// it naps it takes no new packets, as the engine's thread doesn't.
+    /// 0: exact, and an arriving packet runs the scheduler at once.
+    pub wake_late: Nanos,
     /// Width of the throughput bins in the [`Report`].
     pub bin: Nanos,
     /// Seeds the random traffic (web transfers).
@@ -46,18 +50,18 @@ impl SimConfig {
             line_rate,
             isp_buffer: ms(150),
             timer_granularity: 0,
+            wake_late: 0,
             bin: ms(10),
             seed: 1,
         }
     }
 }
 
-/// A scheduler config shaped at `rate`, with the root burst `spike` uses
-/// (2 ms of line).
+/// A scheduler config shaped at `rate`, with the service's root burst.
 pub fn shaped_config(rate: u64, classes: Vec<ClassConfig>) -> SchedulerConfig {
     SchedulerConfig {
         rate_bytes_per_sec: rate,
-        burst_bytes: (rate / 500).max(2 * 1514),
+        burst_bytes: snailnet_core::scheduler::root_burst_bytes(rate),
         classes,
     }
 }
@@ -583,6 +587,10 @@ impl Simulation {
         p.shaper_at = now;
         let meta = self.meta(&p);
         self.sched.enqueue(now, meta, p);
+        if self.cfg.wake_late > 0 && self.shaper_wake.is_some() {
+            // The thread is napping: the packet waits for it.
+            return;
+        }
         self.pump();
     }
 
@@ -610,7 +618,7 @@ impl Simulation {
                 Dequeue::Packet { class, packet } => self.deliver(class, packet),
                 Dequeue::WaitUntil(t) => {
                     let g = self.cfg.timer_granularity;
-                    let t = if g > 0 { t.div_ceil(g) * g } else { t };
+                    let t = if g > 0 { t.div_ceil(g) * g } else { t } + self.cfg.wake_late;
                     if self.shaper_wake.is_none_or(|w| t < w) {
                         self.shaper_wake = Some(t);
                         self.push(t, Event::Shaper);

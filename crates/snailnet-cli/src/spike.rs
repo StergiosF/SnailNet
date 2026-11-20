@@ -55,8 +55,7 @@ fn direction(rules: &[AppRule], line_mbps: f64, factor: f64) -> Result<Scheduler
     let rate = (line_mbps * factor * 1e6 / 8.0) as u64;
     Ok(SchedulerConfig {
         rate_bytes_per_sec: rate,
-        // ~2 ms of line rate keeps the release smooth.
-        burst_bytes: (rate / 500).max(2 * 1514),
+        burst_bytes: snailnet_core::scheduler::root_burst_bytes(rate),
         classes: rules::classes(rules).map_err(anyhow::Error::msg)?,
     })
 }
