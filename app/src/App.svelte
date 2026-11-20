@@ -3,7 +3,8 @@
   // pages (Now, Split, Settings) and the line; beside it the title bar's
   // caption buttons, a state that needs attention if there is one, and
   // the open page. First run takes the whole window until it's done.
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
+  import { timeline } from "./lib/timeline.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import AddSlice from "./lib/components/AddSlice.svelte";
   import AutostartDialog from "./lib/components/AutostartDialog.svelte";
@@ -71,6 +72,17 @@
   // sharing is felt); its list follows the Download / Upload choice.
   const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
   const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
+  // "Last 10 minutes" (timeline.svelte.ts): every tick, both directions,
+  // whatever page is open; and the marks from each new config.
+  $effect(() => {
+    const s = service.stats;
+    if (!s || !connected) return;
+    untrack(() => timeline.feed(s.t_ms, downBook, upBook));
+  });
+  $effect(() => {
+    const c = service.snapshot?.config;
+    if (c) untrack(() => timeline.config(c, label));
+  });
   // The proof (§11.10): ping with and without SnailNet while the line is
   // full, steadied by ProofWatch.
   const proofWatch = new ProofWatch();

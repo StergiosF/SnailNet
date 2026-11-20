@@ -1,9 +1,10 @@
-/* SnailNet's look (PLAN.md §14.1, Obsidian Jade, 2026-11-20): deep mineral
-   charcoal planes with a breath of green, so the snail's living jade, the
-   warm ivory of "what's on" and the apps' own brand icons carry the colour.
-   Hairlines and one panel per page part rather than cards on cards; slice
-   inks only where they carry meaning. Windows high contrast mode replaces
-   all of it with system colours. */
+/* SnailNet's look (PLAN.md §14.1, Obsidian Jade with the Garden's light,
+   "Blend", 2026-11-20): deep charcoal planes with a breath of green, so the
+   snail's living jade, the warm ivory of "what's on" and the apps' own
+   brand icons carry the colour; a soft jade light from above and panels
+   lifted softly off the ground. Hairlines and one panel per page part
+   rather than cards on cards; slice inks only where they carry meaning.
+   Windows high contrast mode replaces all of it with system colours. */
 
 @import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
 
@@ -46,11 +47,11 @@
 
   /* Ground and the surfaces on it, each a step lighter; the side rail a
      step darker. */
-  --surface-side: #0c100f;
-  --surface-ground: #121716;
-  --surface-1: #181f1d;
-  --surface-2: #202826;
-  --surface-3: #2a3431;
+  --surface-side: #0a1311;
+  --surface-ground: #0f1b18;
+  --surface-1: #15221e;
+  --surface-2: #1c2b27;
+  --surface-3: #253631;
   /* The thin ring round dialogs and the segmented track; the caption
      buttons' hover and press; loading placeholders. */
   --stroke-card: rgb(236 234 226 / 0.075);
@@ -60,12 +61,12 @@
   --fill-subtle-pressed: rgb(255 255 255 / 0.03);
   --skeleton: rgb(255 255 255 / 0.07);
 
-  /* Type: primary 13:1 and secondary 8.9:1 on the ground (6.4:1 on
-     surface 2). Tertiary (6:1 on the ground) is for rings and disabled
-     text only; it falls under 4.5:1 on surface 2. */
-  --text-primary: #eceae2;
-  --text-secondary: #a8b3ae;
-  --text-tertiary: #7c8984;
+  /* Type: primary 14.9:1 and secondary 8.9:1 on the ground (7.4:1 on
+     surface 2). Tertiary (5.5:1 on the ground, 5.1:1 on surface 1) is for
+     units, hints and disabled text; it falls under 4.5:1 on surface 2. */
+  --text-primary: #efece3;
+  --text-secondary: #abbcb5;
+  --text-tertiary: #80948b;
 
   /* The one strong action per view, and the mode that's on: cream. */
   --accent: #f0ece1;
@@ -119,10 +120,14 @@
   /* Elevation, declared once: a soft offset shadow, and the light from
      above catching the top edge. */
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.045) inset, 0 12px 32px -12px rgb(0 0 0 / 0.55);
+  --shadow-panel: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 14px 30px -16px rgb(0 0 0 / 0.65);
   --shadow-raised: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 18px 40px -14px rgb(0 0 0 / 0.65);
-  /* The light in the room: barely there, a cool lift from above. No green
-     wash: the jade belongs to the snail and to what's boosted. */
-  --ground-light: radial-gradient(1100px 480px at 60% -14%, rgb(236 234 226 / 0.035), transparent 70%);
+  /* The light in the room (Blend, 2026-11-20: the Garden's light on
+     Obsidian's ground): a soft jade lift from above the content and a
+     deeper pool low on the left. Painted once on the window. */
+  --ground-light:
+    radial-gradient(1100px 520px at 62% -14%, rgb(45 184 148 / 0.11), transparent 70%),
+    radial-gradient(760px 520px at -6% 110%, rgb(31 111 100 / 0.09), transparent 70%);
 }
 
 @media (forced-colors: active) {
@@ -395,12 +400,13 @@ input.switch:disabled {
   color: var(--critical);
 }
 
-/* The one panel per page part: Now's list, Split's shares, Settings'
-   groups. Flat; rows inside it are parted by hairlines. */
+/* The one panel per page part: Now's chart, list and side panels, Split's
+   shares, Settings' groups. Lifted softly off the ground (the Garden's
+   depth); rows inside it are parted by hairlines. */
 .card {
   border-radius: var(--radius-card);
   background: var(--surface-1);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset;
+  box-shadow: var(--shadow-panel);
 }
 
 /* A card's own heading: plain words, not a label above words. */

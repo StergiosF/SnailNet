@@ -2,9 +2,11 @@
   // "Using your internet" (PLAN.md §14.2, Obsidian Jade): who is moving
   // data right now, busiest first, in one flat panel with hairlines between
   // the rows. Each row: the app's icon, its name and what's happening to
-  // it, a thin bar of its part of your speed, its Mbps, then Boost and its
-  // own ••• menu (AppMenu), both there whether or not it's boosted. The
-  // header has the total and the Download / Upload choice (ui.dir). A
+  // it, a thin bar of its part of your speed in its band's colour from
+  // "Last 10 minutes" (Timeline, which also holds the Download / Upload
+  // choice and the total), its Mbps, then Boost and its own ••• menu
+  // (AppMenu), both there whether or not it's boosted. Hovering a row
+  // lights its band in the chart. A
   // boosted row takes a jade wash, a "Boosted" mark, and the time it has
   // left in words and as a bar along its foot. When the order changes the
   // rows glide, so the eye can follow who overtook whom. While nothing is
@@ -21,15 +23,28 @@
   import { boostLeft, boostShare, gameWhy, idle, inCall, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
-  import { ui, type Dir } from "../ui.svelte";
+  import { ui } from "../ui.svelte";
   import AppIcon from "./AppIcon.svelte";
   import AppMenu from "./AppMenu.svelte";
   import BoostButton from "./BoostButton.svelte";
   import Glyph from "./Glyph.svelte";
 
-  let { ledger, canEdit, lineBps = null }: { ledger: Ledger | null; canEdit: boolean; lineBps?: number | null } =
-    $props();
-  const ink = (n: number) => (n >= 0 ? `var(--ink-${n})` : "var(--stone-1)");
+  let {
+    ledger,
+    canEdit,
+    colors = new Map(),
+    lit = null,
+    onlight,
+  }: {
+    ledger: Ledger | null;
+    canEdit: boolean;
+    /** Each row's colour, as its band in "Last 10 minutes" has it. */
+    colors?: Map<string, string>;
+    /** The row whose band is lit. */
+    lit?: string | null;
+    onlight?: (key: string | null) => void;
+  } = $props();
+  const ink = (key: string, n: number) => colors.get(key) ?? (n >= 0 ? `var(--ink-${n})` : "var(--stone-1)");
 
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
@@ -68,25 +83,14 @@
       return { id, target, name: label(target) };
     }),
   );
-  const dirs: { id: Dir; glyph: "download" | "upload" }[] = [
-    { id: "down", glyph: "download" },
-    { id: "up", glyph: "upload" },
-  ];
 </script>
 
 <section class="card who" aria-labelledby="who-title">
   <div class="hd">
     <h2 class="card-title" id="who-title">{t("who.title")}</h2>
-    {#if ledger && ledger.total > 0 && lineBps && list.length > 0}
-      <span class="total num" aria-live="off">{t("who.total", { used: mbps(ledger.total), line: mbps(lineBps) })}</span>
+    {#if list.length > 1}
+      <span class="order">{t("who.busiest")}</span>
     {/if}
-    <div class="dir" role="group" aria-label={t("dir.label")}>
-      {#each dirs as d (d.id)}
-        <button type="button" aria-pressed={ui.dir === d.id} onclick={() => (ui.dir = d.id)}
-          ><Glyph name={d.glyph} size={15} />{t(`dir.${d.id}`)}</button
-        >
-      {/each}
-    </div>
   </div>
   {#if !ledger}
     <ul aria-hidden="true">
@@ -101,6 +105,9 @@
       {#each list as u (u.key)}
         <li
           class:boosted={u.boosted}
+          class:lit={lit === u.key}
+          onpointerenter={() => onlight?.(u.key)}
+          onpointerleave={() => onlight?.(null)}
           animate:flip={glide()}
           in:fade={{ duration: ms(240) }}
           use:flash={`${u.boosted}|${u.ink}`}
@@ -115,7 +122,7 @@
             </span>
             <small class:wait={u.waiting && !u.boosted} class:first={first(u)}>{sub(u)}</small>
             <span class="use" aria-hidden="true"
-              ><i style:width="{Math.max(1.5, u.part * 100)}%" style:background={ink(u.ink)}></i></span
+              ><i style:width="{Math.max(1.5, u.part * 100)}%" style:background={ink(u.key, u.ink)}></i></span
             >
           </span>
           <span class="mb num" aria-live="off"
@@ -184,44 +191,10 @@
     gap: 8px 12px;
     padding: 16px 16px 10px 20px;
   }
-  .total {
-    font-size: 14px;
-    color: var(--text-secondary);
-  }
-  /* Download / Upload: a small segmented choice at the header's end. */
-  .dir {
-    display: flex;
+  .order {
     margin-left: auto;
-    padding: 2px;
-    border-radius: 9px;
-    background: var(--surface-side);
-    box-shadow: inset 0 0 0 1px var(--stroke-card);
-  }
-  .dir button {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 26px;
-    padding: 0 9px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 650;
-    transition:
-      background-color 120ms linear,
-      color 120ms linear;
-  }
-  .dir button:hover {
-    color: var(--text-primary);
-  }
-  .dir button[aria-pressed="true"] {
-    background: var(--surface-3);
-    color: var(--text-primary);
-  }
-  .dir button:focus-visible {
-    outline-offset: -1px;
+    font-size: 13.5px;
+    color: var(--text-tertiary);
   }
   ul {
     display: flex;
@@ -254,11 +227,14 @@
     background: var(--stroke-card);
     transition: opacity 150ms linear;
   }
-  li:hover {
-    background-color: rgb(255 255 255 / 0.03);
+  li:hover,
+  li.lit {
+    background-color: var(--hover-soft);
   }
   li:hover::before,
-  li:hover + li::before {
+  li:hover + li::before,
+  li.lit::before,
+  li.lit + li::before {
     opacity: 0;
   }
   /* A boost: a jade wash from the left and the Boosted mark. */
@@ -482,9 +458,6 @@
       forced-color-adjust: none;
       background: Highlight;
       color: HighlightText;
-    }
-    .dir button[aria-pressed="true"] {
-      outline: 2px solid Highlight;
     }
   }
 </style>

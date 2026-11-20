@@ -2,14 +2,14 @@
 name: SnailNet
 description: Split this PC's internet between apps by percentage. Its own dark look, "Obsidian Jade".
 colors:
-  ground: "#121716"
-  side-rail: "#0c100f"
-  surface-1: "#181f1d"
-  surface-2: "#202826"
-  surface-3: "#2a3431"
-  text-primary: "#eceae2"
-  text-secondary: "#a8b3ae"
-  text-tertiary: "#7c8984"
+  ground: "#0f1b18"
+  side-rail: "#0a1311"
+  surface-1: "#15221e"
+  surface-2: "#1c2b27"
+  surface-3: "#253631"
+  text-primary: "#efece3"
+  text-secondary: "#abbcb5"
+  text-tertiary: "#80948b"
   cream: "#f0ece1"
   cream-hover: "#fbf8ef"
   on-cream: "#121716"
@@ -99,15 +99,19 @@ detailed spec.
   downloads or a video stalls, look, change one thing, close it. Every page
   answers one question first:
   - **Now:** "what's happening, and is it OK?" The sentence as the heading,
-    the one-tap fix under it; beside the list of who is using your
-    internet, the ping proof and what the mode does.
+    the one-tap fix under it; then "Last 10 minutes" over the list of who
+    is using your internet; beside them the ping proof and how the mode
+    shares your internet (the user's call, 2026-11-20: Now was too
+    empty).
   - **Split:** "who gets what?" One sentence on what a share is, the drag
     bar, the shares.
   - **Settings:** "change how SnailNet behaves", grouped by what people
     come for.
-- **One picture of your internet per page.** Now shows use (a thin bar per
-  app); Split shows the split (the drag bar, live use along its foot).
-  Never a second strip, legend or per-row bar saying the same thing again.
+- **One picture of each thing per page.** Now shows use over time (the
+  chart) and now (a thin bar per app, in the same colours, so the list is
+  the chart's legend), and the mode's split once, small; Split shows the
+  split (the drag bar, live use along its foot). Never a second strip,
+  legend or per-row bar saying the same thing again.
 - **The mode is the app's state,** so its switch sits in the window's top
   strip on every page.
 - **Progressive disclosure:** a share's priority, "only use spare speed"
@@ -124,10 +128,13 @@ detailed spec.
 
 ## Colors
 
-- **Planes:** the ground is mineral charcoal (`#121716`), the side rail and
-  title strip a step darker (`#0c100f`), the one panel per page part a step
-  lighter (surface-1), controls another (surface-2, surface-3). No green
-  wash; the light from above is barely there.
+- **Planes ("Blend", the user's pick, 2026-11-20: Obsidian with the old
+  Garden's light):** the ground is charcoal with a breath of green
+  (`#0f1b18`), the side rail and title strip a step darker (`#0a1311`),
+  the one panel per page part a step lighter (surface-1), controls another
+  (surface-2, surface-3). A soft jade light falls from above the content
+  and pools low on the left (`--ground-light`); never a green wash on the
+  planes themselves.
 - **Ivory is "what's on":** the mode that's on, the one main action per
   view, focus rings, and the change warmth (below).
 - **Jade is "goes first / boosted"** and the brand: the snail, a boosted
@@ -168,7 +175,8 @@ detailed spec.
   pages): the mode switch at the gutter, the caption buttons at the right,
   everything else the window's drag region.
 - **Pages:** a 32 px gutter (20 px under 900 px). Now is two columns when
-  wide (the list, and a 300 px side column for the ping and the mode), one
+  wide (the chart and the list, and a 316 px side column of two panels:
+  the ping and the mode's split), one
   when narrow. Split caps at 860 px. Settings sets a 168 px index beside
   groups up to 680 px wide; narrow, the index steps aside.
 - **Rhythm:** 22 px between a page's parts, 60 px rows, 8–14 px inside a
@@ -176,9 +184,11 @@ detailed spec.
 
 ## Elevation & Depth
 
-- **Flat.** One panel per page part; rows inside it are parted by
-  hairlines (`--stroke-card`) and lift one surface step on hover. Menus,
-  dialogs and the toast alone are raised (`--shadow-raised`).
+- **Softly lifted panels.** One panel per page part, lifted off the ground
+  by a soft offset shadow (`--shadow-panel`, the Garden's depth; no
+  border); rows inside it are parted by hairlines (`--stroke-card`) and
+  lift one surface step on hover. Menus, dialogs and the toast alone are
+  raised (`--shadow-raised`).
 - **No side stripes, no cards on cards, no icon in a tinted square.**
   Notices are tinted by their tone with the glyph in full colour; a boosted
   row is a jade wash from the left with a Boosted tag.
@@ -213,10 +223,22 @@ detailed spec.
   that's on is ivory with its glyph in deep jade. Narrow windows drop the
   glyphs, never the names. Each mode's one line is its tooltip and
   description; while a game runs a quiet "Playing" note sits beside it.
-- **Using your internet** (`WhoCard.svelte`): one panel, busiest first,
-  Download / Upload in its header with the total. Each row: icon, name,
-  short status, a 3 px bar of its part of your speed (its share's ink,
-  stone in Everything else), Mbps, **Boost** and **`•••`**. Boost is a
+- **Last 10 minutes** (`Timeline.svelte`, `history.ts`): Now's main
+  picture. One stacked band per app (the five busiest, then "Other
+  apps"), each in its share's ink or a stone step, your speed as a dashed
+  line, "10 min ago · 5 min ago · now" under it. Marks with a short label
+  where something happened: a mode switch, a boost, a share given, an app
+  that started. Hover reads any moment; hovering a row lights its band.
+  Download / Upload and the total live in its header and drive the list
+  too. The app keeps it from the stats it already gets, in 5 s steps,
+  only while it runs: it starts empty, says so, and never invents data.
+- **How {mode} shares it** (`SplitSummary.svelte`, Now's side column):
+  the mode's shares as one small bar, a line each with priority, "at least
+  N Mbps" and what it uses now; apps on spare speed counted in a
+  sentence; "See the split". Balanced says every app gets a fair turn.
+- **Using your internet** (`WhoCard.svelte`): one panel, busiest first.
+  Each row: icon, name, short status, a 3 px bar of its part of your
+  speed (its band's colour from the chart), Mbps, **Boost** and **`•••`**. Boost is a
   quiet text button that turns jade under the pointer; `•••` holds the
   rarer actions, reachable while boosted. Apps barely using anything are
   not listed: an "open but idle" line says so.

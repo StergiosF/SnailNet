@@ -3,12 +3,15 @@
   // is it OK?".
   //   1. The hero, full width: the sentence on how things are going as the
   //      page's heading, and the one-tap fix under it.
-  //   2. Who is using the internet (WhoCard), busiest first, in the main
-  //      column.
-  //   3. A side column: the ping, and this mode in one paragraph with the
-  //      way to its split. While the line is full the ping is live, with
-  //      and without SnailNet (ProofRow); at rest it's the last speed
-  //      test's grades, dated. Never an idle ping the service didn't give.
+  //   2. The main column: "Last 10 minutes" (Timeline, with the Download /
+  //      Upload choice), then who is using the internet now (WhoCard),
+  //      busiest first, each row in its band's colour; hovering a row
+  //      lights its band.
+  //   3. A side column of two panels: the ping, and how the mode shares
+  //      your internet (SplitSummary). While the line is full the ping is
+  //      live, with and without SnailNet (ProofRow); at rest it's the last
+  //      speed test's grades, dated. Never an idle ping the service didn't
+  //      give.
   // Wide windows put 2 and 3 side by side; narrow ones stack them.
   //
   // Its one authored moment: the snail's shell (the same spiral as the
@@ -18,13 +21,16 @@
   import { shortDate } from "../format";
   import { t } from "../i18n";
   import type { Glance, Ledger } from "../ledger";
-  import { MODES, modeName } from "../modes";
+  import { bandColors } from "../history";
   import { grade, rise, type Grade, type Proof } from "../proof";
   import { service } from "../service.svelte";
+  import { timeline } from "../timeline.svelte";
   import { ui } from "../ui.svelte";
   import FixOffer from "./FixOffer.svelte";
-  import Glyph, { modeGlyph } from "./Glyph.svelte";
+  import Glyph from "./Glyph.svelte";
   import ProofRow from "./ProofRow.svelte";
+  import SplitSummary from "./SplitSummary.svelte";
+  import Timeline from "./Timeline.svelte";
   import WhoCard from "./WhoCard.svelte";
 
   let {
@@ -36,26 +42,14 @@
   }: { ledger: Ledger | null; glance: Glance | null; proof: Proof | null; canEdit: boolean; lineBps: number | null } =
     $props();
 
-  const profile = $derived(service.activeProfile);
-  const mode = $derived(modeName(profile));
-  const body = $derived(
-    profile ? t(MODES.find((m) => m.id === profile.id)?.body ?? "mode.own.body") : "",
-  );
-  // Shares of the mode's own: rules that are on and hold a share; and the
-  // ones that only use spare speed.
-  const rules = $derived((profile?.rules ?? []).filter((r) => r.enabled));
-  const slices = $derived(rules.filter((r) => r.share > 0).length);
-  const spare = $derived(rules.filter((r) => r.share === 0).length);
-  const summary = $derived(
-    slices > 0
-      ? t(slices === 1 ? "now.slices.one" : "now.slices.many", { mode, count: slices })
-      : spare === 0
-        ? t("now.noslices", { mode })
-        : "",
-  );
-  const spareText = $derived(
-    spare === 0 ? "" : spare === 1 ? t("now.spare.one") : t("now.spare.many", { count: spare }),
-  );
+  // "Last 10 minutes" in the direction shown, and each band's colour,
+  // which its row in the list shares.
+  const bands = $derived.by(() => {
+    void timeline.rev;
+    return timeline.history.bands(ui.dir);
+  });
+  const colors = $derived(bandColors(bands));
+  let lit = $state<string | null>(null);
 
   // The last speed test's grades (§11.10): how much ping rose while
   // downloading, without SnailNet and, after the check, with it.
@@ -82,6 +76,7 @@
   <div class="now">
     <header class="hero">
       <svg class="shell" viewBox="0 0 512 512" aria-hidden="true">
+        <circle class="rim" cx="224" cy="250" r="150" pathLength="1" />
         <path
           class="coil"
           pathLength="1"
@@ -95,10 +90,13 @@
       <FixOffer {canEdit} />
     </header>
 
-    <div class="main arrive"><WhoCard {ledger} {canEdit} {lineBps} /></div>
+    <div class="main arrive">
+      <Timeline {bands} {colors} {lit} {lineBps} totalBps={ledger ? ledger.total : null} />
+      <WhoCard {ledger} {canEdit} {colors} {lit} onlight={(key) => (lit = key)} />
+    </div>
 
     <aside class="side arrive">
-      <section aria-labelledby="ping-title">
+      <section class="card ping" aria-labelledby="ping-title">
         {#if proof}
           <h2 id="ping-title">{t("proof.title.live")}</h2>
           <ProofRow {proof} />
@@ -128,16 +126,7 @@
         {/if}
       </section>
 
-      {#if profile && mode}
-        <section class="mode" aria-labelledby="mode-title">
-          <h2 id="mode-title">{t("now.mode")}</h2>
-          <p class="nm"><Glyph name={modeGlyph(profile.id)} size={18} />{mode}</p>
-          <p class="note">{body} {summary} {spareText}</p>
-          <button type="button" class="btn go" onclick={() => ui.go("split")}>
-            {slices + spare === 0 ? t("now.noslices.go") : t("now.slices.go")}<Glyph name="chevron" size={16} />
-          </button>
-        </section>
-      {/if}
+      <SplitSummary {ledger} />
     </aside>
   </div>
 </div>
@@ -152,14 +141,14 @@
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 26px;
-    max-width: 1080px;
+    gap: 18px;
+    max-width: 1180px;
     isolation: isolate;
   }
   @container (min-width: 860px) {
     .now {
-      grid-template-columns: minmax(0, 1fr) 300px;
-      column-gap: 44px;
+      grid-template-columns: minmax(0, 1fr) 316px;
+      column-gap: 24px;
     }
     .hero {
       grid-column: 1 / -1;
@@ -169,21 +158,27 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding-top: 22px;
+    gap: 6px;
+    padding: 8px 0 4px;
   }
   /* The shell, behind the heading, drawn once. */
   .shell {
     position: absolute;
     z-index: -1;
-    top: -70px;
-    right: -10px;
+    top: -78px;
+    right: 40px;
     width: 300px;
     height: 300px;
     pointer-events: none;
     fill: none;
     stroke: var(--shell);
     stroke-linecap: round;
+  }
+  .rim {
+    stroke-width: 2;
+    stroke-opacity: 0.09;
+    stroke-dasharray: 1;
+    animation: draw 1400ms var(--ease-out) backwards;
   }
   .coil {
     stroke-width: 9;
@@ -216,33 +211,35 @@
     color: var(--text-secondary);
   }
   .main {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
     min-width: 0;
   }
   .arrive {
     animation: rise-in 520ms 160ms var(--ease-out) backwards;
   }
-  /* The side column: plain sections parted by a hairline, no cards. */
+  /* The side column: two panels, the ping and the mode's split. */
   .side {
     display: flex;
     flex-direction: column;
+    gap: 18px;
     min-width: 0;
   }
-  .side section {
+  .side.arrive {
+    animation-delay: 240ms;
+  }
+  .ping {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    padding: 2px 0 22px;
-  }
-  .side section + section {
-    padding-top: 20px;
-    border-top: 1px solid var(--stroke-card);
+    padding: 16px 20px 18px;
   }
   h2 {
-    margin: 0 0 10px;
-    font-size: 14px;
-    line-height: 20px;
+    margin: 0 0 12px;
+    font-size: 16px;
+    line-height: 22px;
     font-weight: 700;
-    color: var(--text-secondary);
   }
   .note {
     margin: 0;
@@ -295,21 +292,6 @@
   .side .btn {
     align-self: flex-start;
     margin-top: 12px;
-  }
-  .mode .nm {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 4px;
-    font-size: 15px;
-    font-weight: 700;
-  }
-  .mode .nm :global(.glyph) {
-    color: var(--shell-bright);
-  }
-  .go {
-    gap: 4px;
-    padding-right: 10px;
   }
   @media (forced-colors: active) {
     .lt {
