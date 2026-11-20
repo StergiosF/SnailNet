@@ -24,6 +24,10 @@ impl Packet for P {
     fn mark_ce(&mut self) -> bool {
         self.ect
     }
+    /// The source is the owner.
+    fn tag(&self) -> Tag {
+        self.src as Tag
+    }
 }
 
 fn p(len: usize, src: usize) -> P {
@@ -601,7 +605,7 @@ proptest! {
             match op {
                 Op::Enqueue { class, flow, len, prio, control, ect } => {
                     let meta = PacketMeta { class, flow, prio, control };
-                    s.enqueue(now, meta, P { len, born: now, ect, src: 0 });
+                    s.enqueue(now, meta, P { len, born: now, ect, src: flow as usize % 3 });
                     enq += 1;
                 }
                 Op::Advance(dt) => now += dt,
@@ -621,4 +625,87 @@ proptest! {
         let left = s.drain_all().len() as u64;
         prop_assert_eq!(enq, out + dropped + left, "packets leaked or duplicated");
     }
+}
+
+fn pressure_of(s: &Scheduler<P>, tag: Tag) -> Pressure {
+    let mut out = Vec::new();
+    s.pressure(&mut out);
+    out.iter()
+        .find(|(t, _)| *t == tag)
+        .map_or(Pressure::default(), |&(_, p)| p)
+}
+
+#[test]
+fn codel_actions_land_on_the_flows_owner() {
+    // Two bulk owners in different classes, and a light one sharing a
+    // class with the first: CoDel acts on the bulk flows only, and every
+    // action is counted on the owner it hit.
+    let s = plain(10 * MB, &[5000, 5000]);
+    let bulk = |class: ClassId, flow: u64| Src {
+        meta: PacketMeta::new(class, flow),
+        size: 1500,
+        mode: Mode::Backlog(256 * 1024),
+    };
+    let light = Src {
+        meta: PacketMeta::new(1, 2),
+        size: 200,
+        mode: Mode::Every(20 * MS),
+    };
+    let mut sim = Sim::new(s, vec![bulk(1, 1), light, bulk(0, 3)]);
+    sim.run(2 * SEC);
+    let s = &sim.s;
+    let acted = |c: ClassId| s.stats(c).ecn_marked + s.stats(c).dropped_packets;
+    assert!(
+        acted(0) > 10 && acted(1) > 10,
+        "CoDel acted: {} {}",
+        acted(0),
+        acted(1)
+    );
+    assert_eq!(pressure_of(s, 0).acted, acted(1));
+    assert_eq!(pressure_of(s, 1).acted, 0, "the light flow was left alone");
+    assert_eq!(pressure_of(s, 2).acted, acted(0));
+    assert!(pressure_of(s, 0).queued_bytes > 200 * 1024);
+    s.check_invariants(1500);
+}
+
+#[test]
+fn hard_limit_drops_count_on_the_fattest_owner() {
+    // At 1 MB/s the queue limit is 150 KB; 200 packets overflow it.
+    let mut s = plain(MB, &[10000]);
+    for i in 0..200 {
+        s.enqueue(0, PacketMeta::new(0, 1), p(1500, 7));
+        if i % 10 == 0 {
+            s.enqueue(0, PacketMeta::new(0, 2), p(100, 8));
+        }
+    }
+    let dropped = s.stats(0).dropped_packets;
+    assert!(dropped > 0);
+    assert_eq!(pressure_of(&s, 7).acted, dropped);
+    assert_eq!(pressure_of(&s, 8).acted, 0);
+    s.check_invariants(1500);
+}
+
+#[test]
+fn pressure_survives_a_removed_rule() {
+    // The rule's class goes away; what CoDel did to its owner stays counted
+    // (now in Everything else), and its queued bytes move along.
+    let two = || {
+        config(
+            MB,
+            vec![
+                class("a", 5000, Priority::Normal),
+                ClassConfig::new("o", 5000),
+            ],
+        )
+    };
+    let mut s: Scheduler<P> = Scheduler::new(two(), 0).unwrap();
+    for _ in 0..200 {
+        s.enqueue(0, PacketMeta::new(0, 1), p(1500, 4));
+    }
+    let before = pressure_of(&s, 4);
+    assert!(before.acted > 0 && before.queued_bytes > 0, "{before:?}");
+    let only_other = config(MB, vec![ClassConfig::new("o", 10000)]);
+    s.reconfigure(Arc::new(only_other), 0).unwrap();
+    assert_eq!(pressure_of(&s, 4), before);
+    s.check_invariants(1500);
 }

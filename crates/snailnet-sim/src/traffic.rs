@@ -28,6 +28,16 @@ pub enum Model {
     /// Web browsing: transfers of random size (exponential, this mean), each
     /// on a fresh TCP connection, separated by random think times.
     Web { mean_bytes: u64, mean_think: Nanos },
+    /// A video player on one QUIC-like connection: paced, CUBIC's backoff,
+    /// and never faster than `rate` bytes per second (what the stream
+    /// needs). With `chunks: None` it wants `rate` all the time (a buffer
+    /// that isn't full yet); with `Some((bytes, every))` it fetches a chunk
+    /// of `bytes` as fast as it can every `every` (a full buffer being
+    /// topped up), keeping its congestion window between chunks.
+    Video {
+        rate: u64,
+        chunks: Option<(u64, Nanos)>,
+    },
 }
 
 impl Model {
@@ -50,6 +60,9 @@ pub struct FlowSpec {
     /// eligibility for small packets.
     pub prio: Priority,
     pub model: Model,
+    /// The app it belongs to: flows of one app share a scheduler tag, so
+    /// the [`crate::Sample`]s count them together. `None`: its own name.
+    pub app: Option<String>,
     /// Base round-trip time between the sender and the app, queues excluded.
     pub rtt: Nanos,
     pub start: Nanos,
@@ -63,6 +76,7 @@ impl FlowSpec {
             class: class.into(),
             prio: Priority::Normal,
             model,
+            app: None,
             rtt: ms(30),
             start: 0,
             stop: None,
@@ -112,6 +126,31 @@ impl FlowSpec {
         )
     }
 
+    /// A video stream that wants `rate` bytes per second, all the time.
+    pub fn video(name: impl Into<String>, class: impl Into<String>, rate: u64) -> Self {
+        Self::new(name, class, Model::Video { rate, chunks: None })
+    }
+
+    /// Video only: fetch `bytes` every `every`, as fast as allowed, instead
+    /// of streaming at the rate (a full buffer).
+    pub fn chunks(mut self, bytes: u64, every: Nanos) -> Self {
+        if let Model::Video { chunks, .. } = &mut self.model {
+            *chunks = Some((bytes, every));
+        }
+        self
+    }
+
+    /// Count this flow as part of `app`.
+    pub fn app(mut self, app: impl Into<String>) -> Self {
+        self.app = Some(app.into());
+        self
+    }
+
+    /// The app it counts as.
+    pub fn app_name(&self) -> &str {
+        self.app.as_deref().unwrap_or(&self.name)
+    }
+
     /// Negotiate ECN (TCP only; other models ignore it).
     pub fn ecn(mut self) -> Self {
         if let Model::Tcp { ecn, .. } = &mut self.model {
@@ -155,7 +194,7 @@ impl FlowSpec {
     /// Multiplicative decrease on congestion.
     pub(crate) fn beta(&self) -> f64 {
         match self.model {
-            Model::Quic { .. } => 0.7,
+            Model::Quic { .. } | Model::Video { .. } => 0.7,
             _ => 0.5,
         }
     }

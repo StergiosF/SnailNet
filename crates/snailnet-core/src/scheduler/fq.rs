@@ -7,11 +7,16 @@
 //! gets through ahead of the bulk flows sharing its class. Deficits may go
 //! negative, so CoDel can drop whatever is at the head without the DRR
 //! needing to know its size up front.
+//!
+//! Each flow also remembers the [`Tag`] of the packet that started it and
+//! counts what CoDel did to it, for [`FlowQueues::pressure`]. When an idle
+//! bucket is taken over by another tag, its count moves to a small table of
+//! retired counts, so a tag's total never loses what was done to it before.
 
 use std::collections::VecDeque;
 
-use super::Packet;
 use super::codel::{Codel, Entry, Verdicts};
+use super::{NO_TAG, Packet, Pressure, Tag};
 use crate::clock::Nanos;
 
 /// Buckets per class. Flows that collide share a queue; with a home PC's
@@ -19,6 +24,10 @@ use crate::clock::Nanos;
 pub(crate) const BUCKETS: usize = 1024;
 /// DRR quantum for a weight-1 flow: one full-size frame.
 const FLOW_QUANTUM: i64 = 1514;
+/// Retired counts kept per class, reserved up front so retiring never
+/// allocates. Beyond this many tags, further retired counts are forgotten
+/// (their tag's total goes back by that much).
+pub(crate) const RETIRED_SLOTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum List {
@@ -34,6 +43,11 @@ struct Flow<P> {
     weight: i64,
     codel: Codel,
     list: List,
+    /// Tag of the packet that started this flow.
+    tag: Tag,
+    /// Packets CoDel dropped or marked, and hard limit drops, since `tag`
+    /// took this bucket.
+    acted: u64,
 }
 
 impl<P> Flow<P> {
@@ -45,6 +59,8 @@ impl<P> Flow<P> {
             weight: 1,
             codel: Codel::default(),
             list: List::None,
+            tag: NO_TAG,
+            acted: 0,
         }
     }
 }
@@ -56,6 +72,20 @@ pub(crate) struct FlowQueues<P> {
     old: VecDeque<u16>,
     bytes: u64,
     packets: usize,
+    /// `(tag, acted)` of flows whose bucket another tag took over.
+    retired: Vec<(Tag, u64)>,
+}
+
+/// Add `acted` to `tag`'s retired count, if there's room.
+fn retire(retired: &mut Vec<(Tag, u64)>, tag: Tag, acted: u64) {
+    if acted == 0 {
+        return;
+    }
+    if let Some(e) = retired.iter_mut().find(|e| e.0 == tag) {
+        e.1 += acted;
+    } else if retired.len() < RETIRED_SLOTS {
+        retired.push((tag, acted));
+    }
 }
 
 impl<P: Packet> FlowQueues<P> {
@@ -66,6 +96,15 @@ impl<P: Packet> FlowQueues<P> {
             old: VecDeque::new(),
             bytes: 0,
             packets: 0,
+            retired: Vec::new(),
+        }
+    }
+
+    /// Allocate the buckets and the retired table on first use.
+    fn allocate(&mut self) {
+        if self.flows.is_empty() {
+            self.flows.resize_with(BUCKETS, Flow::empty);
+            self.retired.reserve_exact(RETIRED_SLOTS);
         }
     }
 
@@ -84,12 +123,17 @@ impl<P: Packet> FlowQueues<P> {
     /// Queue `packet` on the bucket for `hash`, queued at `at`. `weight` is
     /// the flow's priority weight (latest packet wins).
     pub fn push(&mut self, hash: u64, weight: i64, packet: P, at: Nanos) {
-        if self.flows.is_empty() {
-            self.flows.resize_with(BUCKETS, Flow::empty);
-        }
+        self.allocate();
         let i = (hash % BUCKETS as u64) as usize;
         let len = packet.wire_len() as u64;
+        let tag = packet.tag();
         let f = &mut self.flows[i];
+        if f.list == List::None && f.tag != tag {
+            // A new flow in this bucket, of another owner.
+            retire(&mut self.retired, f.tag, f.acted);
+            f.tag = tag;
+            f.acted = 0;
+        }
         f.queue.push_back(Entry { packet, at });
         f.bytes += len;
         f.weight = weight.max(1);
@@ -120,7 +164,9 @@ impl<P: Packet> FlowQueues<P> {
                 continue;
             }
             let (bytes_before, packets_before) = (f.bytes, f.queue.len());
+            let acted_before = v.dropped_packets + v.marked;
             let got = f.codel.dequeue(&mut f.queue, &mut f.bytes, now, v);
+            f.acted += v.dropped_packets + v.marked - acted_before;
             self.bytes -= bytes_before - f.bytes;
             self.packets -= packets_before - f.queue.len();
             match got {
@@ -157,15 +203,18 @@ impl<P: Packet> FlowQueues<P> {
         let e = f.queue.pop_front()?;
         let len = e.packet.wire_len() as u64;
         f.bytes -= len;
+        f.acted += 1;
         self.bytes -= len;
         self.packets -= 1;
         Some(len)
     }
 
-    /// Remove every packet, resetting all flow state.
+    /// Remove every packet, resetting all flow state (the counts behind
+    /// [`Self::pressure`] are kept).
     pub fn drain_into<T>(&mut self, out: &mut Vec<T>, wrap: impl Fn(P) -> T) {
         for f in &mut self.flows {
             out.extend(f.queue.drain(..).map(|e| wrap(e.packet)));
+            retire(&mut self.retired, f.tag, f.acted);
             *f = Flow::empty();
         }
         self.new.clear();
@@ -177,13 +226,40 @@ impl<P: Packet> FlowQueues<P> {
     /// Move every packet from `other` into the same buckets here, keeping
     /// their queue times (live reconfiguration: a removed rule's packets go
     /// to Everything else, none are lost).
+    /// The counts behind [`Self::pressure`] come along too.
     pub fn absorb(&mut self, mut other: FlowQueues<P>) {
+        self.allocate();
+        for (tag, acted) in other.retired.drain(..) {
+            retire(&mut self.retired, tag, acted);
+        }
         for (i, f) in other.flows.iter_mut().enumerate() {
+            retire(&mut self.retired, f.tag, f.acted);
             let weight = f.weight;
             for e in f.queue.drain(..) {
                 self.push(i as u64, weight, e.packet, e.at);
             }
         }
+    }
+
+    /// Append `(tag, pressure)` for every flow with bytes queued or actions
+    /// counted, and every retired count. Tags may repeat; the caller merges.
+    pub fn pressure(&self, out: &mut Vec<(Tag, Pressure)>) {
+        for f in &self.flows {
+            if f.bytes > 0 || f.acted > 0 {
+                let p = Pressure {
+                    queued_bytes: f.bytes,
+                    acted: f.acted,
+                };
+                out.push((f.tag, p));
+            }
+        }
+        out.extend(self.retired.iter().map(|&(tag, acted)| {
+            let p = Pressure {
+                queued_bytes: 0,
+                acted,
+            };
+            (tag, p)
+        }));
     }
 
     #[cfg(test)]
@@ -217,6 +293,23 @@ mod tests {
     impl Packet for P {
         fn wire_len(&self) -> usize {
             self.0
+        }
+        fn tag(&self) -> Tag {
+            self.1
+        }
+    }
+
+    fn pressure(q: &FlowQueues<P>) -> Vec<(Tag, Pressure)> {
+        let mut out = Vec::new();
+        q.pressure(&mut out);
+        out.sort_unstable_by_key(|e| e.0);
+        out
+    }
+
+    fn pr(queued_bytes: u64, acted: u64) -> Pressure {
+        Pressure {
+            queued_bytes,
+            acted,
         }
     }
 
@@ -298,5 +391,44 @@ mod tests {
         assert_eq!(out.len(), 3);
         assert!(a.is_empty());
         a.check_invariants();
+    }
+
+    #[test]
+    fn a_flow_keeps_its_first_packets_tag() {
+        let mut q = FlowQueues::new();
+        q.push(1, 2, P(1000, 5), 0);
+        // Another owner hashing to the same busy bucket counts as the first.
+        q.push(1, 2, P(500, 6), 0);
+        q.push(2, 2, P(300, 6), 0);
+        assert_eq!(pressure(&q), [(5, pr(1500, 0)), (6, pr(300, 0))]);
+    }
+
+    #[test]
+    fn a_recycled_bucket_retires_the_old_owners_count() {
+        let mut q = FlowQueues::new();
+        for _ in 0..3 {
+            q.push(1, 2, P(1500, 5), 0);
+        }
+        assert_eq!(q.drop_fattest(), Some(1500));
+        let mut v = Verdicts::default();
+        assert!(q.pop(0, &mut v).is_some() && q.pop(0, &mut v).is_some());
+        assert_eq!(q.pop(0, &mut v), None, "bucket 1 is idle now");
+        q.push(1, 2, P(700, 9), 0);
+        assert_eq!(pressure(&q), [(5, pr(0, 1)), (9, pr(700, 0))]);
+        q.check_invariants();
+    }
+
+    #[test]
+    fn retired_counts_are_capped_without_growing() {
+        let mut q = FlowQueues::new();
+        let mut v = Verdicts::default();
+        for tag in 0..(RETIRED_SLOTS as u32 + 10) {
+            q.push(1, 2, P(1500, tag), 0);
+            q.push(1, 2, P(1500, tag), 0);
+            q.drop_fattest();
+            while q.pop(0, &mut v).is_some() {}
+        }
+        assert_eq!(q.retired.len(), RETIRED_SLOTS);
+        assert_eq!(q.retired.capacity(), RETIRED_SLOTS);
     }
 }

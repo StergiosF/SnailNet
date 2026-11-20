@@ -8,11 +8,12 @@ use std::rc::Rc;
 
 use snailnet_core::clock::{Clock, NANOS_PER_SEC, Nanos, SimClock};
 use snailnet_core::scheduler::{
-    ClassConfig, ConfigError, Dequeue, LiveConfig, Packet, PacketMeta, Scheduler, SchedulerConfig,
+    ClassConfig, ConfigError, Dequeue, LiveConfig, Packet, PacketMeta, Pressure, Scheduler,
+    SchedulerConfig, Tag,
 };
 
 use crate::ms;
-use crate::report::{FlowReport, Report};
+use crate::report::{AppSample, FlowReport, Report, Sample};
 use crate::rng::{Rng, mix};
 use crate::traffic::{Cc, FlowSpec, MSS, Model};
 
@@ -66,6 +67,8 @@ type LossLog = Rc<RefCell<Vec<(usize, usize)>>>;
 
 struct SimPacket {
     flow: usize,
+    /// The flow's app index.
+    tag: Tag,
     len: usize,
     sent_at: Nanos,
     /// When it reached the scheduler.
@@ -84,6 +87,10 @@ impl Packet for SimPacket {
     fn mark_ce(&mut self) -> bool {
         self.ce |= self.ect;
         self.ect
+    }
+
+    fn tag(&self) -> Tag {
+        self.tag
     }
 }
 
@@ -117,6 +124,8 @@ enum Event {
     },
     Publish(SchedulerConfig),
     Stop(usize),
+    /// Take a pressure sample, and the next one this much later.
+    Sample(Nanos),
 }
 
 struct Timed {
@@ -149,6 +158,8 @@ impl Ord for Timed {
 
 struct Flow {
     spec: FlowSpec,
+    /// Index of its app in `Simulation::apps`.
+    app: usize,
     cc: Cc,
     /// Bytes left to send in the current transfer; `None` sends forever.
     remaining: Option<u64>,
@@ -162,6 +173,8 @@ struct Flow {
     /// When the pending `Send` event is due. Older ones are stale.
     wake: Option<Nanos>,
     next_pace: Nanos,
+    /// Chunked video: when the next chunk is due.
+    next_chunk: Nanos,
     r: FlowReport,
 }
 
@@ -181,6 +194,14 @@ pub struct Simulation {
     shaper_wake: Option<Nanos>,
     losses: LossLog,
     classes: BTreeMap<String, Vec<u64>>,
+    apps: Vec<String>,
+    /// Bytes delivered per app so far, and at the last sample; the
+    /// scheduler's actions per app at the last sample.
+    app_sent: Vec<u64>,
+    last_sent: Vec<u64>,
+    last_acted: Vec<u64>,
+    pressure: Vec<(Tag, Pressure)>,
+    samples: Vec<Sample>,
 }
 
 impl Simulation {
@@ -207,6 +228,12 @@ impl Simulation {
             shaper_wake: None,
             losses: Rc::default(),
             classes: BTreeMap::new(),
+            apps: Vec::new(),
+            app_sent: Vec::new(),
+            last_sent: Vec::new(),
+            last_acted: Vec::new(),
+            pressure: Vec::new(),
+            samples: Vec::new(),
         })
     }
 
@@ -222,12 +249,31 @@ impl Simulation {
             Model::Tcp { bytes, .. } | Model::Quic { bytes } => bytes,
             Model::Web { .. } => Some(0),
             Model::Cbr { .. } => None,
+            Model::Video { chunks, .. } => chunks.map(|(bytes, _)| bytes),
+        };
+        let next_chunk = match spec.model {
+            Model::Video {
+                chunks: Some((_, every)),
+                ..
+            } => spec.start + every,
+            _ => 0,
+        };
+        let app = match self.apps.iter().position(|a| a == spec.app_name()) {
+            Some(a) => a,
+            None => {
+                self.apps.push(spec.app_name().to_owned());
+                self.app_sent.push(0);
+                self.last_sent.push(0);
+                self.last_acted.push(0);
+                self.apps.len() - 1
+            }
         };
         self.push(spec.start, Event::Send(i));
         if let Some(stop) = spec.stop {
             self.push(stop, Event::Stop(i));
         }
         self.flows.push(Flow {
+            app,
             cc: Cc::new(spec.rtt, spec.beta()),
             remaining,
             conn: 0,
@@ -236,6 +282,7 @@ impl Simulation {
             idle: matches!(spec.model, Model::Web { .. }),
             wake: Some(spec.start),
             next_pace: 0,
+            next_chunk,
             r: FlowReport {
                 name: spec.name.clone(),
                 class: spec.class.clone(),
@@ -251,6 +298,15 @@ impl Simulation {
         config.validate()?;
         self.push(at, Event::Publish(config));
         Ok(())
+    }
+
+    /// Sample every app's pressure (bytes delivered, queued, and what the
+    /// scheduler did to it) every `period`, starting one period in, the way
+    /// the service's stats tick reads it. Call once.
+    pub fn sample_every(&mut self, period: Nanos) -> &mut Self {
+        assert!(period > 0, "sample period must be > 0");
+        self.push(period, Event::Sample(period));
+        self
     }
 
     /// Run until `until` and report.
@@ -278,6 +334,8 @@ impl Simulation {
             classes: std::mem::take(&mut self.classes),
             shaper,
             isp_drops: self.isp_drops,
+            apps: std::mem::take(&mut self.apps),
+            samples: std::mem::take(&mut self.samples),
         }
     }
 
@@ -333,13 +391,23 @@ impl Simulation {
                 }
                 f.wake = None;
                 if f.idle {
-                    let Model::Web { mean_bytes, .. } = f.spec.model else {
-                        return;
-                    };
-                    let size = f.rng.exp(mean_bytes as f64).max(MSS as f64) as u64;
-                    f.remaining = Some(size);
-                    f.cc.reset();
-                    f.conn += 1;
+                    match f.spec.model {
+                        Model::Web { mean_bytes, .. } => {
+                            let size = f.rng.exp(mean_bytes as f64).max(MSS as f64) as u64;
+                            f.remaining = Some(size);
+                            f.cc.reset();
+                            f.conn += 1;
+                        }
+                        Model::Video {
+                            chunks: Some((bytes, every)),
+                            ..
+                        } => {
+                            // Same connection, same window: the next chunk.
+                            f.remaining = Some(bytes);
+                            f.next_chunk = now + every;
+                        }
+                        _ => return,
+                    }
                     f.idle = false;
                 }
                 self.send(i);
@@ -376,6 +444,10 @@ impl Simulation {
                 self.flows[i].active = false;
                 self.flows[i].wake = None;
             }
+            Event::Sample(period) => {
+                self.sample();
+                self.push(now + period, Event::Sample(period));
+            }
         }
     }
 
@@ -399,7 +471,15 @@ impl Simulation {
             self.wake_at(i, now + period);
             return;
         }
-        let paced = matches!(self.flows[i].spec.model, Model::Quic { .. });
+        let paced = matches!(
+            self.flows[i].spec.model,
+            Model::Quic { .. } | Model::Video { .. }
+        );
+        // A streaming video never sends faster than it needs.
+        let cap = match self.flows[i].spec.model {
+            Model::Video { rate, chunks: None } => Some(rate),
+            _ => None,
+        };
         loop {
             let f = &mut self.flows[i];
             if !f.cc.can_send() || f.remaining == Some(0) {
@@ -417,7 +497,9 @@ impl Simulation {
             f.remaining = f.remaining.map(|r| r.saturating_sub(len as u64));
             f.cc.inflight += 1;
             if paced {
-                f.next_pace = f.next_pace.max(now) + f.cc.pacing_gap(len);
+                let gap = f.cc.pacing_gap(len);
+                let gap = cap.map_or(gap, |rate| gap.max(serialise(len, rate)));
+                f.next_pace = f.next_pace.max(now) + gap;
             }
             self.emit(i, len);
         }
@@ -431,9 +513,18 @@ impl Simulation {
             if !f.idle {
                 f.idle = true;
                 f.r.transfers += 1;
-                if let Model::Web { mean_think, .. } = f.spec.model {
-                    let think = f.rng.exp(mean_think as f64) as Nanos;
-                    self.wake_at(i, now + think.max(1));
+                match f.spec.model {
+                    Model::Web { mean_think, .. } => {
+                        let think = f.rng.exp(mean_think as f64) as Nanos;
+                        self.wake_at(i, now + think.max(1));
+                    }
+                    Model::Video {
+                        chunks: Some(_), ..
+                    } => {
+                        let at = f.next_chunk.max(now + 1);
+                        self.wake_at(i, at);
+                    }
+                    _ => {}
                 }
             }
             return;
@@ -447,6 +538,7 @@ impl Simulation {
         f.r.sent_packets += 1;
         let packet = SimPacket {
             flow: i,
+            tag: f.app as Tag,
             len,
             sent_at: now,
             shaper_at: 0,
@@ -541,6 +633,7 @@ impl Simulation {
             None => add(self.classes.entry(name.to_owned()).or_default(), bin, len),
         }
         let f = &mut self.flows[p.flow];
+        self.app_sent[f.app] += len;
         add(&mut f.r.bins, bin, len);
         f.r.delivered_packets += 1;
         f.r.delivered_bytes += len;
@@ -558,6 +651,29 @@ impl Simulation {
             };
             self.push(at, ev);
         }
+    }
+
+    /// Record a [`Sample`]: what the service's stats tick would read.
+    fn sample(&mut self) {
+        self.sched.pressure(&mut self.pressure);
+        let mut apps = vec![AppSample::default(); self.apps.len()];
+        for (a, s) in apps.iter_mut().enumerate() {
+            s.sent_bytes = self.app_sent[a] - self.last_sent[a];
+            self.last_sent[a] = self.app_sent[a];
+        }
+        for &(tag, p) in &self.pressure {
+            let a = tag as usize;
+            let Some(s) = apps.get_mut(a) else {
+                continue;
+            };
+            s.queued_bytes = p.queued_bytes;
+            s.acted = p.acted.saturating_sub(self.last_acted[a]);
+            self.last_acted[a] = p.acted;
+        }
+        self.samples.push(Sample {
+            at: self.now(),
+            apps,
+        });
     }
 
     /// Tell senders about packets dropped since the last call. The signal

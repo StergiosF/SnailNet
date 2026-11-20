@@ -15,7 +15,12 @@
 //! ```
 //!
 //! Shaping below the line rate keeps the ISP's bloated buffer empty; the
-//! scheduler's CoDel queues take its place. Everything runs on a
+//! scheduler's CoDel queues take its place.
+//!
+//! Flows belong to apps ([`FlowSpec::app`]); [`Simulation::sample_every`]
+//! reads the scheduler's per-app pressure the way the service's stats tick
+//! does, and [`WaitWatch`] turns those samples into "this app is waiting"
+//! (the one-tap fix's signal). Everything runs on a
 //! [`snailnet_core::clock::SimClock`], so runs are exact and repeatable.
 //!
 //! Not modelled: the upload direction (TCP ACKs, which the express lane
@@ -26,10 +31,12 @@ mod report;
 mod rng;
 mod sim;
 mod traffic;
+mod waiting;
 
-pub use report::{FlowReport, Report, percentile};
+pub use report::{AppSample, FlowReport, Report, Sample, percentile};
 pub use sim::{SimConfig, Simulation, shaped_config};
 pub use traffic::{FlowSpec, MSS, Model};
+pub use waiting::{RULE, TICK_MS, WaitRule, WaitWatch};
 
 pub use snailnet_core::clock::{NANOS_PER_MILLI, NANOS_PER_SEC, Nanos};
 pub use snailnet_core::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};

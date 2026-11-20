@@ -27,6 +27,9 @@
 //!   share: a class more than one burst in debt queues normally.
 //! - **Live changes** (§9.6): [`Scheduler::reconfigure`] swaps shares, rates
 //!   and rules without dropping a packet.
+//! - **Pressure per app**: each flow sub-queue remembers its first packet's
+//!   [`Tag`] and counts what CoDel did to it, so [`Scheduler::pressure`] can
+//!   say which app is queued and being slowed down, even inside one class.
 
 mod codel;
 mod config;
@@ -47,10 +50,22 @@ use crate::clock::{NANOS_PER_MILLI, NANOS_PER_SEC, Nanos};
 use codel::Verdicts;
 use fq::FlowQueues;
 
+/// Who a packet belongs to: an opaque id from the classifier (the service
+/// packs the app and site into it). The scheduler only groups by it, in
+/// [`Scheduler::pressure`].
+pub type Tag = u32;
+/// No owner known.
+pub const NO_TAG: Tag = Tag::MAX;
+
 /// Anything the scheduler can queue.
 pub trait Packet {
     /// On-wire size in bytes.
     fn wire_len(&self) -> usize;
+    /// The owner's tag. A flow sub-queue takes the tag of the packet that
+    /// starts it.
+    fn tag(&self) -> Tag {
+        NO_TAG
+    }
     /// Set ECN Congestion Experienced if the packet is ECN-capable and return
     /// true; return false if it isn't, and CoDel will drop it instead.
     fn mark_ce(&mut self) -> bool {
@@ -100,6 +115,27 @@ pub struct ClassStats {
     pub express_packets: u64,
     /// Bytes waiting in this class's queues (express lane not included).
     pub queued_bytes: u64,
+}
+
+/// How hard one tag's flows are pushing against their share
+/// ([`Scheduler::pressure`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Pressure {
+    /// Bytes of its flows waiting in class queues now.
+    pub queued_bytes: u64,
+    /// Packets of its flows CoDel dropped or ECN-marked, plus hard queue
+    /// limit drops, since the scheduler started. Cumulative: callers take
+    /// differences between samples. It only goes backwards in a corner case
+    /// (more than `RETIRED_SLOTS` tags lose counts to recycled flow queues
+    /// in one class), so take differences with `saturating_sub`.
+    pub acted: u64,
+}
+
+impl Pressure {
+    fn add(&mut self, other: Pressure) {
+        self.queued_bytes += other.queued_bytes;
+        self.acted += other.acted;
+    }
 }
 
 #[derive(Debug)]
@@ -308,6 +344,25 @@ impl<P: Packet> Scheduler<P> {
 
     pub fn is_empty(&self) -> bool {
         self.backlog_bytes == 0 && self.express.is_empty()
+    }
+
+    /// Pressure per tag, over every class: `out` is cleared, then gets one
+    /// entry per tag with queued bytes or CoDel actions, sorted by tag. Walks
+    /// every flow sub-queue, so call it at the stats rate, not per packet.
+    /// Doesn't allocate once `out` has room for the tags seen.
+    pub fn pressure(&self, out: &mut Vec<(Tag, Pressure)>) {
+        out.clear();
+        for c in &self.classes {
+            c.fq.pressure(out);
+        }
+        out.sort_unstable_by_key(|&(tag, _)| tag);
+        out.dedup_by(|later, kept| {
+            let same = later.0 == kept.0;
+            if same {
+                kept.1.add(later.1);
+            }
+            same
+        });
     }
 
     /// Queue a packet that arrived at `now`. Never fails: if the class is
@@ -525,6 +580,15 @@ impl<P: Packet> Scheduler<P> {
     #[cfg(test)]
     fn check_invariants(&self, max_packet: i64) {
         let mut backlog = 0;
+        let mut pressure = Vec::new();
+        self.pressure(&mut pressure);
+        let by_tag: u64 = pressure.iter().map(|(_, p)| p.queued_bytes).sum();
+        let queued: u64 = self.classes.iter().map(|c| c.stats.queued_bytes).sum();
+        assert_eq!(by_tag, queued, "queued bytes per tag don't add up");
+        assert!(
+            pressure.windows(2).all(|w| w[0].0 < w[1].0),
+            "tags not sorted and unique"
+        );
         for c in &self.classes {
             c.fq.check_invariants();
             assert_eq!(c.stats.queued_bytes, c.fq.bytes(), "{}", c.name);

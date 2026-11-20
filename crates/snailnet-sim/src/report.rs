@@ -41,6 +41,27 @@ impl FlowReport {
     }
 }
 
+/// One app in one [`Sample`]: what the service's stats tick would see.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AppSample {
+    /// Bytes delivered to the app since the previous sample.
+    pub sent_bytes: u64,
+    /// Bytes of its flows waiting in the scheduler now.
+    pub queued_bytes: u64,
+    /// Packets of its flows the scheduler dropped or ECN-marked since the
+    /// previous sample (CoDel and the queue limit).
+    pub acted: u64,
+}
+
+/// The scheduler's per-app pressure, sampled at the stats rate
+/// ([`crate::Simulation::sample_every`]).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Sample {
+    pub at: Nanos,
+    /// Indexed like [`Report::apps`].
+    pub apps: Vec<AppSample>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Report {
     /// Width of the throughput bins.
@@ -54,6 +75,11 @@ pub struct Report {
     pub shaper: Vec<(String, ClassStats)>,
     /// Packets the ISP buffer dropped.
     pub isp_drops: u64,
+    /// App names, in the order their first flow was added; an app's index
+    /// is its scheduler tag.
+    pub apps: Vec<String>,
+    /// Per-app pressure samples, if sampling was on.
+    pub samples: Vec<Sample>,
 }
 
 impl Report {
@@ -97,6 +123,14 @@ impl Report {
             .map(|k| self.class_bytes(k, from, to))
             .sum();
         bytes as f64 * 1e9 / (to - from) as f64
+    }
+
+    /// Index of app `name` in [`Self::apps`] and each [`Sample`].
+    pub fn app(&self, name: &str) -> usize {
+        self.apps
+            .iter()
+            .position(|a| a == name)
+            .unwrap_or_else(|| panic!("no app named {name:?}"))
     }
 
     pub fn total_lost(&self) -> u64 {
