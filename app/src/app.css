@@ -335,8 +335,9 @@ select {
   }
 }
 
-/* An on/off switch: a native checkbox with role="switch". */
-.switch {
+/* An on/off switch: a native checkbox with role="switch". Scoped to the
+   input: the mode switch's own root is also called .switch. */
+input.switch {
   appearance: none;
   position: relative;
   flex: none;
@@ -347,7 +348,7 @@ select {
   background: var(--surface-3);
   transition: background-color 160ms linear;
 }
-.switch::after {
+input.switch::after {
   content: "";
   position: absolute;
   top: 4px;
@@ -360,25 +361,25 @@ select {
     transform 160ms var(--ease-out),
     background-color 160ms linear;
 }
-.switch:checked {
+input.switch:checked {
   background: var(--shell);
 }
-.switch:checked::after {
+input.switch:checked::after {
   transform: translateX(20px);
   background: var(--on-shell);
 }
-.switch:disabled {
+input.switch:disabled {
   opacity: 0.5;
 }
 @media (forced-colors: active) {
-  .switch {
+  input.switch {
     border: 1px solid ButtonText;
   }
-  .switch::after {
+  input.switch::after {
     forced-color-adjust: none;
     background: ButtonText;
   }
-  .switch:checked::after {
+  input.switch:checked::after {
     background: Highlight;
   }
 }
