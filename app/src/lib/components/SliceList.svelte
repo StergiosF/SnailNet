@@ -1,10 +1,11 @@
 <script lang="ts">
-  // The slices (PLAN.md §14.2): the active profile's rules in order, then
-  // Everything else with its apps, then "Add a slice". Rules that take only
-  // what's free and are quiet right now fold into one row that opens (the
-  // modes have many: every launcher and updater). While the service is
-  // still answering, three quiet placeholder rows. (No column headings:
-  // the page's sentence says what a percentage means.)
+  // The shares (PLAN.md §14.2, DESIGN.md Split): one flat panel, hairlines
+  // between rows. The active mode's rules with a share, in order; then the
+  // rules that only use spare speed, folded under one row that says how
+  // many (Quiet downloads, every launcher and updater); Everything else
+  // with its apps; and "Add an app or website" as a plain row at the foot.
+  // While the service is still answering, three quiet placeholder rows.
+  // (No column headings: the page's sentence says what a percentage means.)
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
   import { ui } from "../ui.svelte";
@@ -14,13 +15,15 @@
 
   let { ledger, loading, canEdit }: { ledger: Ledger | null; loading: boolean; canEdit: boolean } = $props();
 
+  /** A rule that only uses spare speed (share 0), and is on. */
+  const spare = (s: Slice) => s.rule >= 0 && s.enabled && s.share === null;
   const other = $derived(ledger?.slices.at(-1) ?? null);
-  /** Quiet "only when free" rules (unless one's settings are open). */
-  const folded = (s: Slice) =>
-    s.rule >= 0 && s.enabled && s.share === null && !s.active && ui.open !== s.key;
-  const shown = $derived(ledger?.slices.filter((s) => !folded(s)) ?? []);
-  const rest = $derived(ledger?.slices.filter(folded) ?? []);
-  let unfold = $state(false);
+  const rules = $derived(ledger?.slices.filter((s) => s.rule >= 0 && !spare(s)) ?? []);
+  const spares = $derived(ledger?.slices.filter(spare) ?? []);
+  // Folded until asked, unless one of them is moving now or has its
+  // settings open: then it shows, so the page never hides what's busy.
+  let unfoldAsked = $state<boolean | null>(null);
+  const unfold = $derived(unfoldAsked ?? spares.some((s) => s.active || ui.open === s.key));
   const empty = $derived(
     ledger !== null && ledger.slices.length === 1 && (other?.members.length ?? 0) === 0 && ledger.total < 50_000,
   );
@@ -28,7 +31,7 @@
 
 <section class="list" aria-label={t("split.label")} aria-busy={ui.saving}>
   {#if loading || !ledger}
-    <ul aria-hidden="true">
+    <ul class="card rows" aria-hidden="true">
       {#each [0.36, 0.28, 0.44] as w, i (i)}
         <li class="skeleton"><span class="ic"></span><span class="bar" style:width="{w * 100}%"></span></li>
       {/each}
@@ -36,42 +39,43 @@
   {:else}
     {#if empty}
       <div class="empty">
-        <Snail size={40} />
+        <Snail size={40} light />
         <p><strong>{t("list.empty.title")}</strong>{t("list.empty.body")}</p>
       </div>
     {/if}
     <ul class="card rows">
-      {#each shown.slice(0, -1) as s (s.key)}
+      {#each rules as s (s.key)}
         <SliceRow slice={s} {canEdit} />
       {/each}
-      {#if rest.length > 0}
+      {#if other}
+        <SliceRow slice={other} {canEdit} />
+      {/if}
+      {#if spares.length > 0}
         <li class="fold">
-          <button type="button" aria-expanded={unfold} onclick={() => (unfold = !unfold)}>
-            <span class="stack" aria-hidden="true">
-              {#each rest.slice(0, 3) as s (s.key)}<span class="dot"></span>{/each}
-            </span>
+          <button type="button" aria-expanded={unfold} onclick={() => (unfoldAsked = !unfold)}>
+            <span class="chev" class:open={unfold} aria-hidden="true"><Glyph name="chevron" size={16} /></span>
             <span class="words">
-              <b>{t(rest.length === 1 ? "fold.title.one" : "fold.title", { count: rest.length })}</b>
-              <small>{rest.map((s) => s.name).slice(0, 4).join(", ")}{rest.length > 4 ? "…" : ""}</small>
+              <b>{t(spares.length === 1 ? "fold.title.one" : "fold.title", { count: spares.length })}</b>
+              {#if !unfold}
+                <small>{spares.map((s) => s.name).slice(0, 4).join(", ")}{spares.length > 4 ? "…" : ""}</small>
+              {/if}
             </span>
-            <span class="chev" class:open={unfold} aria-hidden="true"><Glyph name="down" size={18} /></span>
           </button>
         </li>
         {#if unfold}
-          {#each rest as s (s.key)}
+          {#each spares as s (s.key)}
             <SliceRow slice={s} {canEdit} />
           {/each}
         {/if}
       {/if}
-      {#each shown.slice(-1) as s (s.key)}
-        <SliceRow slice={s} {canEdit} />
-      {/each}
+      {#if canEdit}
+        <li class="addrow">
+          <button type="button" class="add" onclick={() => (ui.adding = true)}>
+            <span class="plus" aria-hidden="true"><Glyph name="plus" size={18} /></span>{t("list.add.long")}
+          </button>
+        </li>
+      {/if}
     </ul>
-    {#if canEdit}
-      <button type="button" class="add" onclick={() => (ui.adding = true)}>
-        <span class="plus" aria-hidden="true"><Glyph name="plus" size={18} /></span>{t("list.add.long")}
-      </button>
-    {/if}
   {/if}
   {#if ui.error}
     <p class="error" role="alert">{ui.error}</p>
@@ -80,91 +84,93 @@
 
 <style>
   .list {
-    margin-top: 24px;
+    margin-top: 22px;
     padding-bottom: 8px;
   }
-  /* The shares in one card, a hairline between rows. */
   ul {
     display: flex;
     flex-direction: column;
     margin: 0;
-    padding: 0;
+    padding: 6px;
     list-style: none;
   }
-  .rows {
-    overflow: hidden;
+  /* Hairlines between rows, inset past the icon; gone around a hovered row. */
+  .rows > :global(li) {
+    position: relative;
   }
-  .rows > :global(li + li) {
-    border-top: 1px solid rgb(0 0 0 / 0.2);
+  .rows > :global(li + li)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 60px;
+    right: 12px;
+    height: 1px;
+    background: var(--stroke-card);
+  }
+  .rows > :global(li.fold)::before,
+  .rows > :global(li.addrow)::before {
+    left: 12px;
   }
   .fold button {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
     width: 100%;
-    min-height: 64px;
-    padding: 12px 16px;
+    min-height: 48px;
+    padding: 6px 14px;
     border: 0;
+    border-radius: 12px;
     background: transparent;
+    color: var(--text-secondary);
     text-align: left;
-    transition: background-color 120ms linear;
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
   }
   .fold button:hover {
-    background: var(--hover-soft);
+    color: var(--text-primary);
   }
-  .stack {
-    display: grid;
-    place-items: center;
-    grid-template-columns: repeat(3, 6px);
-    gap: 4px;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-control);
-    background: rgb(0 0 0 / 0.16);
-  }
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-tertiary);
+  .fold button:focus-visible,
+  .add:focus-visible {
+    outline-offset: -2px;
   }
   .words {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
     flex: 1;
-    gap: 2px;
     min-width: 0;
   }
   .words b {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 650;
   }
   .words small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13.5px;
-    color: var(--text-secondary);
+    font-size: 13px;
+    color: var(--text-tertiary);
   }
   .chev {
     display: flex;
-    color: var(--text-tertiary);
-    transition: transform 200ms var(--ease-out);
+    transition: transform 240ms var(--ease-out);
   }
   .chev.open {
-    transform: rotate(180deg);
+    transform: rotate(90deg);
   }
   .skeleton {
     display: flex;
     align-items: center;
     gap: 14px;
-    height: 68px;
-    padding: 0 16px;
+    height: 62px;
+    padding: 0 14px;
   }
   .skeleton .ic {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-control);
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
     background: var(--skeleton);
   }
   .skeleton .bar {
@@ -177,16 +183,14 @@
     align-items: center;
     gap: 14px;
     width: 100%;
-    height: 60px;
-    margin-top: 10px;
-    padding: 0 16px;
+    min-height: 52px;
+    padding: 8px 14px;
     border: 0;
-    border-radius: var(--radius-card);
+    border-radius: 12px;
     background: transparent;
     color: var(--text-secondary);
-    font-weight: 600;
+    font-weight: 700;
     text-align: left;
-    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.07);
     transition:
       background-color 120ms linear,
       color 120ms linear;
@@ -197,16 +201,11 @@
   }
   .plus {
     display: grid;
+    flex: none;
     place-items: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-control);
-    background: rgb(0 0 0 / 0.16);
-    color: var(--text-secondary);
-  }
-  .add:hover .plus {
-    background: var(--accent);
-    color: var(--on-accent);
+    width: 32px;
+    height: 32px;
+    color: var(--shell-bright);
   }
   .empty {
     display: flex;
@@ -227,8 +226,8 @@
     margin: 12px 12px 0;
   }
   @media (forced-colors: active) {
-    .add {
-      border: 1.5px solid ButtonText;
+    .rows > :global(li + li)::before {
+      background: CanvasText;
     }
   }
 </style>

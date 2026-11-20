@@ -46,23 +46,25 @@
 </div>
 
 <style>
+  /* A row of Settings' About group: the same shape as its neighbours
+     (SettingsPage .item, .ic). */
   .item {
     display: flex;
     align-items: center;
-    gap: 14px;
-    min-height: 68px;
-    padding: 14px 18px 14px 16px;
-    border-top: 1px solid rgb(0 0 0 / 0.18);
+    gap: 18px;
+    min-height: 64px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--stroke-card);
   }
   .ic {
-    display: grid;
+    display: flex;
     flex: none;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-control);
-    background: rgb(0 0 0 / 0.16);
+    width: 20px;
     color: var(--text-tertiary);
+    transition: color 120ms linear;
+  }
+  .item:hover .ic {
+    color: var(--text-secondary);
   }
   .words {
     display: flex;

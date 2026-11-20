@@ -1,10 +1,11 @@
 <script lang="ts">
-  // The Split page (DESIGN.md, Split): one question, "who gets what".
-  // Read top to bottom: the mode's split and its own buttons, one sentence
-  // on what a slice is, the drag bar (the one picture of the split, live
-  // use along its foot), then the slices with − % + and their settings
-  // folded until opened. A mode with no slices gets an empty state that
-  // says what a slice is and offers one to the apps using the line now.
+  // The Split page (DESIGN.md, Split): one question, "who gets what", in
+  // one column capped at 860 px so names stay near their − % +. Top to
+  // bottom: the mode's split and its own buttons, one sentence on what a
+  // share is, the drag bar (the one picture of the split, live use along
+  // its foot), then the shares in one panel. Only a mode with no rules at
+  // all gets the empty state; one whose rules only use spare speed (Quiet
+  // downloads) shows its bar and those apps, since it isn't empty.
   //
   // "Make a copy" starts a mode of your own (§11.2); one of your own has
   // Rename and Delete instead of Reset, since there's no starting split to
@@ -19,6 +20,7 @@
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
   import AppIcon from "./AppIcon.svelte";
+  import Snail from "./Snail.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Glyph from "./Glyph.svelte";
   import NameDialog from "./NameDialog.svelte";
@@ -35,9 +37,9 @@
   let deleting = $state(false);
   let busy = $state(false);
 
-  /** Slices with a share of their own (in the draft, if editing). */
-  const sliced = $derived(ui.rules.filter((r) => r.enabled && r.share > 0).length);
-  const empty = $derived(ledger !== null && !loading && sliced === 0);
+  /** No rules at all (in the draft, if editing). Spare-only rules (share 0)
+   *  count: Quiet downloads is a real split, not an empty one. */
+  const empty = $derived(ledger !== null && !loading && ui.rules.length === 0);
   /** Who could have a slice: the apps in Everything else now, busiest first. */
   const offers = $derived(
     (ledger?.slices.at(-1)?.members ?? []).filter((m) => !m.fixed && m.bps >= 50_000).slice(0, 3),
@@ -66,6 +68,7 @@
   }
 </script>
 
+<div class="split">
 <div class="head">
   <h1>{mode ? t("split.title", { mode }) : t("nav.split")}</h1>
   <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => ui.guard(() => void copyMode())}>
@@ -95,39 +98,41 @@
   oncancel={() => (deleting = false)}
 />
 
+<p class="intro">{t("split.intro")}</p>
 {#if empty}
   <section class="card empty" aria-labelledby="empty-h">
-    <span class="em-ic" aria-hidden="true"><Glyph name="split" size={22} /></span>
+    <span class="em-ic" aria-hidden="true"><Snail size={48} light /></span>
     <div class="words">
       <h2 id="empty-h">{t("split.empty.title")}</h2>
       <p>{t("split.empty.body")}</p>
       {#if canEdit}
         <div class="pick">
           {#each offers as m (m.key)}
-            <button type="button" class="btn" onclick={() => give(m.target)}>
+            <button type="button" class="btn give" onclick={() => give(m.target)}>
               <AppIcon target={m.target} name={m.name} size={18} />{t("split.empty.give", { name: m.name })}
             </button>
           {/each}
-          <button type="button" class="btn btn-quiet" onclick={() => (ui.adding = true)}>
+          <button type="button" class="btn give" onclick={() => (ui.adding = true)}>
             <Glyph name="plus" size={16} />{t("split.empty.other")}
           </button>
         </div>
       {/if}
     </div>
   </section>
-  {#if ui.rules.length > 0}
-    <SliceList {ledger} {loading} {canEdit} />
-  {/if}
 {:else}
-  <p class="intro">{t("split.intro")}</p>
   {#if ledger && !loading}
     <SplitBar {ledger} {canEdit} />
   {/if}
   <SliceList {ledger} {loading} {canEdit} />
 {/if}
+</div>
 <SaveBar />
 
 <style>
+  .split {
+    max-width: 860px;
+    padding-top: 10px;
+  }
   .head {
     display: flex;
     flex-wrap: wrap;
@@ -146,8 +151,8 @@
     gap: 8px;
   }
   .intro {
-    max-width: 62ch;
-    margin: 6px 0 0;
+    max-width: 60ch;
+    margin: 6px 0 22px;
     font-size: 15px;
     line-height: 1.5;
     color: var(--text-secondary);
@@ -155,27 +160,20 @@
   .empty {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
-    margin-top: 24px;
-    padding: 22px 24px 24px;
+    gap: 20px;
+    padding: 28px 30px 30px;
     animation: rise-in 480ms var(--ease-out) backwards;
   }
   .em-ic {
-    display: grid;
+    display: flex;
     flex: none;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: var(--shell-soft);
-    color: var(--shell-bright);
   }
   .words {
     min-width: 0;
   }
   .empty h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     line-height: 24px;
     font-weight: 800;
     letter-spacing: -0.01em;
@@ -191,5 +189,12 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 18px;
+  }
+  .give {
+    padding: 0 12px 0 6px;
+    font-weight: 650;
+  }
+  .give :global(.glyph) {
+    margin-left: 4px;
   }
 </style>

@@ -78,10 +78,10 @@ const APPS: Record<string, Icon> = {
 
 /** The tile a logo sits on (--surface-2) and the cream it falls back to
  *  (--text-primary). */
-const TILE = "#1b443c";
-const CREAM = "#f3eee2";
-/** The Garden's darkest green, for marks on light brand tiles. */
-const DARK = "#0a211d";
+const TILE = "#202826";
+const CREAM = "#eceae2";
+/** The darkest ground, for marks on light brand tiles. */
+const DARK = "#121716";
 
 function luminance(hex: string): number {
   const n = parseInt(hex.replace("#", ""), 16);

@@ -1,14 +1,14 @@
 <script lang="ts">
-  // One share of the line (PLAN.md §14.2): icon, name, what it moves now
-  // in a few words, and − % + to change its share in 5% steps (no bar of
-  // its own: the drag bar above is the one picture of the split), with
-  // what it was before while the change isn't saved (draft.ts). The row's
-  // priority tints it: High a breath of the shell's green, Low a shade
-  // darker. A rule's row opens a short panel in place, one control per
-  // line (priority, only spare speed, a speed limit, remove); what each
-  // does is its tooltip and description, not a paragraph on screen.
-  // Everything else opens to its apps; click one to give it a share of
-  // its own. Every edit goes into the page's draft.
+  // One share of your internet (PLAN.md §14.2, DESIGN.md Split): icon,
+  // name with its ink dot (the colour of its segment in the drag bar),
+  // what it moves now in a few words, and − % + in 5% steps (no bar of its
+  // own: the drag bar is the one picture of the split), with what it was
+  // while the change isn't saved (draft.ts). Priority is said in words at
+  // the start of the status ("High priority ·"), never a tint or a chip.
+  // Opened, the options sit flat inside the row, one per line with its
+  // explanation under its name (priority, only spare speed, a speed
+  // limit), and Remove last. Everything else opens to its apps; one click
+  // gives one a share of its own. Every edit goes into the page's draft.
   import { mbps } from "../format";
   import { t } from "../i18n";
   import { wasShare } from "../draft";
@@ -54,6 +54,10 @@
     const bp = wasShare(d, slice.rule);
     return bp === null ? null : Math.round(bp / 100);
   });
+
+  const inkOf = (s: Slice) =>
+    s.rule < 0 || s.share === null ? "var(--stone-1)" : `var(--ink-${Math.max(0, s.ink)})`;
+  const opens = $derived((rule !== null || (isOther && slice.members.length > 0)) && canEdit);
 
   const words = $derived(
     slice.status.kind === "quiet" || slice.status.kind === "off" || slice.bps < 50_000
@@ -103,12 +107,11 @@
   class:open
   class:hot={ui.hot.includes(slice.key)}
   class:off={!slice.enabled}
-  class:prio-high={prio === "high"}
-  class:prio-low={prio === "low"}
+  style:--ink={inkOf(slice)}
   use:flash={`${pct}|${rule?.priority}|${slice.enabled}|${JSON.stringify(rule?.ceiling ?? null)}`}
 >
   <div class="row">
-    {#if (rule || (isOther && slice.members.length > 0)) && canEdit}
+    {#if opens}
       <button
         type="button"
         class="main"
@@ -117,10 +120,10 @@
         aria-label={t("row.edit", { name: slice.name, status: words })}
         onclick={() => ui.toggle(slice.key)}
       >
-        {@render who(true)}
+        {@render who()}
       </button>
     {:else}
-      <div class="main">{@render who(false)}</div>
+      <div class="main">{@render who()}</div>
     {/if}
 
     <div class="pct">
@@ -130,7 +133,7 @@
         </button>
       {:else if slice.share === null && rule}
         <span class="spare">{t("row.free")}</span>
-      {:else}
+      {:else if rule}
         <Stepper
           name={slice.name}
           {pct}
@@ -139,12 +142,23 @@
           {canMore}
           onstep={(dir) => ui.edit(stepShare(rules, slice.rule, dir))}
         />
+      {:else if pct !== null}
+        <span class="spare other num">{pct}%</span>
       {/if}
     </div>
+    {#if opens}
+      <!-- The same toggle as the row's name, for the pointer at the row's
+           end; the name's button is the one for the keyboard. -->
+      <button type="button" class="chev" class:open tabindex="-1" aria-hidden="true" onclick={() => ui.toggle(slice.key)}
+        ><Glyph name="chevron" size={18} /></button
+      >
+    {:else}
+      <span class="chev-gap" aria-hidden="true"></span>
+    {/if}
   </div>
 
   {#if open && isOther}
-    <div class="ed" id="{uid}-ed">
+    <div class="ed members-ed" id="{uid}-ed">
       <p class="cap">{t("row.members")}</p>
       <div class="members">
         {#each members as m (m.key)}
@@ -173,9 +187,9 @@
 
   {#if open && rule}
     <div class="ed" id="{uid}-ed">
-      <div class="panel">
+      <div class="opts">
         <div class="opt">
-          <span class="k" title={t("edit.priority.hint")}><Glyph name="boost" size={18} />{t("edit.priority")}</span>
+          <span class="k"><b>{t("edit.priority")}</b><small>{t("edit.priority.hint")}</small></span>
           <Segmented
             name="{uid}-prio"
             label={t("edit.priority")}
@@ -185,9 +199,8 @@
             onchange={(p) => ui.edit(setPriority(rules, slice.rule, p))}
           />
         </div>
-        <label class="opt" title={t("edit.free.hint")}>
-          <span class="k"><Glyph name="free" size={18} />{t("edit.free")}</span>
-          <span class="visually-hidden" id="{uid}-free">{t("edit.free.hint")}</span>
+        <label class="opt">
+          <span class="k"><b>{t("edit.free")}</b><small id="{uid}-free">{t("edit.free.hint")}</small></span>
           <input
             type="checkbox"
             role="switch"
@@ -199,7 +212,7 @@
           />
         </label>
         <div class="opt">
-          <span class="k" title={t("edit.limit.hint")}><Glyph name="gauge" size={18} />{t("edit.limit")}</span>
+          <span class="k"><b>{t("edit.limit")}</b><small>{t("edit.limit.hint")}</small></span>
           {#if showLimits}
             <div class="limits">
               {#each ["down", "up"] as const as dir (dir)}
@@ -242,13 +255,11 @@
           {/if}
         </div>
       </div>
-      <div class="foot">
-        {#if slice.target?.kind === "site"}
-          <p class="note">{t("edit.site")}</p>
-        {/if}
+      <div class="opt foot">
+        <p class="note">{slice.target?.kind === "site" ? t("edit.site") : t("edit.remove.hint")}</p>
         <button
           type="button"
-          class="btn btn-danger"
+          class="btn btn-quiet remove"
           title={t("edit.remove.hint")}
           onclick={() => {
             ui.edit(removeRule(rules, slice.rule));
@@ -260,68 +271,74 @@
   {/if}
 </li>
 
-{#snippet who(opens: boolean)}
-  <AppIcon target={slice.target} name={slice.name} size={24} boxed />
+{#snippet who()}
+  <AppIcon target={slice.target} name={slice.name} size={22} boxed />
   <span class="text">
     <span class="line1">
       <b>{slice.name}</b>
-      {#if prio === "high"}
-        <span class="chip high"><Glyph name="boost" size={13} />{t("priority.high.chip")}</span>
-      {:else if prio === "low"}
-        <span class="chip low">{t("priority.low.chip")}</span>
-      {/if}
+      {#if slice.enabled && slice.rule >= 0}<span class="dotk" aria-hidden="true"></span>{/if}
     </span>
-    <span class="st">{words}</span>
+    <span class="st"
+      >{#if prio === "high"}<span class="pr">{t("priority.high.chip")}</span>
+      {:else if prio === "low"}<span class="pr low">{t("priority.low.chip")}</span>
+      {/if}{isOther && !open ? t("split.other.hint") : words}</span
+    >
   </span>
-  {#if opens}
-    <span class="chev" class:open aria-hidden="true"><Glyph name="down" size={18} /></span>
-  {/if}
 {/snippet}
 
 <style>
-  /* Rows sit flat inside the list's card; hover lifts one step. */
+  /* Rows sit flat inside the list's panel; hover lifts one step. */
   .slice {
     list-style: none;
+    border-radius: 12px;
     transition: background-color 120ms linear;
   }
   .slice:hover {
     background-color: var(--hover-soft);
   }
-  .slice.open {
-    background-color: rgb(0 0 0 / 0.1);
-  }
   /* The bar above points at this row (a hovered segment, a held handle). */
   .slice.hot {
     background-color: var(--hover-strong);
   }
-  /* Priority, felt before it's read: High a breath of the shell's green
-     from the left, Low a shade darker. */
-  .slice.prio-high {
-    background-image: linear-gradient(90deg, rgb(47 168 142 / 0.16), rgb(47 168 142 / 0.04) 45%, transparent 80%);
-  }
-  .slice.prio-low {
-    background-image: linear-gradient(90deg, rgb(0 0 0 / 0.2), transparent 70%);
-  }
-  .prio-low b {
-    color: var(--text-secondary);
-  }
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto 32px;
     align-items: center;
-    gap: 16px;
-    padding: 0 16px 0 0;
+    gap: 12px;
+    padding: 0 8px 0 0;
   }
   .main {
     display: flex;
     align-items: center;
     gap: 14px;
     min-width: 0;
-    min-height: 68px;
-    padding: 12px 0 12px 16px;
+    min-height: 62px;
+    padding: 8px 0 8px 14px;
     border: 0;
+    border-radius: 12px;
     background: transparent;
     text-align: left;
+  }
+  .dotk {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    background: var(--ink);
+  }
+  .pr {
+    color: var(--shell-bright);
+    font-weight: 700;
+  }
+  .pr.low {
+    color: var(--text-tertiary);
+  }
+  /* The separator before the status words (Svelte trims a literal one). */
+  .pr::after {
+    content: " · ";
+    color: var(--text-secondary);
+    font-weight: 400;
+    white-space: pre;
   }
   button.main:focus-visible {
     outline-offset: -2px;
@@ -339,11 +356,11 @@
     gap: 8px;
     min-width: 0;
   }
-  b {
+  .line1 b {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
   }
   .st {
@@ -353,40 +370,31 @@
     color: var(--text-secondary);
     font-size: 13.5px;
   }
-  .chip {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 3px;
-    height: 20px;
-    padding: 0 7px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 700;
-  }
-  .chip.high {
-    padding-left: 4px;
-    background: var(--shell-soft);
-    color: var(--shell-bright);
-  }
-  .chip.low {
-    background: rgb(0 0 0 / 0.2);
-    color: var(--text-secondary);
-  }
   .chev {
-    display: flex;
-    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
     color: var(--text-tertiary);
-    transition:
-      transform 200ms var(--ease-out),
-      color 120ms linear;
+    transition: color 120ms linear, background-color 120ms linear;
+  }
+  .chev :global(.glyph) {
+    transition: transform 240ms var(--ease-out);
+  }
+  .chev:hover {
+    background: var(--surface-3);
+    color: var(--text-primary);
   }
   .slice:hover .chev,
   .chev.open {
     color: var(--text-primary);
   }
-  .chev.open {
-    transform: rotate(180deg);
+  .chev.open :global(.glyph) {
+    transform: rotate(90deg);
   }
   .off b,
   .off :global(.wrap) {
@@ -396,61 +404,73 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-width: 168px;
+  }
+  /* Everything else's share: what's left, not stepped here. */
+  .spare.other {
+    min-width: 46px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 800;
   }
   .spare {
-    width: 168px;
+    padding: 0 10px;
     text-align: center;
     font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
   }
 
-  /* Opened: a short panel under the name, one control per line. */
+  /* Opened: the options flat inside the row, under the name, one per line
+     with a hairline between, its explanation under its name. */
   .ed {
-    padding: 0 16px 16px 66px;
+    margin: 0 14px 0 60px;
+    border-top: 1px solid var(--stroke-card);
   }
-  .panel {
-    border-radius: 12px;
-    background: rgb(0 0 0 / 0.16);
+  .members-ed {
+    padding: 12px 0 14px;
   }
   .opt {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px 24px;
-    min-height: 52px;
-    padding: 8px 14px;
+    gap: 8px 20px;
+    min-height: 54px;
+    padding: 8px 0;
   }
   .opt + .opt {
-    border-top: 1px solid rgb(255 255 255 / 0.05);
+    border-top: 1px solid var(--stroke-card);
   }
   .k {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14.5px;
-    font-weight: 600;
-    color: var(--text-primary);
+    flex-direction: column;
+    flex: 1 1 260px;
+    min-width: 0;
   }
-  .k :global(.glyph) {
+  .k b {
+    font-size: 14.5px;
+    font-weight: 650;
+  }
+  .k small {
+    font-size: 13px;
     color: var(--text-tertiary);
   }
-  .foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin-top: 10px;
-  }
-  .foot .btn {
-    margin-left: auto;
-  }
   .note {
+    flex: 1 1 260px;
     margin: 0;
     font-size: 13px;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
+  }
+  .remove {
+    color: var(--critical);
+  }
+  .remove:hover:not(:disabled) {
+    background: var(--critical-soft);
+    color: var(--critical);
+  }
+  .remove :global(.glyph),
+  .remove:hover :global(.glyph) {
+    color: var(--critical);
   }
   .limits {
     display: flex;
@@ -500,23 +520,15 @@
     font-size: 13px;
   }
   .member .plus {
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    background: rgb(0 0 0 / 0.18);
-    color: var(--text-secondary);
-    transition:
-      background-color 120ms linear,
-      color 120ms linear;
+    display: flex;
+    color: var(--text-tertiary);
+    transition: color 120ms linear;
   }
   .member:hover:not(:disabled) {
     background: var(--surface-3);
   }
   .member:hover:not(:disabled) .plus {
-    background: var(--accent);
-    color: var(--on-accent);
+    color: var(--shell-bright);
   }
   .member:disabled {
     cursor: default;

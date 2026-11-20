@@ -8,6 +8,7 @@
   import { icons } from "../icons.svelte";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
+  import Glyph from "./Glyph.svelte";
 
   let {
     target,
@@ -38,7 +39,7 @@
   const system = $derived(target?.kind === "family" && WINDOWS.has(target.id.toLowerCase()));
   const site = $derived(
     target?.kind === "site"
-      ? (SITES[target.id.toLowerCase()] ?? { text: name.charAt(0).toUpperCase(), bg: "#3a3835", fg: "#f1ede6" })
+      ? (SITES[target.id.toLowerCase()] ?? { text: name.charAt(0).toUpperCase(), bg: "var(--surface-3)", fg: "var(--text-secondary)" })
       : null,
   );
   const letter = $derived(name.trim().charAt(0).toUpperCase() || "?");
@@ -67,9 +68,9 @@
       <path d={brand.path} fill={brand.ink} />
     </svg>
   {:else if system && boxed}
-    <span class="solid win"><i class="icon" style:font-size="{size * 0.66}px">&#xE7F4;</i></span>
+    <span class="solid win"><Glyph name="window" size={Math.round(size * 0.7)} /></span>
   {:else if system}
-    <i class="icon sys" style:font-size="{size * 0.72}px">&#xE7F4;</i>
+    <span class="sys"><Glyph name="window" size={Math.round(size * 0.8)} /></span>
   {:else if site}
     <span class="tile" style:background={site.bg} style:color={site.fg} class:wide={site.text.length > 1}>{site.text}</span>
   {:else}
@@ -111,6 +112,7 @@
     color: #ffffff;
   }
   .sys {
+    display: flex;
     color: var(--text-secondary);
   }
   .tile {

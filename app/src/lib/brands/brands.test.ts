@@ -26,8 +26,8 @@ describe("brand logos", () => {
   it("keeps a brand's colour only where it reads on the dark tile", () => {
     expect(inkOn("FF0000")).toBe("#ff0000");
     // Steam's black would vanish: cream instead.
-    expect(inkOn("000000")).toBe("#f3eee2");
-    expect(brandOf({ kind: "family", id: "steam" })?.ink).toBe("#f3eee2");
+    expect(inkOn("000000")).toBe("#eceae2");
+    expect(brandOf({ kind: "family", id: "steam" })?.ink).toBe("#eceae2");
     expect(contrast("#000000", "#ffffff")).toBeCloseTo(21, 0);
   });
 
@@ -37,7 +37,7 @@ describe("brand logos", () => {
     expect(brandOf({ kind: "family", id: "discord" })?.mark).toBe("#ffffff");
     expect(brandOf({ kind: "family", id: "steam" })?.mark).toBe("#ffffff");
     // White would vanish on Kick's light green.
-    expect(brandOf({ kind: "site", id: "kick" })?.mark).toBe("#0a211d");
+    expect(brandOf({ kind: "site", id: "kick" })?.mark).toBe("#121716");
   });
 
   it("credits every logo it ships", () => {

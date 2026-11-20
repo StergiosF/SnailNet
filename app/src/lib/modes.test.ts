@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, boostShare, copyName, gameWhy, inCall, liveBoost, modeName, users } from "./modes";
+import { availableModes, boostLeft, boostShare, copyName, gameWhy, idle, inCall, liveBoost, modeName, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -116,6 +116,29 @@ describe("users", () => {
     // A boost still wins the last place.
     const b = users(l, { target: { kind: "family", id: "brave" } }, label, 2, ["discord"]);
     expect(b.map((x) => x.name)).toEqual(["Steam", "Brave"]);
+  });
+
+  it("lists nobody when nothing is using the internet, and calls those apps idle", () => {
+    // Discord and Steam just went quiet: steady.ts still holds them in
+    // view at a trickle. The glance says nothing is using the internet,
+    // so the list must not say they are (the calm-state contradiction).
+    const calm: DirStats = {
+      shaped_bps: 23 * M,
+      classes: [{ name: "everything else", bps: 0.03 * M, drops: 0, queued_bytes: 0 }],
+      families: [
+        { family: "discord", name: "Discord", bps: 0.02 * M, unidentified_bps: 0, held: true },
+        { family: "steam", name: "Steam", bps: 0.01 * M, unidentified_bps: 0, held: true },
+      ],
+      sites: [],
+    };
+    const l = ledger(rules, calm, label);
+    expect(users(l, null, label)).toEqual([]);
+    expect(idle(l).map((x) => x.name)).toEqual(["Discord", "Steam"]);
+    // Still in a call, or boosted: those stay in view.
+    expect(users(l, null, label, 5, ["discord"]).map((x) => x.name)).toEqual(["Discord"]);
+    expect(users(l, { target: { kind: "family", id: "steam" } }, label).map((x) => x.name)).toEqual(["Steam"]);
+    // Busy again: nobody is idle, and everyone moving is listed.
+    expect(idle(ledger(rules, busy(), label))).toEqual([]);
   });
 
   it("keeps a busy boosted one that falls past the cut", () => {

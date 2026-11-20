@@ -1,35 +1,39 @@
 <script lang="ts">
-  // The proof on the Now page (feature 1, §11.10), under the glance
-  // sentence while the line is full: the live ping with SnailNet, and the
+  // The live proof in the Now page's side column (feature 1, §11.10),
+  // while the line is full: the ping with SnailNet as the section's one
+  // big figure, who is filling the internet, and the bars against the
   // ping the last speed test on this network found without it. Shown and
   // held by ProofWatch (proof.ts); fades when it lets go. With no test to
-  // compare against, a quiet "Measure to compare", only while the line is
-  // full, so it never nags. Screen readers get one sentence, read on
-  // request (aria-live off: live numbers aren't announced, §14.9).
+  // compare against, a quiet "Measure to compare", only while it's busy,
+  // so it never nags. Screen readers get one sentence, read on request
+  // (aria-live off: live numbers aren't announced, §14.9).
   import { canMeasure, measureLine } from "../actions";
   import { t } from "../i18n";
   import { ms } from "../motion";
   import type { Proof } from "../proof";
   import { fade } from "svelte/transition";
+  import Glyph from "./Glyph.svelte";
   import ProofBars from "./ProofBars.svelte";
 
   let { proof }: { proof: Proof } = $props();
 
   const now = $derived(Math.round(proof.now));
-  const live = $derived(t("proof.live", { now, name: proof.name }));
   const sr = $derived(
-    proof.without === null ? `${live}.` : t("proof.sr", { now, without: Math.round(proof.without) }),
+    proof.without === null
+      ? `${t("proof.live", { now, name: proof.name })}.`
+      : t("proof.sr", { now, without: Math.round(proof.without) }),
   );
 </script>
 
-<div class="proof" aria-live="off" in:fade={{ duration: ms(240) }} out:fade={{ duration: ms(480) }}>
+<div class="proof" aria-live="off" in:fade={{ duration: ms(240) }}>
   <p class="visually-hidden">{sr}</p>
-  <p class="live num" aria-hidden="true">{live}</p>
+  <p class="big num" aria-hidden="true"><b>{now}</b><span>{t("proof.with.ms")}</span></p>
+  <p class="note" aria-hidden="true">{t("proof.note", { name: proof.name, now })}</p>
   {#if proof.without !== null && proof.at !== null}
     <ProofBars withMs={proof.now} withoutMs={proof.without} at={proof.at} />
   {:else if proof.missing}
-    <button type="button" class="btn btn-quiet compare" disabled={!canMeasure()} onclick={() => void measureLine()}>
-      <i class="icon" aria-hidden="true">&#xEC4A;</i>{t("proof.measure")}
+    <button type="button" class="btn compare" disabled={!canMeasure()} onclick={() => void measureLine()}>
+      <Glyph name="gauge" size={18} />{t("proof.measure")}
     </button>
   {/if}
 </div>
@@ -38,24 +42,32 @@
   .proof {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-    margin-top: 4px;
+    align-items: stretch;
   }
-  .live {
+  .big {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
     margin: 0;
+  }
+  .big b {
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .big span {
     font-size: 14px;
-    line-height: 20px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-secondary);
+  }
+  .note {
+    margin: 8px 0 14px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
   }
   .compare {
-    gap: 8px;
-    margin-left: -10px;
-    padding: 0 10px;
-    font-size: 13px;
-  }
-  .compare .icon {
-    font-size: 13px;
+    align-self: flex-start;
   }
 </style>

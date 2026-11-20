@@ -9,8 +9,8 @@
 //   <li use:flash={`${share}|${priority}|${enabled}`}>
 // Live numbers (speeds) must stay out of the key, or it would never rest.
 
-/** The warm start: cream over the row, at about a tenth. */
-export const FLASH_COLOR = "rgb(239 232 214 / 0.13)";
+/** The warm start: ivory over the row, at about a tenth. */
+export const FLASH_COLOR = "rgb(240 236 225 / 0.13)";
 /** Long enough to notice, short enough to be gone before the next look. */
 export const FLASH_MS = 1100;
 

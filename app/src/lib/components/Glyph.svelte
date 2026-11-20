@@ -42,7 +42,10 @@
     | "trash"
     | "check"
     | "pen"
-    | "auto";
+    | "auto"
+    | "more"
+    | "search"
+    | "close";
 
   /** A mode's glyph: the four built-in modes have their own, the user's
    *  own modes share one. */
@@ -115,7 +118,7 @@
   {:else if name === "reset"}
     <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.2h3.2" />
   {:else if name === "line"}
-    <path d="M4 17a10 10 0 0 1 16 0" /><path d="M7.5 17a5.5 5.5 0 0 1 9 0" /><circle class="dot" cx="12" cy="17" r="1.4" />
+    <path d="M3.5 9.5a12 12 0 0 1 17 0" /><path d="M6.5 12.8a7.5 7.5 0 0 1 11 0" /><path d="M9.5 16a3.2 3.2 0 0 1 5 0" /><circle class="dot" cx="12" cy="19" r="1.3" />
   {:else if name === "apps"}
     <rect x="4" y="4" width="7" height="7" rx="2" /><rect x="13" y="4" width="7" height="7" rx="2" /><rect
       x="4"
@@ -171,6 +174,12 @@
     <path d="m5 12.5 4.5 4.5L19 7.5" />
   {:else if name === "pen"}
     <path d="M14.5 5.5 18.5 9.5M4.5 19.5l1-4.5L15.8 4.7a1.9 1.9 0 0 1 2.7 0l.8.8a1.9 1.9 0 0 1 0 2.7L9 18.5z" />
+  {:else if name === "more"}
+    <circle class="dot" cx="6" cy="12" r="1.6" /><circle class="dot" cx="12" cy="12" r="1.6" /><circle class="dot" cx="18" cy="12" r="1.6" />
+  {:else if name === "search"}
+    <circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" />
+  {:else if name === "close"}
+    <path d="m7 7 10 10M17 7 7 17" />
   {:else if name === "auto"}
     <path d="M19.5 12a7.5 7.5 0 0 1-13.1 5M4.5 12a7.5 7.5 0 0 1 13.1-5" /><path d="M17.8 3.5v3.7h-3.7M6.2 20.5v-3.7h3.7" />
   {/if}

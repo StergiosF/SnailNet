@@ -14,6 +14,7 @@
   import { lineDialog } from "../lineDialog.svelte";
   import { service } from "../service.svelte";
   import type { SaveError } from "../types";
+  import Glyph from "./Glyph.svelte";
   import SpeedFields from "./SpeedFields.svelte";
 
   let dialogEl = $state<HTMLDialogElement | null>(null);
@@ -113,14 +114,16 @@
           <p class="error" role="alert">{error}</p>
         {/if}
       </div>
+      <!-- In reading order, so Tab walks it left to right (WCAG 2.4.3):
+           Measure on its own at the left, then Cancel, Save. -->
       <div class="footer">
-        <button type="submit" class="btn btn-accent" disabled={saving}>{t("line.save")}</button>
-        <button type="button" class="btn" disabled={saving} onclick={() => lineDialog.close()}>
+        <button type="button" class="btn measure" disabled={saving || !canMeasure()} onclick={measure}>
+          <Glyph name="gauge" size={18} />{measured ? t("line.measure") : t("line.measure.first")}
+        </button>
+        <button type="button" class="btn btn-quiet" disabled={saving} onclick={() => lineDialog.close()}>
           {t("line.cancel")}
         </button>
-        <button type="button" class="btn btn-quiet measure" disabled={saving || !canMeasure()} onclick={measure}>
-          <i class="icon" aria-hidden="true">&#xEC4A;</i>{measured ? t("line.measure") : t("line.measure.first")}
-        </button>
+        <button type="submit" class="btn btn-accent" disabled={saving}>{t("line.save")}</button>
       </div>
     </form>
   {/if}
@@ -142,7 +145,8 @@
     margin: 0;
     font-size: 20px;
     line-height: 28px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
   .content > p {
     margin: 0 0 4px;
@@ -151,17 +155,11 @@
   }
   .footer {
     display: flex;
-    flex-direction: row-reverse;
     gap: 8px;
     padding: 16px 24px 24px;
   }
-  /* Last in the markup, so first in the row: on its own at the left. */
   .measure {
-    gap: 8px;
     margin-right: auto;
-  }
-  .measure .icon {
-    font-size: 13px;
   }
   .content > .source {
     margin: 0;

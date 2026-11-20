@@ -6,17 +6,20 @@
   // pointer and settles on a step of 5% on release. Every move goes into
   // the page's draft, never straight to the line.
   //
-  // What made the old bar hard is answered here: the handle catches a
-  // press 32 px wide over the bar's full height; a segment too thin for its
-  // name shows only its %, thinner still nothing (its row says it); and
-  // while dragging, a readout under the handle says what each side gets in
-  // Mbps. Each handle is a slider for the keyboard. Hovering a segment, or
-  // holding a handle, lights up the rows it means.
+  // Each segment is its ink laid thin over the panel (Obsidian Jade), with
+  // its name over "40% · ≥ 10 Mbps": what it keeps when your internet is
+  // busy, right where it's being changed, so no readout line wraps under
+  // the bar. A segment too thin for its name shows only its %, thinner
+  // still nothing (its row says it). Everything else is hatched stone. The
+  // handle catches a press 32 px wide over the bar's full height, its grip
+  // a narrow ivory line; each handle is a slider for the keyboard, and a
+  // screen reader hears each side's share as it moves. Hovering a segment,
+  // or holding a handle, lights up the rows it means.
   //
-  // Live use rides inside each segment (DESIGN.md, Split): a thin line
-  // along its foot fills as its share is used, so the page has one picture
-  // of the split, not a second strip. The pointer is an open hand over a
-  // handle and a closed one while dragging.
+  // Live use rides inside each segment (DESIGN.md, Split): a thin line in
+  // its ink along its foot fills as its share is used, so the page has one
+  // picture of the split, not a second strip. The pointer is an open hand
+  // over a handle and a closed one while dragging.
   import { mbps } from "../format";
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
@@ -48,7 +51,10 @@
   let width = $state(0);
 
   const pct = (bp: number | null) => Math.round((bp ?? 0) / 100);
-  const ink = (s: Slice) => (s.ink >= 0 ? `var(--ink-${s.ink})` : "var(--stone-0)");
+  const ink = (s: Slice) => (s.ink >= 0 && s.rule >= 0 ? `var(--ink-${s.ink})` : "var(--stone-1)");
+  /** What a segment keeps when your internet is busy, in bps; null when
+   *  SnailNet isn't sharing it out (no speed set). */
+  const keptOf = (s: Slice) => (ledger.shaped === null ? null : (ledger.shaped * (s.share ?? 0)) / 10_000);
   const startOf = (k: number) => shares.slice(0, k).reduce((a, b) => a + b, 0) / 100;
 
   // Dragging. `from` is the rules when the press began, so every move is
@@ -133,9 +139,8 @@
     const a = segs[i];
     const b = segs[i + 1];
     if (!a || !b) return ["", ""];
-    const kept = (s: Slice) => (ledger.shaped === null ? null : (ledger.shaped * (s.share ?? 0)) / 10_000);
-    const ka = kept(a);
-    const kb = kept(b);
+    const ka = keptOf(a);
+    const kb = keptOf(b);
     return [
       ka === null
         ? t("bar.plain", { name: a.name, pct: pct(a.share) })
@@ -181,17 +186,20 @@
         class:other={s.rule < 0}
         style:left="calc({startOf(k)}% + {first ? 0 : 2}px)"
         style:width="max(0px, calc({(s.share ?? 0) / 100}% - {(first ? 0 : 2) + (last ? 0 : 2)}px))"
-        style:background={ink(s)}
+        style:--ink={ink(s)}
         title={fit === "full" ? undefined : t("bar.plain", { name: s.name, pct: pct(s.share) })}
         aria-hidden="true"
         onpointerenter={() => drag === null && (ui.hot = [s.key])}
         onpointerleave={() => drag === null && (ui.hot = [])}
       >
         {#if fit === "full"}
+          {@const kept = s.rule >= 0 ? keptOf(s) : null}
           <span class="name">{s.name}</span>
-        {/if}
-        {#if fit !== "none"}
-          <b>{pct(s.share)}<small>%</small></b>
+          <span class="fig num"
+            >{pct(s.share)}%{#if kept !== null}<em>&nbsp;· ≥ {mbps(kept)} Mbps</em>{/if}</span
+          >
+        {:else if fit !== "none"}
+          <span class="fig num">{pct(s.share)}%</span>
         {/if}
         {#if ledger.shaped !== null && fill(s) !== null}
           <span class="use"><i style:width="{(fill(s) ?? 0) * 100}%"></i></span>
@@ -232,14 +240,12 @@
       {/each}
     {/if}
 
-    {#if showing !== null && pos[showing] !== undefined}
-      {@const at = pos[showing] ?? 50}
-      {@const [left, right] = readout(showing)}
-      <div class="readout" class:start={at < 30} class:end={at > 70} style:left="{at}%" aria-hidden="true">
-        <span>{left}</span><i></i><span>{right}</span>
-      </div>
-    {/if}
   </div>
+  <!-- What each side of the moving handle gets, for screen readers; on
+       screen the segments say it themselves. -->
+  <p class="visually-hidden" aria-live="polite">
+    {#if showing !== null}{readout(showing).join(", ")}{/if}
+  </p>
 
   {#if ticks}
     <div class="ticks" aria-hidden="true">
@@ -253,11 +259,14 @@
 
 <style>
   .drag {
-    margin-top: 24px;
+    margin-top: 0;
   }
   .bar {
     position: relative;
-    height: 56px;
+    height: 52px;
+    border-radius: 12px;
+    background: var(--surface-side);
+    box-shadow: inset 0 0 0 1px var(--stroke-card);
     /* Sideways drags move the split; an up-or-down swipe still scrolls. */
     touch-action: pan-y;
     user-select: none;
@@ -267,27 +276,33 @@
     top: 0;
     bottom: 0;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 14px;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 0 12px;
     overflow: hidden;
-    border-radius: 6px;
-    color: var(--on-accent);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--ink) 27%, var(--surface-1));
+    color: var(--text-primary);
     white-space: nowrap;
     transition:
       left 300ms var(--ease-out),
       width 300ms var(--ease-out),
       filter 120ms linear;
   }
+  /* Everything else: hatched, never colour alone. */
+  .seg.other {
+    background: var(--free-hatch), var(--surface-1);
+  }
   .seg.first {
-    border-radius: 14px 6px 6px 14px;
+    border-radius: 12px 4px 4px 12px;
   }
   .seg.last {
-    justify-content: flex-end;
-    border-radius: 6px 14px 14px 6px;
+    border-radius: 4px 12px 12px 4px;
   }
   .seg.first.last {
-    border-radius: 14px;
+    border-radius: 12px;
   }
   .dragging .seg {
     transition: filter 120ms linear;
@@ -296,21 +311,24 @@
     filter: brightness(1.08);
   }
   .name {
-    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 15px;
-    font-weight: 600;
-  }
-  .seg b {
-    flex: none;
-    font-size: 17px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-  }
-  .seg b small {
     font-size: 13px;
     font-weight: 700;
+  }
+  .fig {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--text-secondary);
+  }
+  .fig em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--text-tertiary);
   }
 
   /* The handle: a 32 px catch over the bar's full height, a narrow cream
@@ -333,18 +351,25 @@
   .bar.dragging * {
     cursor: grabbing;
   }
+  /* The grip: a narrow ivory line, ringed in the ground so it reads on
+     any ink. */
   .handle::before {
     content: "";
     position: absolute;
-    inset: 0 12px;
-    border-radius: 4px;
+    top: 6px;
+    bottom: 6px;
+    left: 14px;
+    width: 4px;
+    border-radius: 2px;
     background: var(--accent);
-    box-shadow: 0 2px 10px rgb(0 0 0 / 0.45);
+    box-shadow:
+      0 0 0 3px var(--surface-ground),
+      0 2px 8px rgb(0 0 0 / 0.5);
     transition: transform 160ms var(--ease-out);
   }
   .handle:hover::before,
   .handle.on::before {
-    transform: scaleX(1.4);
+    transform: scaleX(1.5);
   }
   .handle:focus-visible {
     outline: 2px solid var(--focus-outer);
@@ -352,38 +377,6 @@
   }
   .locked {
     cursor: default;
-  }
-
-  /* While dragging (or on the keyboard): each side, in % and Mbps. */
-  .readout {
-    position: absolute;
-    /* Under the bar: over it sits the page's sentence. */
-    top: calc(100% + 14px);
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 12px;
-    border-radius: var(--radius-control);
-    background: var(--surface-3);
-    box-shadow: var(--shadow-raised);
-    color: var(--text-primary);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
-  .readout.start {
-    transform: translateX(-16px);
-  }
-  .readout.end {
-    transform: translateX(calc(-100% + 16px));
-  }
-  .readout i {
-    width: 1px;
-    align-self: stretch;
-    background: var(--text-tertiary);
   }
 
   /* Where the handles stood before the unsaved changes. */
@@ -402,22 +395,20 @@
     background: var(--text-tertiary);
     opacity: 0.8;
   }
-  /* Live use, inside the segment's foot: how much of its share is used. */
+  /* Live use, along the segment's foot in its ink: how much of its share
+     is used. */
   .use {
     position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 7px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     height: 3px;
-    border-radius: 2px;
-    background: rgb(10 33 29 / 0.14);
     overflow: hidden;
   }
   .use i {
     display: block;
     height: 100%;
-    border-radius: 2px;
-    background: rgb(10 33 29 / 0.5);
+    background: var(--ink);
     transition: width 900ms var(--ease-out);
   }
   @media (forced-colors: active) {
@@ -434,9 +425,6 @@
     .handle::before {
       forced-color-adjust: none;
       background: Highlight;
-    }
-    .readout {
-      border: 1px solid CanvasText;
     }
     .ticks i {
       forced-color-adjust: none;

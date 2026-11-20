@@ -1,20 +1,18 @@
 <script lang="ts">
-  // Custom title bar (PLAN.md §14.2): a drag region (with the snail and
-  // the name only when there's no side rail to carry them, as in first
-  // run) and Windows 11 caption buttons drawn with Segoe Fluent Icons like
-  // the system's own. Snap layouts on hover over Maximize are not available:
+  // Custom title bar (PLAN.md §14.2): one height on every page, so nothing
+  // jumps when the page changes. It holds the mode switch (`lead`) at the
+  // page's gutter, or the snail and the name when there's no side rail to
+  // carry them (first run), and Windows 11 caption buttons drawn as thin
+  // strokes like the system's own. Everything around the switch stays the
+  // drag region. Snap layouts on hover over Maximize are not available:
   // with decorations off, WebView2 owns the mouse over the page and only
-  // reports drag / no-drag regions, never a maximize button, and every
-  // workaround is a hack (native overlay window or faked Win+Z). Win+Z
-  // itself still opens them.
+  // reports drag / no-drag regions, never a maximize button. Win+Z still
+  // opens them.
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, type Snippet } from "svelte";
   import { t } from "../i18n";
   import Snail from "./Snail.svelte";
 
-  // `lead`: what the main window puts in the strip (the mode switch, on
-  // Now and Split); the strip then grows to hold it, and the rest of it
-  // stays the drag region.
   let { brand = false, lead }: { brand?: boolean; lead?: Snippet } = $props();
 
   const win = getCurrentWindow();
@@ -29,27 +27,33 @@
   });
 </script>
 
-<header class="titlebar" class:tall={lead !== undefined} data-tauri-drag-region>
+<header class="titlebar" class:lead={lead !== undefined} data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
     {#if brand}
-      <Snail size={16} light />
+      <Snail size={18} light />
       <span data-tauri-drag-region>{t("app.name")}</span>
     {/if}
     {#if lead}{@render lead()}{/if}
   </div>
   <div class="caption">
     <button type="button" aria-label={t("window.minimize")} onclick={() => win.minimize()}>
-      <i class="icon" aria-hidden="true">&#xE921;</i>
+      <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" /></svg>
     </button>
     <button
       type="button"
       aria-label={maximized ? t("window.restore") : t("window.maximize")}
       onclick={() => win.toggleMaximize()}
     >
-      <i class="icon" aria-hidden="true">{maximized ? "" : ""}</i>
+      <svg viewBox="0 0 10 10" aria-hidden="true">
+        {#if maximized}
+          <path d="M2.5 2.5V.5h7v7h-2" /><rect x=".5" y="2.5" width="7" height="7" />
+        {:else}
+          <rect x=".5" y=".5" width="9" height="9" />
+        {/if}
+      </svg>
     </button>
     <button type="button" class="close" aria-label={t("window.close")} onclick={() => win.close()}>
-      <i class="icon" aria-hidden="true">&#xE8BB;</i>
+      <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0 0 10" /></svg>
     </button>
   </div>
 </header>
@@ -61,37 +65,43 @@
     height: var(--titlebar-h);
     flex: none;
   }
-  .titlebar.tall {
-    height: 76px;
-  }
-  .tall .brand {
-    padding: 16px 0 8px var(--gutter);
-  }
-  .tall .caption {
-    align-self: flex-start;
-    height: var(--titlebar-h);
-  }
   .brand {
     display: flex;
     align-items: center;
     gap: 8px;
     flex: 1;
+    min-width: 0;
     padding-left: 14px;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text-secondary);
+  }
+  .lead .brand {
+    padding-left: var(--gutter);
   }
   .caption {
     display: flex;
   }
   .caption button {
+    display: grid;
+    place-items: center;
     width: 46px;
     border: 0;
     padding: 0;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 10px;
     transition: background-color 83ms linear;
+  }
+  .caption svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+  .caption .close svg {
+    shape-rendering: geometricPrecision;
   }
   .caption button:hover {
     background: var(--fill-subtle-hover);
@@ -111,5 +121,10 @@
   }
   .caption button:focus-visible {
     outline-offset: -2px;
+  }
+  @media (max-width: 900px) {
+    .lead .brand {
+      padding-left: 20px;
+    }
   }
 </style>

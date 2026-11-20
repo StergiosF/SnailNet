@@ -1,9 +1,11 @@
 <script lang="ts">
   // The side rail (PLAN.md §14.2): the snail and the name, the pages (Now,
-  // Split, Settings), and at the bottom Pause and the line as the user set
-  // it, which opens the speed dialog. When a newer SnailNet is out, an
-  // update button pops up there; one click installs it. Its top is part of the window's drag
-  // region.
+  // Split, Settings), and at the foot Pause (only while SnailNet is doing
+  // something) and the internet speed as the user set it, a quiet line that
+  // opens the speed dialog. It is a setting, not a live number, so it never
+  // outshouts the speeds on Now. When a newer SnailNet is out, an update
+  // button pops up there; one click installs it. Its top is part of the
+  // window's drag region.
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { pauseShown } from "../pause";
@@ -36,7 +38,7 @@
 
 <aside class="side">
   <div class="brand" data-tauri-drag-region>
-    <Snail size={30} light />
+    <Snail size={26} light />
     <span data-tauri-drag-region>{t("app.name")}</span>
   </div>
 
@@ -68,24 +70,22 @@
         ? t("sidebar.line.label", { down: fig(line.down_mbps), up: fig(line.up_mbps) })
         : t("header.line.set")}
     >
-      <span class="k"
-        ><Glyph name="gauge" size={16} /><span class="kt">{t("sidebar.line")}</span><span class="pen"
-          ><Glyph name="pen" size={14} /></span
-        ></span
-      >
+      <span class="k"><span class="kt">{t("sidebar.line")}</span><span class="pen">{t("settings.line.change")}</span></span>
       {#if hasLine}
-        <span class="dirs">
-          {#each [{ label: t("sidebar.down"), v: line.down_mbps }, { label: t("sidebar.up"), v: line.up_mbps }] as row (row.label)}
-            <span class="dir">
-              <span class="v num">
-                {#if row.v === undefined}<span class="none">{t("line.notSet")}</span>{:else}{fig(row.v)}{/if}
-              </span>
-              <span class="dirname">{row.label}</span>
-            </span>
-          {/each}
+        <span class="dirs num">
+          <span class="dir"
+            ><Glyph name="download" size={14} />{#if line.down_mbps === undefined}<span class="none"
+                >{t("line.notSet")}</span
+              >{:else}{fig(line.down_mbps)}<small>{t("line.unit")}</small>{/if}</span
+          >
+          <span class="dir"
+            ><Glyph name="upload" size={14} />{#if line.up_mbps === undefined}<span class="none"
+                >{t("line.notSet")}</span
+              >{:else}{fig(line.up_mbps)}<small>{t("line.unit")}</small>{/if}</span
+          >
         </span>
       {:else}
-        <span class="v unset">{t("sidebar.line.none")}</span>
+        <span class="unset">{t("sidebar.line.none")}</span>
       {/if}
     </button>
   {/if}
@@ -108,15 +108,18 @@
     flex-direction: column;
     width: var(--side-w);
     flex: none;
-    padding: 12px 12px 16px;
+    padding: 12px 12px 14px;
     background: var(--surface-side);
+    box-shadow: inset -1px 0 0 var(--stroke-card);
   }
   .brand {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 8px 24px;
-    font-size: 18px;
+    height: 32px;
+    padding: 0 8px;
+    margin-bottom: 22px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: -0.01em;
   }
@@ -126,16 +129,16 @@
     flex-direction: column;
     gap: 2px;
   }
-  /* The open page's highlight, one shape that slides between items. */
+  /* The open page's highlight: one soft shape that slides between items. */
   .mark {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 42px;
+    height: 40px;
     border-radius: var(--radius-control);
-    background: var(--shell-soft);
-    transform: translateY(calc(var(--at) * 44px));
+    background: var(--surface-2);
+    transform: translateY(calc(var(--at) * 42px));
     transition: transform 360ms var(--ease-out);
   }
   nav button {
@@ -143,23 +146,25 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 42px;
-    padding: 0 12px;
+    height: 40px;
+    padding: 0 10px;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
     color: var(--text-secondary);
     font-size: 15px;
+    font-weight: 600;
     text-align: left;
-    transition: background-color 120ms linear, color 120ms linear;
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
   }
   nav button:hover {
-    background: var(--fill-subtle-hover);
+    background: var(--surface-1);
     color: var(--text-primary);
   }
   nav button.on {
     color: var(--text-primary);
-    font-weight: 700;
   }
   nav button.on:hover {
     background: transparent;
@@ -168,101 +173,86 @@
     transition: color 200ms linear;
   }
   nav button.on :global(.glyph) {
-    color: var(--shell);
+    color: var(--shell-bright);
   }
-  /* The line as the user set it: a small card at the rail's foot, the two
-     speeds side by side, big figures over quiet labels. It opens the speed
-     dialog; the pen says so under the pointer. */
+  .foot {
+    margin-top: auto;
+    margin-bottom: 10px;
+  }
+  /* The internet speed as the user set it: a quiet line at the rail's
+     foot over a hairline; "Change" says it opens the speed dialog. */
   .line {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    /* At the foot of the rail; under Pause when Pause shows. */
+    gap: 4px;
     margin-top: auto;
-    padding: 12px 14px 12px;
+    padding: 12px 10px 4px;
     border: 0;
-    border-radius: 14px;
-    background: var(--surface-ground);
-    box-shadow: inset 0 0 0 1px var(--stroke-card);
+    border-top: 1px solid var(--stroke-card);
+    background: transparent;
     text-align: left;
-    transition:
-      background-color 120ms linear,
-      box-shadow 120ms linear;
-  }
-  .foot {
-    margin-top: auto;
   }
   .foot + .line {
-    margin-top: 8px;
-  }
-  .line:hover {
-    background: var(--surface-1);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+    margin-top: 0;
   }
   .k {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-secondary);
-  }
-  .k :global(.glyph) {
+    font-size: 12.5px;
+    font-weight: 600;
     color: var(--text-tertiary);
   }
   .kt {
     flex: 1;
   }
+  .pen {
+    color: var(--text-tertiary);
+    transition: color 120ms linear;
+  }
+  .line:hover .pen {
+    color: var(--text-primary);
+  }
   .dirs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    display: flex;
+    gap: 14px;
   }
   .dir {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .v {
-    font-size: 22px;
-    line-height: 26px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-  }
-  .v.unset {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--caution);
-  }
-  .none {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-  .dirname {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    transition: color 120ms linear;
+  }
+  .dir :global(.glyph) {
+    color: var(--text-tertiary);
+  }
+  .line:hover .dir {
+    color: var(--accent-hover);
+  }
+  small {
+    margin-left: 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+  .none {
+    font-size: 13.5px;
+    font-weight: 600;
     color: var(--text-secondary);
   }
-  .pen {
-    display: flex;
-    opacity: 0;
-    transition: opacity 160ms linear;
-  }
-  .line:hover .pen,
-  .line:focus-visible:not([data-quiet-focus]) .pen {
-    opacity: 1;
+  .unset {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--caution);
   }
   .update {
     display: flex;
     align-items: center;
     gap: 10px;
     min-height: 38px;
-    margin-top: 8px;
+    margin-top: 10px;
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-control);

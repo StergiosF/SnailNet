@@ -1,31 +1,35 @@
 <script lang="ts">
-  // "Using your internet" (PLAN.md §14.2): who is moving data right now,
-  // busiest first, each with what's happening to it and a Boost. The
-  // boosted one is its own thing: lit by the shell's green, its icon
-  // ringed, a "Boosted" mark, the time it has left in words and as a bar
-  // along its foot that shortens as the boost runs out. The green sweeps
-  // in once when a boost starts; nothing loops. When the order changes
-  // the rows glide to their new places, so the eye can follow who
-  // overtook whom.
+  // "Using your internet" (PLAN.md §14.2, Obsidian Jade): who is moving
+  // data right now, busiest first, in one flat panel with hairlines between
+  // the rows. Each row: the app's icon, its name and what's happening to
+  // it, a thin bar of its part of your speed, its Mbps, then Boost and its
+  // own ••• menu (AppMenu), both there whether or not it's boosted. The
+  // header has the total and the Download / Upload choice (ui.dir). A
+  // boosted row takes a jade wash, a "Boosted" mark, and the time it has
+  // left in words and as a bar along its foot. When the order changes the
+  // rows glide, so the eye can follow who overtook whom. While nothing is
+  // using the internet, apps that are only open (steady.ts holds them at a
+  // trickle) are said once, as idle, never listed as users (modes.idle).
   import { mbps, rowMbps, targetLabel } from "../format";
   import { t } from "../i18n";
-  import { unnamed, type Ledger } from "../ledger";
+  import { names, unnamed, type Ledger } from "../ledger";
   import { flip } from "svelte/animate";
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
   import { flash } from "../flash";
   import { glide, ms } from "../motion";
-  import { boostLeft, boostShare, gameWhy, inCall, liveBoost, users } from "../modes";
+  import { boostLeft, boostShare, gameWhy, idle, inCall, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
-  import { ui } from "../ui.svelte";
+  import { ui, type Dir } from "../ui.svelte";
   import AppIcon from "./AppIcon.svelte";
+  import AppMenu from "./AppMenu.svelte";
   import BoostButton from "./BoostButton.svelte";
-  import Snail from "./Snail.svelte";
+  import Glyph from "./Glyph.svelte";
 
   let { ledger, canEdit, lineBps = null }: { ledger: Ledger | null; canEdit: boolean; lineBps?: number | null } =
     $props();
-  const ink = (n: number) => (n >= 0 ? `var(--ink-${n})` : "var(--stone-0)");
+  const ink = (n: number) => (n >= 0 ? `var(--ink-${n})` : "var(--stone-1)");
 
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
@@ -34,18 +38,23 @@
   const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
   const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
   const list = $derived(ledger ? users(ledger, live, label, 5, calls) : []);
+  const resting = $derived(ledger ? idle(ledger).slice(0, 3) : []);
   /** What's left of the boost, 0–1, for its bar; null: until stopped. */
   const left = $derived(live ? boostShare(live, ui.now) : null);
   // The row's second line: a boost's time left, else why a game goes
-  // first, else that it's in a call, else what its slice is doing.
+  // first, else that it's in a call, else what its share is doing.
   function sub(u: (typeof list)[number]): string {
     if (u.boosted && live) return t("who.boost.left", { left: boostLeft(live, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
     if (why) return t(`who.game.${why}`);
     return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
   }
+  const first = (u: (typeof list)[number]) =>
+    u.boosted ||
+    gameWhy(u.target, service.stats?.games, focusBoost) !== null ||
+    inCall(u.target, service.stats?.calls, callsFirst);
   // Website traffic whose name is hidden (ECH): said, never hidden.
-  const hidden = $derived(ledger ? unnamed(service.stats?.down) : null);
+  const hidden = $derived(ledger ? unnamed(ui.dir === "down" ? service.stats?.down : service.stats?.up) : null);
   const hiddenApps = $derived(
     hidden
       ? hidden.apps.length > 3
@@ -59,26 +68,34 @@
       return { id, target, name: label(target) };
     }),
   );
+  const dirs: { id: Dir; glyph: "download" | "upload" }[] = [
+    { id: "down", glyph: "download" },
+    { id: "up", glyph: "upload" },
+  ];
 </script>
 
 <section class="card who" aria-labelledby="who-title">
   <div class="hd">
     <h2 class="card-title" id="who-title">{t("who.title")}</h2>
-    {#if ledger && ledger.total > 0 && lineBps}
-      <span class="total num">{t("who.total", { used: mbps(ledger.total), line: mbps(lineBps) })}</span>
+    {#if ledger && ledger.total > 0 && lineBps && list.length > 0}
+      <span class="total num" aria-live="off">{t("who.total", { used: mbps(ledger.total), line: mbps(lineBps) })}</span>
     {/if}
+    <div class="dir" role="group" aria-label={t("dir.label")}>
+      {#each dirs as d (d.id)}
+        <button type="button" aria-pressed={ui.dir === d.id} onclick={() => (ui.dir = d.id)}
+          ><Glyph name={d.glyph} size={15} />{t(`dir.${d.id}`)}</button
+        >
+      {/each}
+    </div>
   </div>
   {#if !ledger}
     <ul aria-hidden="true">
       {#each [0.5, 0.4, 0.55] as w, i (i)}
-        <li class="skeleton"><span class="ic"></span><span class="bar" style:width="{w * 100}%"></span></li>
+        <li class="skeleton"><span class="sk-ic"></span><span class="bar" style:width="{w * 100}%"></span></li>
       {/each}
     </ul>
   {:else if list.length === 0}
-    <div class="empty">
-      <Snail size={40} light />
-      <p>{t("who.empty")}</p>
-    </div>
+    <p class="empty">{ui.dir === "down" ? t("who.empty") : t("who.empty.up")}</p>
   {:else}
     <ul>
       {#each list as u (u.key)}
@@ -88,19 +105,26 @@
           in:fade={{ duration: ms(240) }}
           use:flash={`${u.boosted}|${u.ink}`}
         >
-          <span class="ic"><AppIcon target={u.target} name={u.name} size={22} boxed /></span>
+          <AppIcon target={u.target} name={u.name} size={22} boxed />
           <span class="nm">
             <span class="line1">
               <b>{u.name}</b>
               {#if u.boosted}
-                <span class="badge"><i class="icon" aria-hidden="true">&#xE945;</i>{t("who.boost.badge")}</span>
+                <span class="tag">{t("who.boost.badge")}</span>
               {/if}
             </span>
-            <small class:wait={u.waiting && !u.boosted}>{sub(u)}</small>
-            <span class="use" aria-hidden="true"><i style:width="{u.part * 100}%" style:background={ink(u.ink)}></i></span>
+            <small class:wait={u.waiting && !u.boosted} class:first={first(u)}>{sub(u)}</small>
+            <span class="use" aria-hidden="true"
+              ><i style:width="{Math.max(1.5, u.part * 100)}%" style:background={ink(u.ink)}></i></span
+            >
           </span>
-          <span class="mb num">{u.bps > 0 ? rowMbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
-          <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />
+          <span class="mb num" aria-live="off"
+            >{#if u.bps > 0}{rowMbps(u.bps)}<small>{t("line.unit")}</small>{/if}</span
+          >
+          <span class="acts">
+            <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />
+            <AppMenu target={u.target} name={u.name} disabled={!canEdit} />
+          </span>
           {#if u.boosted && left !== null}
             <span class="left" aria-hidden="true"><i style:width="{left * 100}%"></i></span>
           {/if}
@@ -108,9 +132,19 @@
       {/each}
     </ul>
   {/if}
+  {#if resting.length > 0 && list.length === 0}
+    <p class="foot idle">
+      <span class="faces" aria-hidden="true">
+        {#each resting as r (r.key)}
+          <AppIcon target={r.target} name={r.name} size={14} boxed />
+        {/each}
+      </span>
+      <span>{t(resting.length === 1 ? "now.idle.one" : "now.idle.many", { names: names(resting.map((r) => r.name)) })}</span>
+    </p>
+  {/if}
   {#if hidden}
-    <p class="unnamed">
-      <i class="icon" aria-hidden="true">&#xE72E;</i>
+    <p class="foot">
+      <Glyph name="info" size={16} />
       <span
         ><b class="num">{t("unnamed.speed", { speed: mbps(hidden.bps) })}</b>
         {t("unnamed.body", { apps: hiddenApps })}</span
@@ -118,8 +152,8 @@
     </p>
   {/if}
   {#if blocked.length > 0}
-    <div class="blocked" role="group" aria-labelledby="who-blocked">
-      <span class="k" id="who-blocked"><i class="icon" aria-hidden="true">&#xE8F8;</i>{t("block.title")}</span>
+    <div class="foot blocked" role="group" aria-labelledby="who-blocked">
+      <span class="k" id="who-blocked"><Glyph name="ban" size={16} />{t("block.title")}</span>
       {#each blocked as b (b.id)}
         <span class="chip">
           <AppIcon target={b.target} name={b.name} size={16} />
@@ -140,152 +174,110 @@
   .who {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 16px 12px 10px;
     min-width: 0;
+    padding-bottom: 6px;
   }
   .hd {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 0 6px 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 16px 16px 10px 20px;
   }
   .total {
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--text-secondary);
   }
-  /* How much of the line it takes: a thin bar under its name, in its
-     slice's ink (stone inside Everything else). Its words say it too. */
-  .use {
-    display: block;
-    height: 4px;
-    margin-top: 6px;
-    border-radius: 2px;
-    background: rgb(255 255 255 / 0.06);
-    overflow: hidden;
+  /* Download / Upload: a small segmented choice at the header's end. */
+  .dir {
+    display: flex;
+    margin-left: auto;
+    padding: 2px;
+    border-radius: 9px;
+    background: var(--surface-side);
+    box-shadow: inset 0 0 0 1px var(--stroke-card);
   }
-  .use i {
-    display: block;
-    height: 100%;
-    min-width: 2px;
-    border-radius: 2px;
-    transition: width 900ms var(--ease-out);
+  .dir button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 650;
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
   }
-  .nm small.wait {
-    color: var(--caution);
+  .dir button:hover {
+    color: var(--text-primary);
+  }
+  .dir button[aria-pressed="true"] {
+    background: var(--surface-3);
+    color: var(--text-primary);
+  }
+  .dir button:focus-visible {
+    outline-offset: -1px;
   }
   ul {
     display: flex;
     flex-direction: column;
-    gap: 2px;
     margin: 0;
-    padding: 0;
+    padding: 0 6px;
     list-style: none;
   }
   li {
     position: relative;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) 84px auto;
     align-items: center;
-    gap: 12px;
-    min-height: 58px;
-    padding: 6px 6px;
+    gap: 14px;
+    min-height: 62px;
+    padding: 8px 8px 8px 14px;
     border-radius: 12px;
     overflow: hidden;
-    background: linear-gradient(90deg, rgb(47 168 142 / 0.26), rgb(47 168 142 / 0.08) 75%) no-repeat;
-    background-size: 0% 100%;
-    transition:
-      background-size 600ms var(--ease-out),
-      box-shadow 400ms var(--ease-out);
+    transition: background-color 150ms var(--ease-out);
   }
-  li:hover {
-    background-color: rgb(255 255 255 / 0.025);
-  }
-  /* A boost: the shell's green sweeps in from the left (once), the row
-     takes a hairline of it and sits a little forward. */
-  li.boosted {
-    min-height: 60px;
-    margin: 4px 0;
-    background-size: 100% 100%;
-    box-shadow:
-      inset 0 0 0 1px rgb(47 168 142 / 0.4),
-      0 10px 24px -14px rgb(0 0 0 / 0.6);
-  }
-  .ic {
-    position: relative;
-    display: grid;
-  }
-  /* Its icon ringed in the shell's green. */
-  li.boosted .ic::after {
+  /* Hairlines between rows, from the name's edge, gone around the hovered
+     one. */
+  li + li::before {
     content: "";
     position: absolute;
-    inset: -3px;
-    border-radius: 13px;
-    box-shadow: 0 0 0 2px var(--shell);
-    animation: ring-in 520ms 120ms var(--ease-out) backwards;
+    top: 0;
+    left: 60px;
+    right: 12px;
+    height: 1px;
+    background: var(--stroke-card);
+    transition: opacity 150ms linear;
   }
-  @keyframes ring-in {
-    from {
-      opacity: 0;
-      transform: scale(1.25);
-    }
+  li:hover {
+    background-color: rgb(255 255 255 / 0.03);
+  }
+  li:hover::before,
+  li:hover + li::before {
+    opacity: 0;
+  }
+  /* A boost: a jade wash from the left and the Boosted mark. */
+  li.boosted {
+    background-image: linear-gradient(90deg, var(--shell-soft), transparent 70%);
+  }
+  li.boosted::before,
+  li.boosted + li::before {
+    opacity: 0;
+  }
+  .nm {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
   .line1 {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-width: 0;
-  }
-  .badge {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 4px;
-    height: 20px;
-    padding: 0 7px 0 5px;
-    border-radius: 6px;
-    background: var(--shell);
-    color: var(--on-shell);
-    font-size: 12px;
-    font-weight: 800;
-    animation: badge-in 480ms 200ms var(--ease-out) backwards;
-  }
-  .badge .icon {
-    font-size: 11px;
-  }
-  @keyframes badge-in {
-    from {
-      opacity: 0;
-      transform: translateX(-6px) scale(0.9);
-    }
-  }
-  /* The time it has left, shortening along the row's foot. */
-  .left {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 3px;
-    background: rgb(47 168 142 / 0.18);
-  }
-  .left i {
-    display: block;
-    height: 100%;
-    background: var(--shell);
-    border-radius: 0 2px 2px 0;
-    transition: width 1200ms linear;
-    animation: drain-in 900ms 240ms var(--ease-out) backwards;
-    transform-origin: left;
-  }
-  @keyframes drain-in {
-    from {
-      transform: scaleX(0);
-    }
-  }
-  .nm {
-    display: flex;
-    flex-direction: column;
     min-width: 0;
   }
   b {
@@ -295,67 +287,149 @@
     font-size: 15px;
     font-weight: 700;
   }
+  .tag {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: var(--shell-soft);
+    color: var(--shell-bright);
+    font-size: 11.5px;
+    font-weight: 800;
+    animation: tag-in 420ms 160ms var(--ease-out) backwards;
+  }
+  @keyframes tag-in {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
+  }
   .nm small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--text-secondary);
   }
-  li.boosted .nm small {
-    color: var(--text-primary);
+  .nm small.wait {
+    color: var(--caution);
+  }
+  .nm small.first {
+    color: var(--shell-bright);
+  }
+  /* How much of your speed it takes: a thin bar under its name, in its
+     share's ink (stone inside Everything else). Its words say it too. */
+  .use {
+    display: block;
+    height: 3px;
+    margin-top: 7px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.05);
+    overflow: hidden;
+  }
+  .use i {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    transition: width 900ms var(--ease-out);
   }
   .mb {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     font-size: 15px;
     font-weight: 700;
-    text-align: right;
     white-space: nowrap;
   }
   .mb small {
+    margin-top: -2px;
     font-size: 12px;
-    font-weight: 400;
-    color: var(--text-secondary);
+    font-weight: 600;
+    color: var(--text-tertiary);
   }
-  .unnamed {
+  .acts {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    margin: 4px 6px 2px;
-    padding-top: 10px;
-    border-top: 1px solid var(--stroke-card);
-    font-size: 13px;
+    align-items: center;
+    gap: 2px;
+  }
+  /* The time it has left, shortening along the row's foot. */
+  .left {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: rgb(45 184 148 / 0.15);
+    overflow: hidden;
+  }
+  .left i {
+    display: block;
+    height: 100%;
+    background: var(--shell);
+    transition: width 1200ms linear;
+  }
+  .empty {
+    margin: 0;
+    padding: 2px 20px 16px;
+    font-size: 14.5px;
     line-height: 1.45;
     color: var(--text-secondary);
   }
-  .unnamed .icon {
-    flex: none;
-    font-size: 12px;
-    transform: translateY(1px);
+  /* What sits under the list: who's idle, unnamed traffic, blocked apps. */
+  .foot {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 6px 0 4px;
+    padding: 12px 20px 8px;
+    border-top: 1px solid var(--stroke-card);
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
   }
-  .unnamed b {
-    font-weight: 700;
+  .foot :global(.glyph) {
+    flex: none;
+    align-self: center;
+    color: var(--text-tertiary);
+  }
+  .foot b {
+    font-size: inherit;
     color: var(--text-primary);
   }
-  .blocked {
+  .idle {
+    align-items: center;
+    color: var(--text-tertiary);
+  }
+  .faces {
     display: flex;
+    flex: none;
+  }
+  .faces > :global(*) {
+    margin-right: -6px;
+    border-radius: 7px;
+    box-shadow: 0 0 0 2px var(--surface-1);
+  }
+  .faces > :global(*:last-child) {
+    margin-right: 0;
+  }
+  .blocked {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin: 4px 6px 6px;
-    padding-top: 10px;
-    border-top: 1px solid var(--stroke-card);
   }
   .k {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-right: 4px;
-    font-size: 13px;
     font-weight: 700;
     color: var(--critical);
   }
-  .k .icon {
-    font-size: 12px;
+  .k :global(.glyph) {
+    color: var(--critical);
   }
   .chip {
     display: flex;
@@ -365,6 +439,7 @@
     padding: 0 4px 0 8px;
     border-radius: 9px;
     background: var(--surface-2);
+    color: var(--text-primary);
     font-size: 14px;
   }
   .chip button {
@@ -381,25 +456,15 @@
     background: var(--accent);
     color: var(--on-accent);
   }
-  .empty {
+  .skeleton {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 8px 6px 12px;
   }
-  .empty p {
-    margin: 0;
-    color: var(--text-secondary);
-    line-height: 1.45;
-  }
-  .skeleton {
-    display: flex;
-    gap: 12px;
-  }
-  .skeleton .ic {
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-control);
+  .sk-ic {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
     background: var(--skeleton);
   }
   .skeleton .bar {
@@ -412,11 +477,14 @@
       outline: 2px solid Highlight;
       outline-offset: -2px;
     }
-    .badge,
+    .tag,
     .left i {
       forced-color-adjust: none;
       background: Highlight;
       color: HighlightText;
+    }
+    .dir button[aria-pressed="true"] {
+      outline: 2px solid Highlight;
     }
   }
 </style>

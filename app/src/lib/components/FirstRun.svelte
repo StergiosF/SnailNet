@@ -12,6 +12,7 @@
   import { service } from "../service.svelte";
   import type { Measured, SaveError } from "../types";
   import ProofBars from "./ProofBars.svelte";
+  import Glyph from "./Glyph.svelte";
   import Snail from "./Snail.svelte";
   import SpeedFields from "./SpeedFields.svelte";
 
@@ -101,11 +102,11 @@
   {#key step}
   <div class="step">
     {#if step === "welcome"}
-      <Snail size={48} />
+      <Snail size={48} light />
       <h1 tabindex="-1" bind:this={headingEl}>{t("firstrun.welcome.title")}</h1>
       <p class="lead">{t("firstrun.welcome.body")}</p>
       <p class="privacy">
-        <i class="icon" aria-hidden="true">&#xE72E;</i>{t("firstrun.welcome.privacy")}
+        <Glyph name="info" size={16} />{t("firstrun.welcome.privacy")}
       </p>
       <div class="actions">
         <button type="button" class="btn btn-accent" onclick={() => void go("speed")}>
@@ -117,7 +118,7 @@
         <h1 id="fr-speed-title" tabindex="-1" bind:this={headingEl}>{t("firstrun.speed.title")}</h1>
         <p class="lead" id="fr-speed-body">{t("firstrun.speed.body")}</p>
         <button type="button" class="btn btn-accent measure" disabled={saving || measuring} onclick={() => void measure()}>
-          <i class="icon" aria-hidden="true">&#xEC4A;</i>{measuring ? t("firstrun.measuring") : t("firstrun.measure")}
+          <Glyph name="gauge" size={18} />{measuring ? t("firstrun.measuring") : t("firstrun.measure")}
         </button>
         <p class="or">{t("firstrun.or")}</p>
         <SpeedFields bind:this={fields} bind:down bind:up {submitted} disabled={saving || measuring} />
@@ -188,8 +189,8 @@
     margin: 8px 0 0;
     font-size: 30px;
     line-height: 36px;
-    font-weight: 700;
-    letter-spacing: -0.015em;
+    font-weight: 800;
+    letter-spacing: -0.02em;
     text-wrap: balance;
   }
   .lead {
@@ -207,8 +208,10 @@
     line-height: 18px;
     color: var(--text-secondary);
   }
-  .privacy .icon {
-    margin-top: 2px;
+  .privacy :global(.glyph) {
+    flex: none;
+    margin-top: 1px;
+    color: var(--text-tertiary);
   }
   .proof {
     align-self: stretch;
@@ -232,9 +235,6 @@
   .measure {
     gap: 8px;
     margin-top: 8px;
-  }
-  .measure .icon {
-    font-size: 14px;
   }
   .or {
     margin: 4px 0 0;

@@ -58,8 +58,8 @@
     <h2 id="{uid}-t">{title}</h2>
     <p id="{uid}-b">{body}</p>
     <div class="row">
-      <button bind:this={cancelBtn} type="button" class="btn" onclick={oncancel}>{t("cancel")}</button>
-      <button type="button" class="btn danger" disabled={busy} onclick={onconfirm}>{confirm}</button>
+      <button bind:this={cancelBtn} type="button" class="btn btn-quiet" onclick={oncancel}>{t("cancel")}</button>
+      <button type="button" class="btn btn-danger" disabled={busy} onclick={onconfirm}>{confirm}</button>
     </div>
   </div>
 </dialog>
@@ -71,7 +71,8 @@
   h2 {
     margin: 0;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
   p {
     margin: 8px 0 0;
@@ -84,12 +85,7 @@
     gap: 8px;
     margin-top: 24px;
   }
-  .danger {
-    background: var(--critical);
-    color: #2a0d07;
+  .btn-danger {
     font-weight: 700;
-  }
-  .danger:hover:not(:disabled) {
-    background: #f6a595;
   }
 </style>

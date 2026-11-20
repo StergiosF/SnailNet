@@ -3,7 +3,7 @@
 // the split in short. Pure, so it's tested.
 
 import { sameTarget } from "./rules";
-import { statusText, type Ledger } from "./ledger";
+import { QUIET_BPS, statusText, top, type Ledger } from "./ledger";
 import { t, type Key } from "./i18n";
 import type { Boost, GameTick, GameWhy, Profile, Target } from "./types";
 
@@ -179,12 +179,17 @@ export function users(
     }
   }
   out.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
-  const shown = out.slice(0, max);
+  const calling = (u: User) => inCall(u.target, calls, true);
+  // Nothing is using the internet (the glance says so): what steady.ts
+  // still holds in view at a trickle isn't "using your internet", or the
+  // page would contradict its own heading (seen 2026-11-20). Those go to
+  // idle() instead; an app left waiting or in a call stays.
+  const pool = top(l) === null ? out.filter((u) => u.waiting || calling(u)) : out;
+  const shown = pool.slice(0, max);
   // An app in a call stays in view however little it moves (a voice call
   // is ~0.05 Mbps), so "in a call" is seen while a download is busy: it
   // takes the place of the quietest app that isn't in a call.
-  const calling = (u: User) => inCall(u.target, calls, true);
-  for (const u of out) {
+  for (const u of pool) {
     if (shown.includes(u) || !calling(u)) continue;
     let i = shown.length - 1;
     while (i >= 0 && calling(shown[i]!)) i--;
@@ -213,6 +218,24 @@ export function users(
     }
   }
   return shown;
+}
+
+/** The apps that are open but idle while nothing is using the internet:
+ *  held in view by steady.ts at a trickle, so users() leaves them out.
+ *  Busiest first; empty as soon as anything moves for real. */
+export function idle(l: Ledger): { key: string; target: Target; name: string }[] {
+  if (top(l) !== null) return [];
+  const out: { key: string; target: Target; name: string; bps: number }[] = [];
+  for (const s of l.slices) {
+    if (s.target !== null) {
+      if (s.active && s.bps < QUIET_BPS) out.push({ key: s.key, target: s.target, name: s.name, bps: s.bps });
+      continue;
+    }
+    for (const m of s.members) if (!m.fixed && !m.waiting && m.bps < QUIET_BPS) out.push(m);
+  }
+  return out
+    .sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name))
+    .map(({ key, target, name }) => ({ key, target, name }));
 }
 
 /** Why `target` goes first as a game right now (§11.5), or null: not a

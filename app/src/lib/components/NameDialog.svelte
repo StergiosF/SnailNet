@@ -60,9 +60,9 @@
   <form class="in" onsubmit={submit}>
     <h2 id="{uid}-t">{t("mode.rename.title")}</h2>
     <label for="{uid}-n">{t("mode.rename.label")}</label>
-    <input id="{uid}-n" bind:this={input} bind:value maxlength="40" autocomplete="off" spellcheck="false" />
+    <input id="{uid}-n" class="field" bind:this={input} bind:value maxlength="40" autocomplete="off" spellcheck="false" />
     <div class="row">
-      <button type="button" class="btn" onclick={oncancel}>{t("cancel")}</button>
+      <button type="button" class="btn btn-quiet" onclick={oncancel}>{t("cancel")}</button>
       <button type="submit" class="btn btn-accent" disabled={!ok || busy}>{t("mode.rename.save")}</button>
     </div>
   </form>
@@ -78,26 +78,18 @@
   h2 {
     margin: 0 0 16px;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
   label {
     margin-bottom: 6px;
     font-size: 13px;
+    font-weight: 700;
     color: var(--text-secondary);
   }
+  /* The look is app.css .field, the same as every text box. */
   input {
-    height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--stroke-card);
-    border-radius: var(--radius-control);
-    background: var(--surface-2);
-    color: var(--text-primary);
-    font: inherit;
     font-size: 15px;
-  }
-  input:focus-visible {
-    outline: 2px solid var(--focus-outer);
-    outline-offset: 1px;
   }
   .row {
     display: flex;

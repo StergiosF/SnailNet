@@ -1,12 +1,15 @@
 <script lang="ts">
-  // The Split page's unsaved changes (PLAN.md §14.3): a bar that stays at
-  // the bottom of the page while the draft differs from what's saved.
-  // Save sends it (rev-checked), Discard drops it. When the saved split
-  // changed somewhere else meanwhile it says so, and offers the new one
-  // or saving this one over it. It rises in once, as the first change is
-  // made; reduced motion keeps only the fade. Ctrl+S saves too.
+  // The Split page's unsaved changes (PLAN.md §14.3): docked at the foot of
+  // the page while the draft differs from what's saved, full width with a
+  // hairline above it, so it reads as part of the window rather than a
+  // card floating over the list. Save (ivory, Ctrl+S) sends it
+  // (rev-checked), Discard drops it. When the saved split changed
+  // somewhere else meanwhile it says so, and offers the new one or saving
+  // this one over it. It slides up once, as the first change is made;
+  // reduced motion keeps only the fade.
   import { t } from "../i18n";
   import { ui } from "../ui.svelte";
+  import Glyph from "./Glyph.svelte";
 
   function onKey(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && ui.dirty && !ui.committing) {
@@ -20,7 +23,9 @@
 
 {#if ui.dirty}
   <div class="bar" class:stale={ui.stale} class:failed={ui.draftError !== null} role="region" aria-label={t("draft.title")}>
-    <i class="icon mark" aria-hidden="true">{ui.stale || ui.draftError ? "" : ""}</i>
+    {#if ui.stale || ui.draftError}
+      <span class="mark" aria-hidden="true"><Glyph name="info" size={20} /></span>
+    {/if}
     <div class="words" aria-live="polite">
       {#if ui.draftError}
         <b>{t("draft.title")}</b>
@@ -44,64 +49,68 @@
       <button type="button" class="btn btn-quiet" disabled={ui.committing} onclick={() => ui.discard()}
         >{t("draft.discard")}</button
       >
-      <button type="button" class="btn btn-accent save" disabled={ui.committing} onclick={() => void ui.commit()}
-        title={t("draft.save.key")}>{t("draft.save")}</button
+      <button
+        type="button"
+        class="btn btn-accent save"
+        disabled={ui.committing}
+        aria-keyshortcuts="Control+S"
+        onclick={() => void ui.commit()}>{t("draft.save")}<kbd aria-hidden="true">Ctrl+S</kbd></button
       >
     {/if}
   </div>
 {/if}
 
 <style>
+  /* Docked: sticky to the foot of the scrolling page, out to the window's
+     edges (past the page's gutter and bottom padding). */
   .bar {
     position: sticky;
-    bottom: 16px;
+    bottom: 0;
     z-index: 2;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
-    margin-top: 16px;
-    padding: 12px 12px 12px 16px;
-    border-radius: var(--radius-card);
-    background: var(--surface-3);
-    box-shadow: var(--shadow-raised);
-    animation: rise-in 360ms var(--ease-out) backwards;
+    gap: 10px 12px;
+    margin: 28px calc(-1 * var(--gutter)) -28px;
+    padding: 12px var(--gutter);
+    border-top: 1px solid var(--stroke-strong);
+    background: color-mix(in srgb, var(--surface-side) 92%, transparent);
+    backdrop-filter: blur(10px);
+    animation: dock 340ms var(--ease-out) backwards;
+  }
+  @keyframes dock {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
   }
   .mark {
+    display: flex;
     flex: none;
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    background: var(--accent);
-    color: var(--on-accent);
-    font-size: 14px;
+    color: var(--caution);
   }
-  .stale .mark {
-    background: var(--caution);
+  .failed .mark {
+    color: var(--critical);
   }
   .words {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
     flex: 1;
     min-width: 0;
     font-size: 14px;
     line-height: 1.35;
   }
   .words b {
-    font-size: 15px;
+    font-size: 14.5px;
     font-weight: 700;
   }
   .words span {
     color: var(--text-secondary);
   }
-  /* Red text falls under 4.5:1 on this surface: the mark carries the
-     colour, the words stay light. */
   .words .err {
     color: var(--text-primary);
-  }
-  .failed .mark {
-    background: var(--critical);
   }
   .btn {
     flex: none;
@@ -109,9 +118,15 @@
   .save {
     min-width: 96px;
   }
+  kbd {
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.55;
+  }
   @media (forced-colors: active) {
     .bar {
-      border: 2px solid Highlight;
+      border-top: 2px solid Highlight;
     }
   }
 </style>

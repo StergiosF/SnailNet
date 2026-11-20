@@ -1,33 +1,31 @@
 <script lang="ts">
-  // The tray flyout (PLAN.md §14.4): the quickest way to see who is using
-  // the line and to change it. The snail, Pause / Resume; the main window's
-  // sentence (or the state that needs attention) and, while the line is
-  // full, the proof's one line (ping with and without SnailNet); the modes; a small live
-  // strip; the boost, if one is on (who goes first, the time left in words
-  // and as a shortening bar, Stop); the slices with − % + (quiet "only
-  // when free" ones left out); and the way to the main window. Its − / +
-  // save by themselves: it's the quick panel (ui.svelte.ts `change`). It hides on Escape and when it loses
-  // focus (tray.rs).
+  // The tray flyout (PLAN.md §14.4, Obsidian Jade), 380 × 500: the quickest
+  // look and the quickest change. The snail and what SnailNet is doing; the
+  // main window's sentence (or the state that needs attention) with the
+  // one-tap fix; the modes as four tiles; the proof's one line (live ping
+  // while busy, else the last speed test's grades); the apps using the
+  // internet now, each with Boost; and at the foot Pause (always here, the
+  // tray is where people reach for it) and the way to the main window. It
+  // hides on Escape and when it loses focus (tray.rs).
   import { getCurrentWindow, Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
-  import { glance, ledger, parts, statusText } from "../ledger";
-  import { pause, resume, startService, stopBoost, switchMode } from "../actions";
-  import { availableModes, boostLeft, boostShare, liveBoost } from "../modes";
+  import { glance, ledger } from "../ledger";
+  import { pause, resume, startService, switchMode } from "../actions";
+  import { availableModes, boostLeft, gameWhy, inCall, liveBoost, timeLeft, users } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
-  import { pauseShown } from "../pause";
-  import { flash } from "../flash";
-  import { ProofWatch, proofOf } from "../proof";
-  import { canStep, stepShare } from "../rules";
+  import { placeMenu } from "../popover";
+  import { ProofWatch, grade, proofOf, rise } from "../proof";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
-  import FixOffer from "./FixOffer.svelte";
   import AppIcon from "./AppIcon.svelte";
+  import BoostButton from "./BoostButton.svelte";
+  import FixOffer from "./FixOffer.svelte";
+  import Glyph, { modeGlyph } from "./Glyph.svelte";
   import Snail from "./Snail.svelte";
-  import Stepper from "./Stepper.svelte";
 
   onMount(() => {
     service.start().catch((e: unknown) => {
@@ -35,7 +33,6 @@
     });
     return ui.tick();
   });
-
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
@@ -48,12 +45,22 @@
     const now = proofOf(s, book, upBook, service.snapshot?.config.line.measured);
     return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
   });
+  // Ping is only ever shown live while the service measures it (busy);
+  // quiet, the last speed test's grades speak instead, never a made-up ping.
+  const measured = $derived(service.snapshot?.config.line.measured);
+  const grades = $derived.by(() => {
+    const without = measured ? rise(measured.idle_ms, measured.loaded_ms) : null;
+    const withIt = measured ? rise(measured.idle_ms, measured.with_ms) : null;
+    return without === null || withIt === null ? null : { without: grade(without), with: grade(withIt) };
+  });
   const proofLine = $derived(
-    proof === null
-      ? null
-      : proof.without === null
+    proof !== null
+      ? proof.without === null
         ? t("proof.live", { now: Math.round(proof.now), name: proof.name })
-        : t("proof.flyout", { now: Math.round(proof.now), without: Math.round(proof.without) }),
+        : t("proof.flyout", { now: Math.round(proof.now), without: Math.round(proof.without) })
+      : grades
+        ? t("flyout.grades", grades)
+        : null,
   );
   const lineMbps = $derived(service.snapshot?.config.line.down_mbps);
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
@@ -68,20 +75,58 @@
       newNetworkName(service.snapshot?.config),
     ),
   );
-  const strip = $derived(book ? parts(book) : []);
   const boost = $derived(connected ? liveBoost(service.snapshot?.config.boost, ui.now) : null);
-  const boostBar = $derived(boost ? boostShare(boost, ui.now) : null);
-  const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));
   const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
   const active = $derived(service.snapshot?.config.active_profile ?? "");
   const picked = $derived(modes.find((m) => m.id === active));
-  const paused = $derived.by(() => {
+  const pausedUntil = $derived.by(() => {
     const p = service.snapshot?.config.pause;
-    return p !== undefined && (p.until === undefined || ui.now < p.until);
+    return p !== undefined && (p.until === undefined || ui.now < p.until) ? p : null;
   });
-  const rows = $derived(
-    book?.slices.filter((s) => !(s.rule >= 0 && s.enabled && s.share === null && !s.active)) ?? [],
+
+  // Who is using the internet now (what the tray is opened for), not the
+  // split's rules: in Balanced there are none, and the flyout would be empty.
+  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
+  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
+  const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
+  const list = $derived(book ? users(book, boost, label, 4, calls) : []);
+  const total = $derived(book?.total ?? 0);
+  function sub(u: (typeof list)[number]): string {
+    if (u.boosted && boost) return t("who.boost.left", { left: boostLeft(boost, ui.now) });
+    const why = gameWhy(u.target, service.stats?.games, focusBoost);
+    if (why) return t(`who.game.${why}`);
+    return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
+  }
+  const first = (u: (typeof list)[number]) =>
+    u.boosted ||
+    gameWhy(u.target, service.stats?.games, focusBoost) !== null ||
+    inCall(u.target, service.stats?.calls, callsFirst);
+
+  const doing = $derived(
+    pausedUntil
+      ? t("flyout.state.paused", { left: timeLeft(pausedUntil.until, ui.now) })
+      : service.playing && picked
+        ? t("mode.playing")
+        : connected
+          ? t("flyout.state.on")
+          : "",
   );
+
+  const uid = $props.id();
+  let pauseBtn = $state<HTMLButtonElement | null>(null);
+  let pauseMenu = $state<HTMLDivElement | null>(null);
+  const pauseChoices: { minutes: number | null; label: string; glyph: "clock" | "infinity" }[] = [
+    { minutes: 15, label: t("pause.for.15m"), glyph: "clock" },
+    { minutes: 60, label: t("pause.for.1h"), glyph: "clock" },
+    { minutes: null, label: t("pause.for.forever"), glyph: "infinity" },
+  ];
+  function placePause(e: ToggleEvent) {
+    if (e.newState === "open" && pauseBtn && pauseMenu) placeMenu(pauseBtn, pauseMenu, "above", "start");
+  }
+  function pickPause(minutes: number | null) {
+    pauseMenu?.hidePopover();
+    void pause(minutes);
+  }
 
   async function openMain() {
     const main = await Window.getByLabel("main");
@@ -96,38 +141,31 @@
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") void getCurrentWindow().hide();
   }
-  const ink = (i: number, shade: number) => (i >= 0 ? `var(--ink-${i})` : `var(--stone-${shade})`);
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 <div class="flyout">
   <div class="top">
-    <Snail size={20} light />
+    <Snail size={22} light />
     <span class="app">{t("app.name")}</span>
-    {#if connected && pauseShown(service.snapshot?.config, ui.now)}
-      <button
-        type="button"
-        class="pause"
-        class:paused
-        onclick={() => void (paused ? resume() : pause(60))}
-        >{paused ? t("pause.resume") : t("pause.1h")}</button
-      >
+    {#if doing}
+      <span class="state" class:paused={pausedUntil !== null}><i aria-hidden="true"></i>{doing}</span>
     {/if}
   </div>
-  {#if notice}
-    <h1>{notice.title}</h1>
-    <p class="detail" role={notice.severity === "info" ? "status" : "alert"}>{notice.message}</p>
-  {:else if sentence}
-    <h1>{sentence.title}</h1>
-    <p class="detail">{sentence.detail}</p>
-    <FixOffer canEdit={connected} compact />
-    {#if proofLine}
-      <p class="proof num" aria-live="off">{proofLine}</p>
+
+  <div class="say">
+    {#if notice}
+      <h1>{notice.title}</h1>
+      <p class="detail" role={notice.severity === "info" ? "status" : "alert"}>{notice.message}</p>
+    {:else if sentence}
+      <h1>{sentence.title}</h1>
+      <p class="detail">{sentence.detail}</p>
+      <FixOffer canEdit={connected} compact />
+    {:else}
+      <h1 class="wait">{t("link.connecting")}</h1>
     {/if}
-  {:else}
-    <h1 class="wait">{t("link.connecting")}</h1>
-  {/if}
+  </div>
 
   {#if connected && modes.length > 0}
     <div class="modes" role="radiogroup" aria-label={t("mode.label")}>
@@ -138,66 +176,49 @@
           aria-checked={m.id === active}
           class:on={m.id === active}
           class:playing={m.id === "gaming" && service.playing}
-          onclick={() => void switchMode(m.id)}>{m.name}</button
+          title={m.body}
+          onclick={() => void switchMode(m.id)}
         >
+          <Glyph name={modeGlyph(m.id)} size={18} />
+          <span>{m.id === "quiet-downloads" ? t("flyout.mode.quiet") : m.name}</span>
+        </button>
       {/each}
     </div>
     {#if service.playing && picked}
-      <p class="detail" role="status">{t("mode.playing.note", { mode: picked.name })}</p>
+      <p class="detail note" role="status">{t("mode.playing.note", { mode: picked.name })}</p>
     {/if}
   {/if}
 
-  {#if book && service.stats}
-    <div class="bar" aria-hidden="true">
-      {#each strip as p (p.key)}
-        <i style:width="{(p.bps / scale) * 100}%" style:background={ink(p.ink, p.shade)}></i>
-      {/each}
-    </div>
-  {/if}
-
-  {#if boost}
-    <div class="boost">
-      <AppIcon target={boost.target} name={label(boost.target)} size={18} />
-      <span class="bw">{t("flyout.boost", { name: label(boost.target), left: boostLeft(boost, ui.now) })}</span>
-      <button
-        type="button"
-        aria-label={t("boost.stop.label", { name: label(boost.target) })}
-        onclick={() => void stopBoost()}>{t("boost.stop")}</button
-      >
-      {#if boostBar !== null}
-        <span class="left" aria-hidden="true"><i style:width="{boostBar * 100}%"></i></span>
-      {/if}
-    </div>
+  {#if connected && proofLine}
+    <p class="proof num" aria-live="off"><Glyph name="ping" size={18} /><span>{proofLine}</span></p>
   {/if}
 
   {#if book}
-    <ul aria-label={t("split.label")}>
-      {#each rows as s (s.key)}
-        <li use:flash={`${s.share}|${s.enabled}`}>
-          <AppIcon target={s.target} name={s.name} size={20} />
-          <span class="who">
-            <b>{s.name}</b>
-            <span
-              >{s.bps >= 50_000
-                ? t("row.moving", { mbps: mbps(s.bps), status: statusText(s.status) })
-                : statusText(s.status)}</span
-            >
-          </span>
-          {#if s.enabled}
-            <Stepper
-              name={s.name}
-              pct={s.share === null ? null : Math.round(s.share / 100)}
-              canLess={canStep(ui.rules, s.rule, -1)}
-              canMore={canStep(ui.rules, s.rule, 1)}
-              onstep={(dir) => ui.change(stepShare(ui.rules, s.rule, dir))}
-              compact
-            />
-          {:else}
-            <span class="off">{t("row.off")}</span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
+    <div class="list">
+      <h2>
+        {t("who.title")}
+        {#if list.length > 0 && lineBps !== null}
+          <span class="num" aria-live="off">{t("who.total", { used: mbps(total), line: mbps(lineBps) })}</span>
+        {/if}
+      </h2>
+      {#if list.length > 0}
+        <ul>
+          {#each list as u (u.key)}
+            <li class:boosted={u.boosted}>
+              <AppIcon target={u.target} name={u.name} size={24} />
+              <span class="who">
+                <b>{u.name}</b>
+                <span class:wait={u.waiting && !u.boosted} class:first={first(u)}>{sub(u)}</span>
+              </span>
+              <span class="mb num" aria-live="off">{mbps(u.bps)}</span>
+              <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!connected} />
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="empty">{t("who.empty")}</p>
+      {/if}
+    </div>
   {:else}
     <div class="quiet"><Snail size={32} light /></div>
   {/if}
@@ -205,9 +226,36 @@
     <p class="error" role="alert">{ui.error}</p>
   {/if}
 
-  <button type="button" class="btn open" onclick={() => void openMain()}>
-    {t("flyout.open")}<i class="icon" aria-hidden="true">&#xE8A7;</i>
-  </button>
+  <div class="foot">
+    {#if connected}
+      {#if pausedUntil}
+        <button type="button" class="btn resume" onclick={() => void resume()}>
+          <Glyph name="play" size={18} />{t("pause.resume")}
+        </button>
+      {:else}
+        <button
+          bind:this={pauseBtn}
+          type="button"
+          class="btn"
+          popovertarget="{uid}-pause"
+          aria-haspopup="menu"
+          aria-label={t("pause.label")}
+        >
+          <Glyph name="pause" size={18} />{t("pause")}
+        </button>
+        <div bind:this={pauseMenu} id="{uid}-pause" class="popmenu" popover="auto" role="menu" ontoggle={placePause}>
+          <p class="title">{t("pause.label")}</p>
+          <p class="body">{t("pause.menu.body")}</p>
+          {#each pauseChoices as c (c.label)}
+            <button type="button" role="menuitem" onclick={() => pickPause(c.minutes)}
+              ><Glyph name={c.glyph} size={18} />{c.label}</button
+            >
+          {/each}
+        </div>
+      {/if}
+    {/if}
+    <button type="button" class="btn btn-accent open" onclick={() => void openMain()}>{t("flyout.open")}</button>
+  </div>
 </div>
 
 <style>
@@ -215,53 +263,95 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 16px;
     overflow: hidden;
   }
   .top {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 10px;
+    padding: 14px 16px 6px;
   }
   .app {
     flex: 1;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .state i {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--shell);
+  }
+  .state.paused i {
+    background: var(--caution);
+  }
+  .say {
+    padding: 4px 16px 0;
+  }
+  h1 {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  h1.wait {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .detail {
+    margin: 3px 0 0;
     font-size: 13px;
-    font-weight: 700;
+    line-height: 1.4;
     color: var(--text-secondary);
   }
-  .pause {
-    height: 28px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 8px;
-    background: var(--surface-1);
-    color: var(--text-primary);
-    font-size: 12px;
-    font-weight: 700;
+  .note {
+    padding: 0 16px;
   }
-  .pause:hover {
-    background: var(--surface-2);
-  }
-  .pause.paused {
-    background: var(--caution);
-    color: #2a1d05;
-  }
+  /* The modes as four tiles: glyph over name; the one that's on is ivory. */
   .modes {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-    margin-top: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 12px 12px 0;
   }
   .modes button {
-    height: 34px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 2px 7px;
     border: 0;
-    border-radius: 9px;
+    border-radius: var(--radius-control);
     background: var(--surface-1);
     color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 700;
-    transition: background-color 140ms linear, color 140ms linear;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.15;
+    transition:
+      background-color 140ms linear,
+      color 140ms linear;
+  }
+  .modes button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .modes button:hover:not(.on) {
     background: var(--surface-2);
@@ -271,152 +361,77 @@
     background: var(--accent);
     color: var(--on-accent);
   }
+  .modes button.on :global(.glyph) {
+    color: #13785f;
+  }
   /* Gaming standing in while a game runs (§11.5). */
-  .modes button.playing {
-    color: var(--accent);
-    box-shadow: inset 0 0 0 1.5px var(--accent);
-  }
-  @media (forced-colors: active) {
-    .modes button,
-    .pause {
-      border: 1px solid ButtonText;
-    }
-    .modes button.on {
-      forced-color-adjust: none;
-      background: Highlight;
-      color: HighlightText;
-    }
-  }
-  h1 {
-    margin: 0;
-    font-size: 18px;
-    line-height: 1.3;
-    font-weight: 700;
-    text-wrap: balance;
-  }
-  h1.wait {
-    color: var(--text-secondary);
-    font-weight: 600;
-  }
-  .detail {
-    margin: 4px 0 0;
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--text-secondary);
+  .modes button.playing:not(.on) {
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1.5px var(--shell);
   }
   .proof {
-    margin: 6px 0 0;
-    font-size: 13px;
-    line-height: 1.4;
-    font-weight: 700;
-    color: var(--shell-hover);
-  }
-  @media (forced-colors: active) {
-    .proof {
-      color: CanvasText;
-    }
-  }
-  .bar {
     display: flex;
-    gap: 2px;
-    flex: none;
-    height: 8px;
-    margin-top: 14px;
-    border-radius: 3px;
-    background: var(--surface-1);
-    overflow: hidden;
-  }
-  .bar i {
-    display: block;
-    flex: 0 1 auto;
-    min-width: 2px;
-    border-radius: 2px;
-  }
-  .boost {
-    position: relative;
-    display: flex;
-    flex: none;
     align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 8px 8px 10px 10px;
-    border-radius: var(--radius-control);
-    overflow: hidden;
-    background: linear-gradient(90deg, rgb(47 168 142 / 0.26), rgb(47 168 142 / 0.08));
-    box-shadow: inset 0 0 0 1px rgb(47 168 142 / 0.4);
-    animation: rise-in 420ms var(--ease-out) backwards;
+    gap: 10px;
+    margin: 10px 12px 0;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: var(--surface-1);
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--text-secondary);
   }
-  .bw {
+  .proof :global(.glyph) {
+    color: var(--shell-bright);
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
     flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-height: 0;
+    padding: 12px 6px 0;
+  }
+  h2 {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    padding: 0 10px 6px;
     font-size: 13px;
     font-weight: 700;
+    color: var(--text-secondary);
   }
-  .boost button {
-    flex: none;
-    height: 26px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 7px;
-    background: var(--shell);
-    color: var(--on-shell);
-    font-size: 12px;
-    font-weight: 700;
-  }
-  .boost button:hover {
-    background: var(--shell-hover);
-  }
-  .boost .left {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 3px;
-    background: rgb(47 168 142 / 0.18);
-  }
-  .boost .left i {
-    display: block;
-    height: 100%;
-    background: var(--shell);
-    transition: width 1200ms linear;
-  }
-  @media (forced-colors: active) {
-    .boost {
-      border: 1px solid Highlight;
-    }
-    .boost .left i,
-    .boost button {
-      forced-color-adjust: none;
-      background: Highlight;
-      color: HighlightText;
-    }
+  h2 span {
+    font-weight: 600;
+    color: var(--text-tertiary);
   }
   ul {
     flex: 1;
     min-height: 0;
-    margin: 12px -8px 0;
+    margin: 0;
     padding: 0;
     list-style: none;
     overflow-y: auto;
   }
   li {
-    display: flex;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 10px;
-    min-height: 48px;
-    padding: 0 8px;
+    min-height: 46px;
+    padding: 3px 4px 3px 10px;
     border-radius: var(--radius-control);
+    transition: background-color 120ms linear;
   }
   li:hover {
     background: var(--surface-1);
   }
+  li.boosted {
+    background: var(--shell-soft);
+  }
   .who {
     display: flex;
     flex-direction: column;
-    flex: 1;
     min-width: 0;
     white-space: nowrap;
   }
@@ -424,17 +439,28 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
   }
   .who span {
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--text-secondary);
   }
-  .off {
-    flex: none;
-    font-size: 13px;
+  .who span.wait {
+    color: var(--caution);
+  }
+  .who span.first {
+    color: var(--shell-bright);
+  }
+  .mb {
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+  .empty {
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 13.5px;
     color: var(--text-secondary);
   }
   .quiet {
@@ -443,13 +469,37 @@
     place-items: center;
   }
   .error {
-    margin: 8px 0 0;
+    margin: 8px 16px 0;
   }
-  .open {
+  .foot {
+    display: flex;
     flex: none;
-    margin-top: 12px;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--stroke-card);
   }
-  .open .icon {
-    font-size: 12px;
+  .foot .btn {
+    flex: 1;
+  }
+  .foot .resume {
+    background: color-mix(in srgb, var(--caution) 16%, var(--surface-2));
+    color: var(--caution);
+  }
+  .foot .resume:hover {
+    background: color-mix(in srgb, var(--caution) 24%, var(--surface-2));
+  }
+  @media (forced-colors: active) {
+    .modes button,
+    .proof {
+      border: 1px solid ButtonText;
+    }
+    .modes button.on {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
+    li.boosted {
+      outline: 1px solid Highlight;
+    }
   }
 </style>

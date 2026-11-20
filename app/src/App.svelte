@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Main window (PLAN.md §14.2, the Garden): the green side rail with the
+  // Main window (PLAN.md §14.2, Obsidian Jade): the side rail with the
   // pages (Now, Split, Settings) and the line; beside it the title bar's
   // caption buttons, a state that needs attention if there is one, and
   // the open page. First run takes the whole window until it's done.
@@ -56,7 +56,8 @@
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const dirStats = $derived(ui.dir === "down" ? service.stats?.down : service.stats?.up);
   const book = $derived(connected ? ledger(ui.rules, dirStats, label, service.waiting[ui.dir]) : null);
-  // The Now page always speaks of downloads: that's where the sharing is felt.
+  // The Now page's sentence always speaks of downloads (that's where the
+  // sharing is felt); its list follows the Download / Upload choice.
   const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
   const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
   // The proof (§11.10): ping with and without SnailNet while the line is
@@ -69,6 +70,7 @@
     return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
   });
   const downLine = $derived(service.snapshot?.config.line.down_mbps);
+  const dirLine = $derived(ui.dir === "down" ? downLine : service.snapshot?.config.line.up_mbps);
   const loading = $derived(
     service.link.kind === "connecting" || (service.link.kind === "connected" && service.stats === null),
   );
@@ -100,7 +102,8 @@
   {:else}
     <Sidebar />
     <div class="col">
-      <TitleBar lead={ui.page === "settings" ? undefined : modeSwitch} />
+      <!-- The mode switch on every page: the strip never changes height. -->
+      <TitleBar lead={modeSwitch} />
       <main>
         {#if service.link.kind === "connecting"}
           <p class="visually-hidden" role="status">{t("link.connecting")}</p>
@@ -112,11 +115,11 @@
           <div class="page">
             {#if ui.page === "now"}
               <NowPage
-                ledger={loading ? null : downBook}
+                ledger={loading ? null : book}
                 glance={sentence}
                 {proof}
                 canEdit={connected}
-                lineBps={downLine === undefined ? null : downLine * 1e6}
+                lineBps={dirLine === undefined ? null : dirLine * 1e6}
               />
             {:else if ui.page === "split"}
               {#if service.link.kind === "connecting" || connected}
@@ -156,7 +159,12 @@
   main {
     flex: 1;
     overflow-y: auto;
-    padding: 0 var(--gutter) 28px;
+    padding: 14px var(--gutter) 28px;
+  }
+  @media (max-width: 900px) {
+    main {
+      --gutter: 20px;
+    }
   }
   .notice {
     margin-bottom: 16px;

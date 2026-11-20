@@ -1,10 +1,9 @@
-/* SnailNet's look (PLAN.md §14.1, the Garden): the snail icon's own
-   colours, not Windows' light/dark or accent. The deep green of its shell's
-   spiral is the ground, its body's darker green the side rail, the shell's
-   bright green marks what's boosted, and cream marks the choice that's on.
-   Soft rounded surfaces a step lighter, warm off-white type in one
-   hyperlegible family, and slice inks only where they carry meaning.
-   Windows high contrast mode replaces all of it with system colours. */
+/* SnailNet's look (PLAN.md §14.1, Obsidian Jade, 2026-11-20): deep mineral
+   charcoal planes with a breath of green, so the snail's living jade, the
+   warm ivory of "what's on" and the apps' own brand icons carry the colour.
+   Hairlines and one panel per page part rather than cards on cards; slice
+   inks only where they carry meaning. Windows high contrast mode replaces
+   all of it with system colours. */
 
 @import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
 
@@ -47,14 +46,16 @@
 
   /* Ground and the surfaces on it, each a step lighter; the side rail a
      step darker. */
-  --surface-side: #0a211d;
-  --surface-ground: #0e2b26;
-  --surface-1: #143831;
-  --surface-2: #1b443c;
-  --surface-3: #24524a;
+  --surface-side: #0c100f;
+  --surface-ground: #121716;
+  --surface-1: #181f1d;
+  --surface-2: #202826;
+  --surface-3: #2a3431;
   /* The thin ring round dialogs and the segmented track; the caption
      buttons' hover and press; loading placeholders. */
-  --stroke-card: rgb(255 255 255 / 0.08);
+  --stroke-card: rgb(236 234 226 / 0.075);
+  /* A stronger hairline: text boxes, the save bar's edge. */
+  --stroke-strong: rgb(236 234 226 / 0.13);
   --fill-subtle-hover: rgb(255 255 255 / 0.06);
   --fill-subtle-pressed: rgb(255 255 255 / 0.03);
   --skeleton: rgb(255 255 255 / 0.07);
@@ -62,35 +63,35 @@
   /* Type: primary 13:1 and secondary 8.9:1 on the ground (6.4:1 on
      surface 2). Tertiary (6:1 on the ground) is for rings and disabled
      text only; it falls under 4.5:1 on surface 2. */
-  --text-primary: #f3eee2;
-  --text-secondary: #b8cbc4;
-  --text-tertiary: #8fa9a1;
+  --text-primary: #eceae2;
+  --text-secondary: #a8b3ae;
+  --text-tertiary: #7c8984;
 
   /* The one strong action per view, and the mode that's on: cream. */
-  --accent: #efe8d6;
-  --accent-hover: #fbf6ea;
-  --accent-pressed: #ddd5c1;
-  --on-accent: #0a211d;
+  --accent: #f0ece1;
+  --accent-hover: #fbf8ef;
+  --accent-pressed: #dcd7ca;
+  --on-accent: #121716;
   /* The shell: what's boosted, and the brand. */
-  --shell: #2fa88e;
-  --shell-hover: #3bbb9f;
-  --on-shell: #062520;
-  --shell-soft: rgb(47 168 142 / 0.16);
-  --shell-soft-hover: rgb(47 168 142 / 0.28);
+  --shell: #2db894;
+  --shell-hover: #3fcaa5;
+  --on-shell: #03241b;
+  --shell-soft: rgb(45 184 148 / 0.11);
+  --shell-soft-hover: rgb(45 184 148 / 0.2);
   /* The shell's green lit up, for marks on a dark surface (Boost, ticks):
      7.4:1 on surface 2. */
-  --shell-bright: #74dcc1;
+  --shell-bright: #5ee0bd;
   /* Hover on the menus and quiet rows: a breath of cream, not a grey slab. */
-  --hover-soft: rgb(239 232 214 / 0.07);
-  --hover-strong: rgb(239 232 214 / 0.11);
-  --critical-soft: rgb(242 144 126 / 0.12);
+  --hover-soft: rgb(240 236 225 / 0.06);
+  --hover-strong: rgb(240 236 225 / 0.1);
+  --critical-soft: rgb(240 144 124 / 0.12);
 
-  --caution: #eab04e;
-  --critical: #f2907e;
+  --caution: #e8b45c;
+  --critical: #f0907c;
   --close-hover: #c42b1c;
 
-  --focus-outer: #efe8d6;
-  --selection: rgb(239 232 214 / 0.25);
+  --focus-outer: #f0ece1;
+  --selection: rgb(240 236 225 / 0.25);
 
   /* Slice inks, in rule order (all ≥ 5.7:1 on the ground); Everything
      else is stone, lighter to darker for its apps in the live strip. Every
@@ -101,17 +102,17 @@
   --ink-3: #d3a0d8;
   --ink-4: #c9c46e;
   --ink-5: #f0a3a3;
-  --stone-0: #a6b5ad;
-  --stone-1: #8fa39a;
-  --stone-2: #7b8f87;
-  --stone-3: #687c74;
-  --stone-4: #566a63;
-  --free-hatch: repeating-linear-gradient(135deg, #2d5a52 0 2px, transparent 2px 6px);
+  --stone-0: #a3aea9;
+  --stone-1: #8d9893;
+  --stone-2: #79847f;
+  --stone-3: #66706c;
+  --stone-4: #555e5a;
+  --free-hatch: repeating-linear-gradient(135deg, rgb(236 234 226 / 0.07) 0 2px, transparent 2px 6px);
 
   --radius-control: 10px;
   --radius-card: 16px;
-  --titlebar-h: 32px;
-  --side-w: 208px;
+  --titlebar-h: 44px;
+  --side-w: 212px;
   --gutter: 32px;
   /* Exponential ease-out: confident arrivals, no bounce. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -119,12 +120,9 @@
      above catching the top edge. */
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.045) inset, 0 12px 32px -12px rgb(0 0 0 / 0.55);
   --shadow-raised: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 18px 40px -14px rgb(0 0 0 / 0.65);
-  /* The light in the room: shell green from above the content, a deeper
-     green pooling low. Painted once on the window, under everything. */
-  --ground-light:
-    radial-gradient(1100px 520px at 62% -12%, rgb(47 168 142 / 0.17), transparent 70%),
-    radial-gradient(900px 600px at 105% 110%, rgb(8 27 23 / 0.9), transparent 70%),
-    radial-gradient(700px 500px at -10% 105%, rgb(31 111 100 / 0.12), transparent 70%);
+  /* The light in the room: barely there, a cool lift from above. No green
+     wash: the jade belongs to the snail and to what's boosted. */
+  --ground-light: radial-gradient(1100px 480px at 60% -14%, rgb(236 234 226 / 0.035), transparent 70%);
 }
 
 @media (forced-colors: active) {
@@ -293,7 +291,7 @@ select {
 /* Something that can't be taken back: coral, and it stays coral under the
    pointer (a soft coral wash, never a grey one). */
 .btn-danger {
-  background: transparent;
+  background: color-mix(in srgb, var(--critical) 12%, var(--surface-2));
   color: var(--critical);
 }
 .btn-danger:hover:not(:disabled) {
@@ -310,24 +308,28 @@ select {
   }
 }
 
-/* A text box on a surface. */
+/* One text box style everywhere (speeds, names, search): a dark well with
+   a hairline, an ivory ring while typing. */
 .field {
-  height: 36px;
+  height: 40px;
   padding: 0 12px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius-control);
-  background: var(--surface-2);
+  background: var(--surface-side);
+  box-shadow: inset 0 0 0 1px var(--stroke-strong);
   color: var(--text-primary);
+  transition: box-shadow 120ms linear;
 }
 .field:hover {
-  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px rgb(236 234 226 / 0.2);
 }
+.field:focus,
 .field:focus-visible {
-  outline: 2px solid var(--focus-outer);
-  outline-offset: 0;
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-outer);
 }
 .field::placeholder {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 @media (forced-colors: active) {
   .field {
@@ -346,6 +348,7 @@ input.switch {
   margin: 0;
   border-radius: 12px;
   background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--stroke-strong);
   transition: background-color 160ms linear;
 }
 input.switch::after {
@@ -392,12 +395,12 @@ input.switch:disabled {
   color: var(--critical);
 }
 
-/* A soft card on the ground: the Now page's boxes, Settings' groups. Lit
-   from above: a touch lighter at the top, its edge catching the light. */
+/* The one panel per page part: Now's list, Split's shares, Settings'
+   groups. Flat; rows inside it are parted by hairlines. */
 .card {
   border-radius: var(--radius-card);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 120px), var(--surface-1);
-  box-shadow: var(--shadow-card);
+  background: var(--surface-1);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset;
 }
 
 /* A card's own heading: plain words, not a label above words. */
@@ -580,14 +583,16 @@ dialog::backdrop {
   white-space: nowrap;
 }
 
-/* Reduced motion: nothing travels or blurs. Colour and opacity changes
-   that say something happened stay, quick. */
+/* Reduced motion (DESIGN.md: "drops travel and keeps colour"): keyframed
+   arrivals end at once and nothing slides, but colour, background and
+   opacity still fade, so hover feedback and the change warmth (flash.ts,
+   Web Animations on background colour only) stay. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-delay: 0s !important;
+    transition-property: color, background-color, border-color, opacity, box-shadow, outline-color !important;
   }
 }

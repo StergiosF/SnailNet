@@ -63,7 +63,8 @@
   h2 {
     margin: 0;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: -0.01em;
     text-wrap: balance;
   }
   p {

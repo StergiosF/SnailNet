@@ -208,13 +208,14 @@
   ]);
 
   // The index: one entry per group shown, lit for the group in view.
-  const index = $derived<{ id: string; glyph: GlyphName; label: string }[]>([
-    { id: "set-line", glyph: "line", label: t("settings.connection") },
-    { id: "set-first", glyph: "boost", label: t("settings.first") },
-    ...(grouped.length > 0 ? [{ id: "set-apps", glyph: "apps" as GlyphName, label: t("settings.apps") }] : []),
-    { id: "set-start", glyph: "power", label: t("settings.windows") },
-    { id: "set-about", glyph: "info", label: t("settings.about") },
-    { id: "set-reset", glyph: "reset", label: t("settings.reset") },
+  // Words only: the rows carry the glyphs, once (DESIGN.md, Settings).
+  const index = $derived<{ id: string; label: string }[]>([
+    { id: "set-line", label: t("settings.connection") },
+    { id: "set-first", label: t("settings.first") },
+    ...(grouped.length > 0 ? [{ id: "set-apps", label: t("settings.apps") }] : []),
+    { id: "set-start", label: t("settings.windows") },
+    { id: "set-about", label: t("settings.about") },
+    { id: "set-reset", label: t("settings.reset") },
   ]);
   let current = $state("set-line");
   let groupsEl = $state<HTMLDivElement | null>(null);
@@ -279,16 +280,16 @@
         aria-current={current === g.id ? "true" : undefined}
         onclick={() => go(g.id)}
       >
-        <Glyph name={g.glyph} size={17} />{g.label}
+        {g.label}
       </button>
     {/each}
   </nav>
   <div class="groups" bind:this={groupsEl}>
     <section id="set-line" aria-labelledby="set-line-h">
-      <h2 class="group-title" id="set-line-h"><Glyph name="line" size={18} />{t("settings.connection")}</h2>
+      <h2 class="group-title" id="set-line-h">{t("settings.connection")}</h2>
       <div class="card group">
         <div class="item">
-          <span class="ic"><Glyph name="gauge" size={20} /></span>
+          <span class="ic"><Glyph name="line" size={20} /></span>
           <div class="words">
             <b>{t("settings.line")}</b>
             <span class="num"
@@ -312,7 +313,7 @@
         </div>
         {#if measured}
           <div class="item test">
-            <span class="ic"><Glyph name="ping" size={20} /></span>
+            <span class="ic"><Glyph name="gauge" size={20} /></span>
             <div class="words">
               <b>{t("measure.last", { date: measuredOn })}</b>
               <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
@@ -353,7 +354,7 @@
         {#if others.length > 0}
           <details class="item fold">
             <summary>
-              <span class="ic"><Glyph name="line" size={20} /></span>
+              <span class="ic"><Glyph name="window" size={20} /></span>
               <span class="words"><b>{t("settings.networks")}</b><span>{t("settings.networks.body")}</span></span>
               <span class="count">{t("settings.networks.count", { count: others.length })}<Glyph name="chevron" size={16} /></span>
             </summary>
@@ -371,7 +372,7 @@
     </section>
 
     <section id="set-first" aria-labelledby="set-first-h">
-      <h2 class="group-title" id="set-first-h"><Glyph name="boost" size={18} />{t("settings.first")}</h2>
+      <h2 class="group-title" id="set-first-h">{t("settings.first")}</h2>
       <div class="card group">
         {#each firstSwitches as sw (sw.title)}
           <label class="item">
@@ -419,7 +420,7 @@
 
     {#if grouped.length > 0}
       <section id="set-apps" aria-labelledby="set-apps-h">
-        <h2 class="group-title" id="set-apps-h"><Glyph name="apps" size={18} />{t("settings.apps")}</h2>
+        <h2 class="group-title" id="set-apps-h">{t("settings.apps")}</h2>
         <div class="card group">
           <details class="item fold">
             <summary>
@@ -459,7 +460,7 @@
     {/if}
 
     <section id="set-start" aria-labelledby="set-start-h">
-      <h2 class="group-title" id="set-start-h"><Glyph name="power" size={18} />{t("settings.windows")}</h2>
+      <h2 class="group-title" id="set-start-h">{t("settings.windows")}</h2>
       <div class="card group">
         <label class="item">
           <span class="ic"><Glyph name="power" size={20} /></span>
@@ -512,7 +513,7 @@
     </section>
 
     <section id="set-about" aria-labelledby="set-about-h">
-      <h2 class="group-title" id="set-about-h"><Glyph name="info" size={18} />{t("settings.about")}</h2>
+      <h2 class="group-title" id="set-about-h">{t("settings.about")}</h2>
       <div class="card group">
         <div class="item">
           <span class="ic"><Glyph name="info" size={20} /></span>
@@ -541,7 +542,7 @@
     </section>
 
     <section id="set-reset" aria-labelledby="set-reset-h">
-      <h2 class="group-title" id="set-reset-h"><Glyph name="reset" size={18} />{t("settings.reset")}</h2>
+      <h2 class="group-title" id="set-reset-h">{t("settings.reset")}</h2>
       <div class="card group">
         <div class="item">
           <span class="ic"><Glyph name="reset" size={20} /></span>
@@ -583,8 +584,8 @@
      column at a reading width. */
   .settings {
     display: grid;
-    grid-template-columns: 184px minmax(0, 680px);
-    column-gap: 32px;
+    grid-template-columns: 168px minmax(0, 680px);
+    column-gap: 40px;
     align-items: start;
   }
   h1 {
@@ -605,15 +606,14 @@
   .index button {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 38px;
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 10px;
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
     color: var(--text-secondary);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     text-align: left;
     transition:
       background-color 140ms linear,
@@ -623,12 +623,11 @@
     background: var(--fill-subtle-hover);
     color: var(--text-primary);
   }
+  /* The group in view: a soft fill and bright words, as the side rail
+     marks the open page. Never a stripe down one side. */
   .index button.on {
     background: var(--surface-1);
     color: var(--text-primary);
-  }
-  .index button.on :global(.glyph) {
-    color: var(--shell);
   }
   .groups {
     display: flex;
@@ -638,9 +637,6 @@
   }
   section {
     scroll-margin-top: 8px;
-  }
-  .group-title :global(.glyph) {
-    color: var(--shell);
   }
   /* A list needed once: one row that opens. */
   .item.fold {
@@ -674,7 +670,7 @@
     color: var(--text-primary);
   }
   .fold .nets {
-    margin: 12px 0 2px 50px;
+    margin: 12px 0 2px 38px;
   }
   @media (max-width: 980px) {
     .settings {
@@ -685,10 +681,7 @@
     }
   }
   .group-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 10px 4px;
+    margin: 0 0 10px 2px;
     font-size: 16px;
     line-height: 22px;
     font-weight: 700;
@@ -701,12 +694,13 @@
   .item {
     display: flex;
     align-items: center;
-    gap: 14px;
-    min-height: 68px;
-    padding: 14px 18px 14px 16px;
+    gap: 18px;
+    min-height: 64px;
+    padding: 12px 18px;
   }
+  /* Hairlines between rows, light enough to see on the dark panel. */
   .item + .item {
-    border-top: 1px solid rgb(0 0 0 / 0.18);
+    border-top: 1px solid var(--stroke-card);
   }
   /* A row you click anywhere on says so under the pointer. */
   label.item,
@@ -777,95 +771,82 @@
   /* The last test's grades: without and with SnailNet side by side, each
      its letter and how far ping rose. The letter says it; its colour only
      echoes it (§14.9). */
+  /* Side by side, parted by a hairline: a big plain letter, how far ping
+     rose, and whose it is. No boxes. */
   .grades {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin: 12px 0 8px;
+    max-width: 420px;
+    margin: 14px 0 10px;
     padding: 0;
     list-style: none;
   }
   .grades li {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    background: rgb(0 0 0 / 0.16);
+    flex-direction: column-reverse;
+    gap: 0;
+    padding-right: 14px;
   }
-  .grades li.ours {
-    background: var(--shell-soft);
+  .grades li + li {
+    padding: 0 0 0 16px;
+    border-left: 1px solid var(--stroke-card);
   }
   .words .who {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-secondary);
   }
-  .grades li.ours .who {
-    color: var(--text-primary);
-  }
   .score {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 0;
   }
   .words .rise {
-    font-size: 14px;
+    font-size: 13.5px;
+    font-weight: 700;
     color: var(--text-primary);
   }
   .words .letter {
-    display: grid;
-    flex: none;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    background: var(--surface-2);
-    color: var(--text-primary);
-    font-size: 17px;
+    font-size: 30px;
     font-weight: 800;
-    line-height: 1;
+    line-height: 1.15;
+    color: var(--text-primary);
   }
   .words .g-A,
   .words .g-B {
-    background: var(--shell);
-    color: var(--on-shell);
+    color: var(--shell-bright);
   }
   .words .g-C {
-    background: rgb(234 176 78 / 0.16);
     color: var(--caution);
   }
   .words .g-D,
   .words .g-F {
-    background: var(--critical-soft);
     color: var(--critical);
   }
   .words .note {
     max-width: 64ch;
     font-size: 13px;
   }
-  @media (forced-colors: active) {
-    .letter {
-      border: 1px solid CanvasText;
-    }
-  }
   .words .metered {
     margin-top: 4px;
     color: var(--caution);
   }
-  /* Every setting leads with a quiet grey glyph of what it's about. */
+  /* Every setting leads with one quiet grey glyph of what it's about:
+     plain, never on a tile, and nowhere else on the page. */
   .ic {
-    display: grid;
+    display: flex;
     flex: none;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-control);
-    background: rgb(0 0 0 / 0.16);
+    width: 20px;
     color: var(--text-tertiary);
+    transition: color 120ms linear;
+  }
+  .item:hover .ic,
+  .fold summary:hover .ic {
+    color: var(--text-secondary);
   }
   .item.test .ic {
     align-self: flex-start;
+    margin-top: 2px;
   }
   .choices li {
     align-items: center;

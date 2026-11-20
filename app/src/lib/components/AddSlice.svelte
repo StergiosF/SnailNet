@@ -1,7 +1,8 @@
 <script lang="ts">
-  // "Add a slice" (PLAN.md §11.1): a dialog listing the websites SnailNet
-  // knows and the apps it has seen, without the ones that have a rule,
-  // with a search box, each with its real logo where there is one.
+  // "Add an app or website" (PLAN.md §11.1): a dialog listing the apps
+  // SnailNet has seen and the websites it knows, in two groups, without
+  // the ones that have a rule, with a search box (the one text-box style,
+  // a search glyph inside it), each with its real logo where there is one.
   // Picking one gives it a 20% slice (from Everything else first) in the
   // Split page's draft and opens its row. A native <dialog>: focus stays inside,
   // Escape closes it, focus goes back to the button that opened it.
@@ -13,6 +14,7 @@
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
   import AppIcon from "./AppIcon.svelte";
+  import Glyph from "./Glyph.svelte";
 
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchEl = $state<HTMLInputElement | null>(null);
@@ -37,6 +39,13 @@
     }
   });
 
+  const groups = $derived(
+    [
+      { label: t("settings.apps"), items: choices.filter((c) => c.target.kind !== "site") },
+      { label: t("editor.kind.site.many"), items: choices.filter((c) => c.target.kind === "site") },
+    ].filter((g) => g.items.length > 0),
+  );
+
   function closed() {
     ui.adding = false;
     if (opener?.isConnected) {
@@ -58,31 +67,39 @@
     <div class="top">
       <h2 id="add-title">{t("picker.title")}</h2>
       <button type="button" class="x" aria-label={t("editor.close")} onclick={() => (ui.adding = false)}>
-        <i class="icon" aria-hidden="true">&#xE711;</i>
+        <Glyph name="close" size={18} />
       </button>
     </div>
-    <input
-      bind:this={searchEl}
-      bind:value={query}
-      class="field search"
-      type="search"
-      placeholder={t("picker.search")}
-      aria-label={t("picker.search")}
-    />
+    <label class="search">
+      <Glyph name="search" size={18} />
+      <input
+        bind:this={searchEl}
+        bind:value={query}
+        type="search"
+        placeholder={t("picker.search")}
+        aria-label={t("picker.search")}
+      />
+    </label>
     {#if choices.length === 0}
       <p class="hint">{query.trim() ? t("picker.empty", { query: query.trim() }) : t("picker.hint")}</p>
     {:else}
-      <ul>
-        {#each choices as c (c.target.kind + ":" + c.target.id)}
-          <li>
-            <button type="button" class="choice" onclick={() => pick(c.target)}>
-              <AppIcon target={c.target} name={c.name} size={22} />
-              <span class="name">{c.name}</span>
-              <span class="kind">{t(`editor.kind.${c.target.kind}`)}</span>
-            </button>
-          </li>
+      <div class="lists">
+        {#each groups as g (g.label)}
+          <h3>{g.label}</h3>
+          <ul>
+            {#each g.items as c (c.target.kind + ":" + c.target.id)}
+              <li>
+                <button type="button" class="choice" onclick={() => pick(c.target)}>
+                  <AppIcon target={c.target} name={c.name} size={22} boxed />
+                  <span class="name">{c.name}</span>
+                  <span class="kind">{t(`editor.kind.${c.target.kind}`)}</span>
+                  <span class="plus" aria-hidden="true"><Glyph name="plus" size={18} /></span>
+                </button>
+              </li>
+            {/each}
+          </ul>
         {/each}
-      </ul>
+      </div>
     {/if}
   {/if}
 </dialog>
@@ -90,8 +107,9 @@
 <style>
   /* The frame is app.css's dialog. */
   dialog {
-    max-height: min(520px, calc(100vh - 64px));
-    padding: 20px;
+    width: min(500px, calc(100vw - 48px));
+    max-height: min(560px, calc(100vh - 64px));
+    padding: 22px 22px 14px;
     overflow: hidden;
   }
   dialog[open] {
@@ -107,37 +125,79 @@
   h2 {
     margin: 0;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
   .x {
+    display: grid;
+    place-items: center;
     width: 32px;
     height: 32px;
     border: 0;
     border-radius: 8px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 12px;
   }
   .x:hover {
     background: var(--surface-2);
     color: var(--text-primary);
   }
+  /* The one text-box style (app.css .field), with its glyph inside. */
   .search {
-    width: 100%;
+    display: flex;
     flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    background: var(--surface-side);
+    box-shadow: inset 0 0 0 1px var(--stroke-strong);
+    color: var(--text-tertiary);
+    cursor: text;
+    transition: box-shadow 120ms linear;
+  }
+  .search:hover {
+    box-shadow: inset 0 0 0 1px rgb(236 234 226 / 0.2);
+  }
+  .search:focus-within {
+    box-shadow: inset 0 0 0 2px var(--focus-outer);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+  }
+  .search input::placeholder {
+    color: var(--text-tertiary);
+  }
+  .lists {
+    margin: 8px -8px 0;
+    padding: 0 0 6px;
+    overflow-y: auto;
+  }
+  h3 {
+    margin: 12px 10px 4px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-tertiary);
   }
   ul {
-    margin: 12px -8px 0;
+    margin: 0;
     padding: 0;
     list-style: none;
-    overflow-y: auto;
   }
   .choice {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 44px;
+    min-height: 48px;
     padding: 0 10px;
     border: 0;
     border-radius: var(--radius-control);
@@ -160,6 +220,19 @@
   .kind {
     color: var(--text-secondary);
     font-size: 13px;
+  }
+  .plus {
+    display: flex;
+    color: var(--text-tertiary);
+    transition: color 120ms linear;
+  }
+  .choice:hover .plus {
+    color: var(--shell-bright);
+  }
+  @media (forced-colors: active) {
+    .search {
+      border: 1px solid CanvasText;
+    }
   }
   .hint {
     margin: 14px 0 0;

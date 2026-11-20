@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Pause (PLAN.md §11.8), at the foot of the side rail: a button that
+  // Pause (PLAN.md §11.8), at the foot of the side rail: a quiet item that
   // opens a menu (15 minutes, 1 hour, until I resume). While paused it
   // becomes Resume, with the time left under it.
   import { pause, resume } from "../actions";
@@ -71,22 +71,26 @@
 {/if}
 
 <style>
+  /* A quiet rail item like the pages above it; Resume says it in amber. */
   .ctl {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 44px;
-    padding: 6px 12px;
+    min-height: 40px;
+    padding: 4px 10px;
     border: 0;
     border-radius: var(--radius-control);
-    background: var(--fill-subtle-hover);
-    color: var(--text-primary);
+    background: transparent;
+    color: var(--text-secondary);
     text-align: left;
-    transition: background-color 140ms linear;
+    transition:
+      background-color 140ms linear,
+      color 140ms linear;
   }
   .ctl:hover:not(:disabled) {
-    background: rgb(255 255 255 / 0.1);
+    background: var(--surface-1);
+    color: var(--text-primary);
   }
   .ctl:disabled {
     opacity: 0.5;
@@ -96,20 +100,20 @@
     flex-direction: column;
   }
   b {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 600;
   }
   small {
-    font-size: 12px;
-    color: inherit;
-    opacity: 0.8;
+    font-size: 12.5px;
+    color: var(--text-secondary);
   }
   .resume {
-    background: var(--caution);
-    color: #2a1d05;
+    background: color-mix(in srgb, var(--caution) 12%, transparent);
+    color: var(--caution);
   }
   .resume:hover:not(:disabled) {
-    background: #f1c06a;
+    background: color-mix(in srgb, var(--caution) 20%, transparent);
+    color: var(--caution);
   }
   @media (forced-colors: active) {
     .ctl {

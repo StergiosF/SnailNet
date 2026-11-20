@@ -51,26 +51,33 @@
 </span>
 
 <style>
+  /* One dark well holding − % +, a hairline round it. */
   .stepper {
     display: flex;
     flex: none;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-control);
+    background: var(--surface-side);
+    box-shadow: inset 0 0 0 1px var(--stroke-card);
   }
   /* Drawn, not typed: a font's − and + sit off the middle of the button. */
   .step {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border: 0;
-    border-radius: var(--radius-control);
-    background: var(--surface-2);
+    border-radius: 8px;
+    background: transparent;
     color: var(--text-secondary);
     font-size: 18px;
     line-height: 1;
-    transition: background-color 120ms linear;
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
   }
   .step svg {
     width: 14px;
@@ -88,30 +95,33 @@
     opacity: 0.35;
   }
   .fig {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
+  /* What it was, hanging just under the figure so the well keeps its size. */
   .was {
-    margin-top: -2px;
-    font-size: 12px;
+    position: absolute;
+    top: calc(100% + 4px);
+    font-size: 11.5px;
     font-weight: 600;
-    color: var(--text-secondary);
+    white-space: nowrap;
+    color: var(--text-tertiary);
   }
   .n {
-    width: 72px;
+    width: 52px;
     text-align: center;
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: 15px;
+    font-weight: 800;
   }
   .n .v {
     display: inline-block;
   }
   .n small {
     margin-left: 1px;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text-secondary);
   }
   .free {
@@ -121,22 +131,18 @@
     color: var(--text-secondary);
   }
 
-  .compact {
-    gap: 10px;
-  }
   .compact .step {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
   }
   .compact .step svg {
     width: 12px;
     height: 12px;
   }
   .compact .n {
-    width: 50px;
-    font-size: 18px;
-    letter-spacing: 0;
+    width: 44px;
+    font-size: 14px;
   }
   .compact .n small {
     margin-left: 0;
@@ -147,6 +153,9 @@
   }
 
   @media (forced-colors: active) {
+    .stepper {
+      border: 1px solid CanvasText;
+    }
     .step {
       border: 1px solid ButtonText;
     }

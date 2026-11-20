@@ -74,7 +74,7 @@ mockIPC(
     const a = (args ?? {}) as Record<string, unknown>;
     switch (cmd) {
       case "current": {
-        const latest: Latest = { link: { kind: "connected", service_version: "0.0.6" }, snapshot, stats: tick(0) };
+        const latest: Latest = { link: { kind: "connected", service_version: "0.0.7" }, snapshot, stats: tick(0) };
         return structuredClone(latest);
       }
       case "set_rules": {
@@ -153,3 +153,10 @@ setInterval(() => {
 }, 250);
 
 await import("./main");
+
+// ?page=split|settings opens that page, for screenshots.
+const page = params.get("page");
+if (page === "split" || page === "settings") {
+  const { ui } = await import("./lib/ui.svelte");
+  ui.go(page);
+}

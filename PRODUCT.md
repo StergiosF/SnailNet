@@ -72,11 +72,13 @@ priorities and absolute limits and make the user do the arithmetic.
 - The snail is the brand: in the side rail, the tray, the flyout, empty
   states, and its shell spiral drawn faint behind the Now page. Never in
   the way of a control.
-- Its own dark look from the snail icon, "the Garden" (PLAN.md §14.1,
-  D11–D13): shell greens, cream for what's on, soft light and depth,
-  hyperlegible type, motion that explains. Chosen by the user from
-  real-size mockups (2026-11-17) after Windows 11 native ("looks like a
-  Windows application") and the plainer Ledger.
+- Its own dark look, "Obsidian Jade" (PLAN.md §14.1): mineral charcoal
+  planes so the snail's jade, ivory for what's on and the apps' own
+  icons carry the colour; flat panels and hairlines, hyperlegible type,
+  motion that explains. Chosen by the user from an interactive mockup
+  (2026-11-20), replacing "the Garden" (2026-11-17), which came after
+  Windows 11 native ("looks like a Windows application") and the plainer
+  Ledger.
 
 ## Evidence on Hand
 

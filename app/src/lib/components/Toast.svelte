@@ -4,13 +4,15 @@
   // after a few seconds (ui.svelte.ts) or when dismissed.
   import { t } from "../i18n";
   import { ui } from "../ui.svelte";
+  import Glyph from "./Glyph.svelte";
 </script>
 
 <div class="slot" role="status" aria-live="polite">
   {#if ui.toast}
     {@const toast = ui.toast}
     <div class="toast">
-      <span>{toast.message}</span>
+      <Glyph name="check" size={18} />
+      <span class="msg">{toast.message}</span>
       {#if toast.action}
         <button
           type="button"
@@ -22,7 +24,7 @@
         >
       {/if}
       <button type="button" class="x" aria-label={t("dismiss")} onclick={() => (ui.toast = null)}>
-        <i class="icon" aria-hidden="true">&#xE711;</i>
+        <Glyph name="close" size={16} />
       </button>
     </div>
   {/if}
@@ -38,19 +40,29 @@
     justify-content: center;
     pointer-events: none;
   }
+  /* Quiet and dark: a raised surface with a jade tick, not a bright pill. */
   .toast {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     max-width: 560px;
-    padding: 8px 8px 8px 16px;
-    border-radius: 14px;
-    background: var(--accent);
-    color: var(--on-accent);
+    padding: 6px 6px 6px 14px;
+    border-radius: 12px;
+    background: var(--surface-3);
+    color: var(--text-primary);
     font-size: 14px;
-    box-shadow: 0 12px 32px rgb(0 0 0 / 0.4);
+    font-weight: 600;
+    box-shadow:
+      var(--shadow-raised),
+      inset 0 0 0 1px var(--stroke-strong);
     pointer-events: auto;
-    animation: rise 180ms var(--ease-out);
+    animation: rise 220ms var(--ease-out);
+  }
+  .toast > :global(.glyph) {
+    color: var(--shell-bright);
+  }
+  .msg {
+    min-width: 0;
   }
   @keyframes rise {
     from {
@@ -64,24 +76,31 @@
     color: inherit;
   }
   .act {
-    height: 32px;
+    height: 30px;
     padding: 0 12px;
-    border-radius: 9px;
-    font-weight: 800;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    border-radius: 8px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--surface-2);
+    transition: background-color 120ms linear;
   }
-  .act:hover,
-  .x:hover {
-    background: rgb(10 33 29 / 0.08);
+  .act:hover {
+    background: var(--surface-1);
   }
   .x {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    font-size: 11px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
+  }
+  .x:hover {
+    background: var(--hover-strong);
+    color: var(--text-primary);
   }
   @media (forced-colors: active) {
     .toast {

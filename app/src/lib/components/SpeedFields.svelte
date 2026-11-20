@@ -6,6 +6,7 @@
   import { parseSpeed } from "../line";
   import { t } from "../i18n";
   import type { Direction } from "../lineDialog.svelte";
+  import Glyph from "./Glyph.svelte";
 
   let {
     down = $bindable(""),
@@ -31,9 +32,9 @@
     inputs[target]?.select();
   }
 
-  const dirs: { dir: Direction; glyph: string; label: string }[] = [
-    { dir: "down", glyph: "", label: t("line.down") },
-    { dir: "up", glyph: "", label: t("line.up") },
+  const dirs: { dir: Direction; glyph: "download" | "upload"; label: string }[] = [
+    { dir: "down", glyph: "download", label: t("line.down") },
+    { dir: "up", glyph: "upload", label: t("line.up") },
   ];
 </script>
 
@@ -41,7 +42,7 @@
   {#each dirs as d (d.dir)}
     <div class="speed">
       <label for="{uid}-{d.dir}">
-        <i class="icon" aria-hidden="true">{d.glyph}</i>{d.label}
+        <Glyph name={d.glyph} size={16} />{d.label}
       </label>
       <div class="box" class:invalid={shown[d.dir]}>
         <input
@@ -91,41 +92,34 @@
   label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text-secondary);
   }
-  label .icon {
-    font-size: 13px;
-    color: var(--shell);
+  label :global(.glyph) {
+    color: var(--text-tertiary);
   }
+  /* The app's one text box look (app.css .field), a little taller for a
+     big number. */
   .box {
     display: flex;
     align-items: center;
-    height: 52px;
-    padding: 0 14px;
-    border-radius: 12px;
-    background: var(--surface-ground);
-    box-shadow:
-      inset 0 0 0 1px rgb(255 255 255 / 0.08),
-      inset 0 2px 6px rgb(0 0 0 / 0.25);
-    transition: box-shadow 160ms linear;
+    height: 46px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    background: var(--surface-side);
+    box-shadow: inset 0 0 0 1px var(--stroke-strong);
+    transition: box-shadow 120ms linear;
   }
   .box:hover {
-    box-shadow:
-      inset 0 0 0 1px rgb(255 255 255 / 0.16),
-      inset 0 2px 6px rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 0 0 1px rgb(236 234 226 / 0.2);
   }
   .box:focus-within {
-    box-shadow:
-      inset 0 0 0 2px var(--shell),
-      inset 0 2px 6px rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 0 0 2px var(--focus-outer);
   }
   .box.invalid {
-    box-shadow:
-      inset 0 0 0 2px var(--critical),
-      inset 0 2px 6px rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 0 0 2px var(--critical);
   }
   input {
     flex: 1;
@@ -136,16 +130,16 @@
     background: transparent;
     color: var(--text-primary);
     font: inherit;
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: -0.01em;
     user-select: text;
     cursor: text;
   }
   input::placeholder {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
   }
   input:focus-visible {
     outline: none;
@@ -156,14 +150,15 @@
   }
   .unit {
     padding-left: 6px;
-    font-size: 14px;
-    color: var(--text-secondary);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
   }
   .hint {
     margin: 10px 0 0;
     font-size: 13px;
     line-height: 18px;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
   }
   @media (forced-colors: active) {
     .box {
