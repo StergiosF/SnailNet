@@ -10,11 +10,11 @@ publish.workspace = true
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 ctrlc = "3.5.2"
-snailnet-core = { version = "0.0.7", path = "../snailnet-core" }
-snailnet-engine = { version = "0.0.7", path = "../snailnet-engine" }
-snailnet-ipc = { version = "0.0.7", path = "../snailnet-ipc" }
-snailnet-service = { version = "0.0.7", path = "../snailnet-service" }
-snailnet-win = { version = "0.0.7", path = "../snailnet-win" }
+snailnet-core = { version = "0.0.8", path = "../snailnet-core" }
+snailnet-engine = { version = "0.0.8", path = "../snailnet-engine" }
+snailnet-ipc = { version = "0.0.8", path = "../snailnet-ipc" }
+snailnet-service = { version = "0.0.8", path = "../snailnet-service" }
+snailnet-win = { version = "0.0.8", path = "../snailnet-win" }
 
 [lints]
 workspace = true
