@@ -52,6 +52,9 @@ class Ui {
   /** The app picked inside Everything else, or null. */
   member = $state<string | null>(null);
   adding = $state(false);
+  /** Rows the Split page's bar points at (a hovered segment, a handle's
+   *  two neighbours): slice keys. */
+  hot = $state<string[]>([]);
   /** A speed test this window started is running, its check with
    *  SnailNet included (actions.ts measureLine). */
   measuring = $state(false);

@@ -105,7 +105,7 @@
   ];
 </script>
 
-<li class="slice" class:open class:off={!slice.enabled}>
+<li class="slice" class:open class:hot={ui.hot.includes(slice.key)} class:off={!slice.enabled}>
   <div class="row">
     {#if rule && canEdit}
       <button
@@ -321,6 +321,10 @@
   .slice:hover,
   .slice.open {
     background: var(--surface-1);
+  }
+  /* The bar above points at this row (a hovered segment, a held handle). */
+  .slice.hot {
+    background: var(--surface-2);
   }
   .row {
     display: grid;
@@ -581,6 +585,10 @@
     .member {
       forced-color-adjust: none;
       border: 1px solid ButtonText;
+    }
+    .slice.hot {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
     }
     .member.picked {
       outline: 2px solid Highlight;

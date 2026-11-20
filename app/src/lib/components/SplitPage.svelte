@@ -6,8 +6,8 @@
   // Delete instead of Reset, since there's no starting split to go back to.
   //
   // Read top to bottom: what a slice is (one sentence), what the line is
-  // doing right now, then the slices with what the percentage means over
-  // them. Changes wait in a draft until Save (SaveBar, ui.svelte.ts); the
+  // doing right now, the bar to drag the split with, then the slices with
+  // what the percentage means over them (two ways to the same draft). Changes wait in a draft until Save (SaveBar, ui.svelte.ts); the
   // mode's own buttons ask first when there are unsaved changes.
   import { copyMode, deleteMode, renameMode, resetSplit } from "../actions";
   import { t } from "../i18n";
@@ -19,6 +19,7 @@
   import NameDialog from "./NameDialog.svelte";
   import SaveBar from "./SaveBar.svelte";
   import SliceList from "./SliceList.svelte";
+  import SplitBar from "./SplitBar.svelte";
   import UsageStrip from "./UsageStrip.svelte";
 
   let {
@@ -84,6 +85,9 @@
 />
 {#if ledger && showStrip}
   <UsageStrip {ledger} {lineBps} />
+{/if}
+{#if ledger && !loading}
+  <SplitBar {ledger} {canEdit} />
 {/if}
 <SliceList {ledger} {loading} {canEdit} />
 <SaveBar />

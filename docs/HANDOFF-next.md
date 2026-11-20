@@ -16,16 +16,17 @@ nothing released since.
 | **1 The proof**: ping with / without SnailNet, A–F grades | Built, service + app (`192b844`, `75340bc`) | **Live check** (below), the user's look |
 | **3 The living snail**: calm / working / struggling tray icon | Built (`943f11f`) | The user's look at the real tray |
 | **2 The one-tap fix** | 2.0 sim, 2.1 scheduler pressure, 2.2 to IPC (`9858dcd`, `751c480`) | 2.3–2.6 (app), live check |
+| **The drag slider** on the Split page | Built (`splitDrag.ts`, `SplitBar.svelte`, PLAN.md §14.3) | the user's look: drag feel, label fitting, the readout |
 | No Windows notifications | Built: toasts gone, app doesn't ask for new-app events, Settings switches gone | — |
 | Measure again in the Connection speed box | Built | user's look |
-| Redesign: Now, Split, Save/Discard, boost look, real logos | Built (`75340bc`, PLAN.md §14.3) | user's look; **the drag slider** (below) |
+| Redesign: Now, Split, Save/Discard, boost look, real logos | Built (`75340bc`, PLAN.md §14.3) | user's look |
 
 **Nothing UI has been seen in a real window** (no-browser rule). Every
 screen above needs the user's eyes before release.
 
 ## Next, in order
 
-### 1. The drag slider on the Split page (the user asked, 2026-11-20)
+### 1. ~~The drag slider on the Split page~~ (built 2026-11-20; the brief below is kept for the user's look)
 
 "For the split design we should have the slider like the website where the
 user can drag it." The website's demo (`site/index.html` `.dbar`,
