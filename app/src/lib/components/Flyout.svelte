@@ -17,6 +17,7 @@
   import { availableModes, boostLeft, boostShare, liveBoost } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
+  import { pauseShown } from "../pause";
   import { ProofWatch, proofOf } from "../proof";
   import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
@@ -103,7 +104,7 @@
   <div class="top">
     <Snail size={20} light />
     <span class="app">{t("app.name")}</span>
-    {#if connected}
+    {#if connected && pauseShown(service.snapshot?.config, ui.now)}
       <button
         type="button"
         class="pause"

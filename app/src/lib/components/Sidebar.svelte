@@ -6,6 +6,7 @@
   // region.
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
+  import { pauseShown } from "../pause";
   import { service } from "../service.svelte";
   import { ui, type Page } from "../ui.svelte";
   import { updates } from "../update.svelte";
@@ -20,6 +21,9 @@
   ];
 
   const line = $derived(service.snapshot?.config.line ?? {});
+  // Pause only while SnailNet is doing something the user set up (or is
+  // paused, for Resume); the tray menu always has it (pause.ts).
+  const showPause = $derived(pauseShown(service.snapshot?.config, ui.now));
   const canSet = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const hasLine = $derived(line.down_mbps !== undefined || line.up_mbps !== undefined);
   const fig = (v: number | undefined) => (v === undefined ? "–" : String(Math.round(v * 10) / 10));
@@ -51,9 +55,11 @@
   </nav>
 
   {#if canSet}
-    <div class="foot">
-      <PauseControl disabled={!canSet} />
-    </div>
+    {#if showPause}
+      <div class="foot">
+        <PauseControl disabled={!canSet} />
+      </div>
+    {/if}
     <button
       type="button"
       class="line"
@@ -165,7 +171,8 @@
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
-    margin-top: 8px;
+    /* At the foot of the rail; under Pause when Pause shows. */
+    margin-top: auto;
     padding: 10px 12px 12px;
     border: 0;
     border-radius: var(--radius-control);
@@ -175,6 +182,9 @@
   }
   .foot {
     margin-top: auto;
+  }
+  .foot + .line {
+    margin-top: 8px;
   }
   .line:hover {
     background: var(--fill-subtle-hover);

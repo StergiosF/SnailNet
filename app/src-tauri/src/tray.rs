@@ -1,6 +1,8 @@
 //! The tray icon and its flyout (PLAN.md §14.4). SnailNet lives in the
-//! tray: closing the main window hides it, the tray's menu has "Open" and
-//! "Quit", and a left click toggles the flyout, a small borderless window
+//! tray: closing the main window hides it, the tray's menu has "Open",
+//! Pause / Resume (always: the window shows Pause only while SnailNet is
+//! doing something, the user's choice 2026-11-20) and "Quit", and a left
+//! click toggles the flyout, a small borderless window
 //! anchored above the tray icon (Windows 11 quick-panel style) that hides
 //! when it loses focus. The flyout loads the same page as the main window;
 //! the page picks its view from the window label ([`FLYOUT`]).
@@ -28,6 +30,19 @@ const GAP: f64 = 12.0;
 /// A tray click this soon after the flyout hid on blur is the click that
 /// blurred it: don't open it again.
 const REOPEN_GUARD: Duration = Duration::from_millis(250);
+
+/// The tray menu's Pause / Resume item, renamed as the service pauses.
+pub struct PauseItem(MenuItem<tauri::Wry>);
+
+const PAUSE_LABEL: &str = "Pause SnailNet for 1 hour";
+const RESUME_LABEL: &str = "Resume SnailNet";
+
+/// Name the tray menu's item for the state SnailNet is in.
+pub fn sync_pause(app: &AppHandle, paused: bool) {
+    if let Some(item) = app.try_state::<PauseItem>() {
+        let _ = item.0.set_text(if paused { RESUME_LABEL } else { PAUSE_LABEL });
+    }
+}
 
 /// When the flyout last hid because it lost focus.
 #[derive(Default)]
@@ -68,6 +83,8 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     }
 
     let open = MenuItem::with_id(app, "open", "Open SnailNet", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", PAUSE_LABEL, true, None::<&str>)?;
+    app.manage(PauseItem(pause.clone()));
     let startup = tauri::menu::CheckMenuItem::with_id(
         app,
         "startup",
@@ -78,13 +95,27 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     )?;
     let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit SnailNet", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &startup, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &pause, &startup, &sep, &quit])?;
     let mut tray = TrayIconBuilder::with_id(tray_icon::TRAY_ID)
         .tooltip("SnailNet")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, e| match e.id().as_ref() {
             "open" => open_main(app),
+            // Pause for an hour, or resume: the same requests as the
+            // window's, against the latest revision. Not connected: nothing
+            // to pause (the item says Pause and does nothing).
+            "pause" => {
+                if let Some((rev, paused)) = crate::pause_state(app) {
+                    tauri::async_runtime::spawn(async move {
+                        let _ = if paused {
+                            crate::changes::resume(rev).await
+                        } else {
+                            crate::changes::pause(Some(60), rev).await
+                        };
+                    });
+                }
+            }
             // The click already flipped the check; follow it, then show
             // what the registry really says (the write can fail).
             "startup" => {
