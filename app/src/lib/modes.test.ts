@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, boostShare, copyName, gameWhy, idle, inCall, liveBoost, modeName, users } from "./modes";
+import { availableModes, boostLeft, boostShare, copyName, gameWhy, idle, inCall, inFront, liveBoost, modeName, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -144,6 +144,19 @@ describe("users", () => {
   it("keeps a busy boosted one that falls past the cut", () => {
     const u = users(ledger(rules, busy(), label), { target: { kind: "family", id: "brave" } }, label, 2);
     expect(u.map((x) => x.name)).toEqual(["Steam", "Brave"]);
+  });
+});
+
+describe("in front", () => {
+  it("is the app the service reports in front", () => {
+    expect(inFront({ kind: "family", id: "firefox" }, "firefox", true)).toBe(true);
+    expect(inFront({ kind: "family", id: "Firefox" }, "firefox", true)).toBe(true);
+    expect(inFront({ kind: "family", id: "steam" }, "firefox", true)).toBe(false);
+    expect(inFront({ kind: "site", id: "firefox" }, "firefox", true)).toBe(false);
+    expect(inFront({ kind: "family", id: "firefox" }, undefined, true)).toBe(false);
+  });
+  it("says nothing while the switch is off", () => {
+    expect(inFront({ kind: "family", id: "firefox" }, "firefox", false)).toBe(false);
   });
 });
 

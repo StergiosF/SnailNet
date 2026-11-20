@@ -118,6 +118,16 @@ impl Inner {
         self.focus.games(&self.config.settings)
     }
 
+    /// The app in front that goes first now (§11.5), for `tick`: none
+    /// while the switch is off or nothing is shaped (then nothing goes
+    /// first, as in `plan`).
+    fn front(&self, tick: &StatsTick) -> Option<String> {
+        let shaping = tick.down.is_some() || tick.up.is_some();
+        (self.config.settings.focus_boost && shaping)
+            .then(|| self.focus.front(&self.config.settings))
+            .flatten()
+    }
+
     /// The apps in a live call that go first now (§11.9): none while the
     /// switch is off, never a "never first" app, each family once, sorted.
     fn calls(&self) -> Vec<String> {
@@ -357,6 +367,7 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: i.calls(),
+                front: i.front(t),
                 ping: i.ping,
                 ..t.clone()
             },
@@ -369,6 +380,7 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: Vec::new(),
+                front: None,
                 ping: None,
             },
         }
@@ -412,8 +424,13 @@ impl Hub {
                 playing: i.playing(),
                 games: i.games(),
                 calls: i.calls(),
+                front: None,
                 ping: i.ping,
             }
+        });
+        let tick = tick.map(|mut t| {
+            t.front = i.front(&t);
+            t
         });
         if tick.is_some() {
             i.tick = tick;
@@ -1189,6 +1206,48 @@ mod tests {
         })
         .unwrap();
         assert!(hub.plan(0).0.focus.is_empty(), "switched off");
+    }
+
+    #[test]
+    fn the_app_in_front_reaches_the_tick_while_shaping_and_switched_on() {
+        let (_t, hub) = hub();
+        hub.set_state(ServiceState::Shaping);
+        hub.set_family_of(|_| Some("firefox".into()));
+        hub.focus_changed(std::process::id(), None);
+        assert_eq!(hub.latest_tick().front, None, "no stats yet");
+        let base = Instant::now();
+        let snap = |ms: u64, shaped: bool| EngineSnapshot {
+            taken: Some(base + std::time::Duration::from_millis(ms)),
+            down: shaped.then(|| DirectionStats {
+                rate_bytes_per_sec: 1_000_000,
+                classes: vec![],
+                tags: vec![],
+                pressure: vec![],
+            }),
+            up: None,
+        };
+        hub.publish(&snap(0, true), None);
+        hub.publish(&snap(100, true), None);
+        assert_eq!(hub.latest_tick().front.as_deref(), Some("firefox"));
+
+        hub.change(hub.rev(), |c| {
+            c.settings.focus_boost = false;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(hub.latest_tick().front, None, "switched off");
+        hub.change(hub.rev(), |c| {
+            c.settings.focus_boost = true;
+            Ok(())
+        })
+        .unwrap();
+
+        hub.publish(&snap(200, false), None);
+        assert_eq!(
+            hub.latest_tick().front,
+            None,
+            "only blocking, nothing first"
+        );
     }
 
     #[test]

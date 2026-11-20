@@ -222,6 +222,7 @@ mod tests {
             playing: false,
             games: Vec::new(),
             calls: Vec::new(),
+            front: None,
             ping: None,
         }
     }

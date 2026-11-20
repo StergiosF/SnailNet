@@ -13,7 +13,7 @@
   import { t } from "../i18n";
   import { glance, ledger } from "../ledger";
   import { pause, resume, startService, switchMode } from "../actions";
-  import { availableModes, boostLeft, gameWhy, inCall, liveBoost, timeLeft, users } from "../modes";
+  import { availableModes, boostLeft, gameWhy, inCall, inFront, liveBoost, timeLeft, users } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
   import { placeMenu } from "../popover";
@@ -95,12 +95,14 @@
     if (u.boosted && boost) return t("who.boost.left", { left: boostLeft(boost, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
     if (why) return t(`who.game.${why}`);
-    return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
+    if (inCall(u.target, service.stats?.calls, callsFirst)) return t("who.call");
+    return inFront(u.target, service.stats?.front, focusBoost) ? t("who.front") : u.status;
   }
   const first = (u: (typeof list)[number]) =>
     u.boosted ||
     gameWhy(u.target, service.stats?.games, focusBoost) !== null ||
-    inCall(u.target, service.stats?.calls, callsFirst);
+    inCall(u.target, service.stats?.calls, callsFirst) ||
+    inFront(u.target, service.stats?.front, focusBoost);
 
   const doing = $derived(
     pausedUntil

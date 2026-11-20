@@ -380,6 +380,11 @@ pub struct StatsTick {
     /// §11.9). Empty from a service that doesn't report it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub calls: Vec<String>,
+    /// The app (family id) in front that goes first now (PLAN.md §11.5):
+    /// none while "Put what you're using first" is off, not shaping, or
+    /// from a service that doesn't report it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub front: Option<String>,
     /// The line's ping now (PLAN.md §11.10), while shaping and the line is
     /// busy. `None` when the line is quiet, ICMP is blocked, or from a
     /// service that doesn't report it.
@@ -763,6 +768,7 @@ mod tests {
                     why: GameWhy::Library,
                 }],
                 calls: vec!["discord".into()],
+                front: Some("firefox".into()),
                 ping: Some(PingTick {
                     now_ms: 19.5,
                     low_ms: 12.0,

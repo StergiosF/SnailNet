@@ -245,6 +245,11 @@ export function gameWhy(target: Target, games: GameTick[] | undefined, focusBoos
   return games?.find((g) => g.family === target.id)?.why ?? null;
 }
 
+/** Whether `target` is the app in front that goes first (§11.5). */
+export function inFront(target: Target, front: string | undefined, on: boolean): boolean {
+  return on && target.kind === "family" && front?.toLowerCase() === target.id.toLowerCase();
+}
+
 /** Whether `target` is an app in a live call that goes first (§11.9). */
 export function inCall(target: Target, calls: string[] | undefined, on: boolean): boolean {
   const id = target.id.toLowerCase();

@@ -501,6 +501,7 @@ mod tests {
             playing: false,
             games: Vec::new(),
             calls: Vec::new(),
+            front: None,
             ping: ping.map(|(now_ms, low_ms)| PingTick { now_ms, low_ms }),
         }
     }

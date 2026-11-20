@@ -246,6 +246,9 @@ export interface StatsTick {
   /** Apps (family ids) in a live call that goes first now (§11.9).
    *  Missing when there are none, or from older services. */
   calls?: string[];
+  /** The app (family id) in front that goes first now (§11.5). Missing
+   *  while "Put what you're using first" is off, or from older services. */
+  front?: string;
   /** Live ping to the probe's public host while shaping (feature 1, the
    *  proof). Missing when there's none (line quiet, ICMP blocked) or from
    *  older services. */

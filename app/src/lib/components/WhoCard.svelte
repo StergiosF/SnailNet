@@ -20,7 +20,7 @@
   import { unblock } from "../actions";
   import { flash } from "../flash";
   import { glide, ms } from "../motion";
-  import { boostLeft, boostShare, gameWhy, idle, inCall, liveBoost, users } from "../modes";
+  import { boostLeft, boostShare, gameWhy, idle, inCall, inFront, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -57,17 +57,20 @@
   /** What's left of the boost, 0–1, for its bar; null: until stopped. */
   const left = $derived(live ? boostShare(live, ui.now) : null);
   // The row's second line: a boost's time left, else why a game goes
-  // first, else that it's in a call, else what its share is doing.
+  // first, else that it's in a call, else that it's in front, else what its
+  // share is doing.
   function sub(u: (typeof list)[number]): string {
     if (u.boosted && live) return t("who.boost.left", { left: boostLeft(live, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
     if (why) return t(`who.game.${why}`);
-    return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
+    if (inCall(u.target, service.stats?.calls, callsFirst)) return t("who.call");
+    return inFront(u.target, service.stats?.front, focusBoost) ? t("who.front") : u.status;
   }
   const first = (u: (typeof list)[number]) =>
     u.boosted ||
     gameWhy(u.target, service.stats?.games, focusBoost) !== null ||
-    inCall(u.target, service.stats?.calls, callsFirst);
+    inCall(u.target, service.stats?.calls, callsFirst) ||
+    inFront(u.target, service.stats?.front, focusBoost);
   // Website traffic whose name is hidden (ECH): said, never hidden.
   const hidden = $derived(ledger ? unnamed(ui.dir === "down" ? service.stats?.down : service.stats?.up) : null);
   const hiddenApps = $derived(

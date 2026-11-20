@@ -128,6 +128,15 @@ impl Focus {
         );
         out
     }
+
+    /// The app family in front, for the app to label (never a "never
+    /// first" one, nor one whose family couldn't be resolved).
+    pub fn front(&self, s: &Settings) -> Option<String> {
+        self.foreground
+            .as_ref()
+            .filter(|f| f.allowed(s))
+            .and_then(|f| f.family.clone())
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +160,19 @@ mod tests {
         );
         assert!(f.changed(20, None, Some(2), None, &s));
         assert_eq!(f.pids(&s), vec![20]);
+    }
+
+    #[test]
+    fn the_front_family_is_named_unless_never_first() {
+        let mut s = none();
+        let mut f = Focus::default();
+        assert_eq!(f.front(&s), None);
+        f.changed(10, None, Some(1), None, &s);
+        assert_eq!(f.front(&s), None, "family unknown");
+        f.changed(20, None, Some(2), Some("firefox".into()), &s);
+        assert_eq!(f.front(&s).as_deref(), Some("firefox"));
+        s.never_first = vec!["firefox".into()];
+        assert_eq!(f.front(&s), None);
     }
 
     #[test]
