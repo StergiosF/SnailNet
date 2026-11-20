@@ -29,7 +29,7 @@
 
 ## Why SnailNet
 
-A game download starts and takes the whole line. The video you're
+A game download starts and takes all your speed. The video you're
 watching stops to buffer, the call breaks up, and ping jumps in the
 middle of a match. Router settings are hard to find, and most bandwidth
 tools make you type limits in KB/s and do the arithmetic yourself.
@@ -40,28 +40,28 @@ nothing sent anywhere.
 
 ## What it does
 
-- **Splits your connection by percentage.** Give each app or website a
-  slice of the line. Everything you haven't named shares the rest, and
-  always keeps at least 5%.
-- **A slice is a guarantee, never a cage.** While everyone is busy, each
-  gets its slice. What one doesn't use goes to whoever needs it, so none
-  of your connection is wasted.
+- **Splits your internet by percentage.** Give each app or website a
+  share. Everything you haven't named shares the rest, and always keeps
+  at least 5%.
+- **A share is a guarantee, never a cage.** While everyone is busy, each
+  gets its share. What one doesn't use goes to whoever needs it, so none
+  of your speed is wasted.
 - **Works on websites, in any browser.** A rule for YouTube, Twitch or
   Netflix applies in every browser and comes before the browser's own
-  slice.
-- **Lets games and calls go first.** The app in front gets its traffic out
-  first, a game keeps that while it runs, a voice or video call (in any
-  app or browser) goes first while it lasts, and Boost lets one app go
-  first for an hour, four hours or until you stop it. A call only sends
-  sooner; it never gets a bigger share.
-- **Keeps ping low.** It sends slightly below your line speed, so the
-  queue stays on your PC instead of in your router, and follows your line
-  as it gets faster or slower.
-- **Shows it working.** While something fills your line, SnailNet shows
-  your ping next to the ping your last speed test measured without it:
-  *"Ping 19 ms while Steam fills your line"*, with 142 ms beside it for
-  without. Both numbers are measured on your PC, on your network; when
-  there's no difference worth showing, it doesn't claim one.
+  share.
+- **Lets games and calls go first.** The app you're using gets its
+  traffic out first, a game keeps that while it runs, a voice or video
+  call (in any app or browser) goes first while it lasts, and Boost lets
+  one app go first for an hour, four hours or until you stop it. Going
+  first only means sooner; it never makes a share bigger.
+- **Keeps ping low.** It sends slightly below your internet speed, so the
+  queue stays on your PC instead of in your router, and follows your
+  speed as it gets faster or slower.
+- **Shows it working.** While something fills your internet, SnailNet
+  shows your ping next to the ping your last speed test measured without
+  it: *"Ping 19 ms while Steam fills your internet"*, with 142 ms beside
+  it for without. Both numbers are measured on your PC, on your network;
+  when there's no difference worth showing, it doesn't claim one.
 - **Switches whole setups in one click.** Four modes, plus your own copies
   of them.
 - **Steps aside rather than break your internet.** If anything goes
@@ -86,8 +86,8 @@ nothing sent anywhere.
    speed test shows. Until it knows your speed, it only
    watches.
 
-That's it: SnailNet starts sharing your connection, starts with Windows,
-and sits in the tray.
+That's it: SnailNet starts sharing your internet and sits in the tray.
+The first time, it asks once whether to start with Windows.
 
 **Needs:** Windows 10 or 11, 64-bit (x64). Not available for macOS,
 Linux or ARM PCs.
@@ -95,45 +95,16 @@ Linux or ARM PCs.
 ## Using SnailNet
 
 **The tray.** Click the snail in the notification area for the quick
-panel: who is using the internet right now, the four modes, each slice
-with − and +, and Pause. The snail itself shows how the line is doing:
-as always while the line is quiet, a cream spiral while the line is full
-and SnailNet is sharing it, a coral shell when ping is well up anyway.
-Hover it for the same in words, with the ping.
+panel: whether SnailNet is sharing your internet, the mode switch, the
+apps using your internet now (each with **Boost**), your ping, **Pause**
+and **Open SnailNet**. The snail itself shows how your internet is
+doing: as always while it's quiet, a cream spiral while it's full and
+SnailNet is sharing it, a coral shell when ping is well up anyway. Hover
+it for the same in words.
 
-**Now** (the main window's first page) answers *what matters right now?*
-
-- Pick a **mode**: the whole split changes at once.
-- **Using your internet** lists every app and website moving data, how
-  fast, and how it's doing ("gets all it asks for", "using its whole
-  slice, wants more"). **Boost** lets one of them go first for a while:
-  it gets at least half your line, then everything goes back by itself.
-- When one app fills the line and leaves another **waiting** (Steam's
-  download and the YouTube video that keeps buffering), the sentence at
-  the top says so and offers the fix: **Give Brave 60%**. One click
-  saves it in the current mode, **Undo** puts it back, **Not now** keeps
-  quiet about those two until tomorrow. It's a button where you're
-  already looking, never a pop-up; turn it off in Settings. Without a
-  website slice SnailNet sees the browser, not the site, so it says
-  "Brave" rather than "YouTube".
-- While the line is full, a row under the sentence at the top shows your
-  **ping with SnailNet** and, as a second bar, the ping your last speed
-  test found **without** it. With no speed test on this network yet,
-  **Measure to compare** runs one.
-- **The split** shows each slice as a bar. **Fine-tune** opens the Split
-  page; **Reset split** puts the mode back how it started.
-
-**Split** is where you shape it:
-
-- **Drag** a cream handle on the bar at the top to trade between the two
-  slices beside it (it settles on 5% steps), or use **−** and **+** on
-  each row, 5% at a time. Nothing changes on your line until **Save**.
-- **Add a slice** for an app or a website (search by name).
-- Open a slice for more: **Goes first** (High, Normal, Low priority),
-  **Only when the line is free** (it waits until nobody else needs the
-  line), a **speed limit** in Mbps or %, or **Remove**.
-- **Block** an app from its Boost menu if it shouldn't use the internet
-  at all.
+**The mode switch** sits at the top of the window on every page:
+**Balanced**, **Streaming**, **Gaming**, **Quiet downloads**, and any
+of your own. Pick one and the whole split changes at once.
 
 | Mode | What it does |
 | --- | --- |
@@ -142,29 +113,86 @@ Hover it for the same in words, with the ping.
 | **Gaming** | Your game and voice chat come first. |
 | **Quiet downloads** | Downloads never slow anything else down. |
 
-Press **Ctrl+Alt+S** anywhere to step to the next mode (change the keys
-in Settings → Windows). With *Switch to Gaming while I play* on, SnailNet
-switches to Gaming when a game starts and back when it closes.
+Press **Ctrl+Alt+S** anywhere to switch to the next mode (change the
+keys in Settings → Startup and keys). With *Gaming mode while you play*
+on, SnailNet switches to Gaming when a game starts and back to your mode
+when it closes.
 
-**Settings** is grouped the way you'd look for things: your internet
-(speed, **Measure** or **Change**, which can measure again too; the last
-speed test, with a grade from A to F for how much ping rose while
-downloading, without SnailNet and with it; other networks), calls, games
-and the app you're using (*Put calls first* is on by default), how apps
-are grouped, Windows (start with Windows, the hotkey), version and
-updates, and starting over. When a new version is out, an **Update**
-button appears in the side bar; one click installs it.
+**Now** (the main window's first page) answers *what's happening, and is
+it OK?*
+
+- **The sentence at the top** says it in words: *"Steam is using the
+  most right now."* When one app fills your internet and leaves another
+  **waiting** (Steam's download and the YouTube video that keeps
+  buffering), it says so and offers the fix: **Give Brave 40%**. One
+  click saves it in the current mode, **Undo** puts it back, **Not now**
+  keeps quiet about those two until tomorrow. It's a button where you're
+  already looking, never a pop-up; turn it off in Settings. Without a
+  website share SnailNet sees the browser, not the site, so it says
+  "Brave" rather than "YouTube".
+- **Last 10 minutes** shows what used your internet over time, one band
+  per app in the same colours as the list under it, with your speed as a
+  dashed line and marks where something happened (a mode switch, a boost,
+  a share given, an app that started). Hover it to read any moment;
+  **Download** and **Upload** switch the chart and the list. It starts
+  empty when SnailNet opens and never invents data.
+- **Using your internet** lists the apps and websites moving data,
+  busiest first: how fast, how each is doing ("getting all it needs",
+  "waiting for speed", "Goes first · in a call") and a thin bar of its
+  part of your speed. **Boost** lets one go first for a while: it gets
+  at least half your speed, then everything goes back by itself. Its
+  **•••** menu holds the rest: block it, mark it as a game, never let it
+  go first, or change how its programs are grouped.
+- **Ping** sits beside them: while something fills your internet, your
+  **ping with SnailNet** next to the ping your last speed test found
+  **without** it; when it's quiet, the speed test's grades from A to F.
+  With no speed test on this network yet, **Measure** runs one.
+- **How {mode} shares it** shows the mode's shares as one small bar, each
+  with its priority, the speed it's sure of and what it uses now. **See
+  the split** opens the Split page.
+
+**Split** is where you shape it:
+
+- **Drag** a handle on the bar at the top to trade between the two
+  shares beside it (it settles on 5% steps), or use **−** and **+** on
+  each row, 5% at a time. Nothing changes on your internet until
+  **Save** (Ctrl+S); **Discard** throws the changes away.
+- **Add an app or website** at the foot of the list (search by name).
+  **Everything else** opens to its apps; one click gives an app a share
+  of its own.
+- Open a share for more: **Priority** (High, Normal, Low), **Only use
+  spare speed** (it waits until nobody else needs the speed), a **Speed
+  limit** in Mbps or %, or **Remove**.
+- **Reset split** puts the mode back how it started.
+
+**Settings** is grouped the way you'd look for things:
+
+- **Your internet:** your speed, with **Measure** or **Change**; the
+  last speed test, with a grade from A to F for how much ping rose while
+  downloading, without SnailNet and with it; other networks, each with
+  its own speed.
+- **What goes first:** calls, the app you're using, and Gaming mode while
+  you play (the first two are on by default), plus the apps you marked.
+- **Apps:** how apps are grouped.
+- **Startup and keys:** start with Windows, and the keys that switch
+  mode.
+- **Updates and About:** the version, **Check for updates**, and "Keep
+  app and game lists up to date".
+- **Start over:** reset one mode's split, or everything.
+
+When a new version is out, an **Update** button appears in the side
+rail; one click installs it.
 
 ### The words SnailNet uses
 
 | Word | Means |
 | --- | --- |
-| **Slice** | An app's or website's share of your line, in percent. |
-| **Everything else** | All the apps you haven't given a slice. It always keeps at least 5%. |
-| **Goes first** | Its traffic is sent ahead of the rest, so it stays quick. It never makes the slice bigger. |
-| **Only when the line is free** | It uses the line only when nobody else wants it. |
+| **Share** | An app's or website's part of your internet, in percent. It's the least it gets while everyone is busy. |
+| **Everything else** | All the apps you haven't given a share. It always keeps at least 5%. |
+| **Priority** | High goes first: its traffic is sent ahead of the rest, so it stays quick. It never makes the share bigger. |
+| **Only use spare speed** | It uses your internet only when nobody else wants it. |
 | **Boost** | Let one app go first for a while. |
-| **Your line** | How fast your connection is, down and up. SnailNet shares out exactly that. |
+| **Your internet speed** | How fast your connection is, down and up. SnailNet shares out exactly that. |
 
 ## Questions
 
@@ -173,15 +201,15 @@ SnailNet to the tray and your rules keep working. Right-click the tray
 icon and choose **Quit SnailNet** to stop the background service too, or
 use **Pause** to step aside temporarily.
 
-**Will it make my internet slower?** It sends slightly below your line
-speed on purpose: that keeps the queue on your PC, which is what keeps
+**Will it make my internet slower?** It sends slightly below your
+internet speed on purpose: that keeps the queue on your PC, which is what keeps
 ping low while something big downloads. The cost is a sliver of top
 speed.
 
 **Does it work in every browser?** Yes. Website rules go by the site's
 name, which SnailNet reads when the connection starts. A few sites hide
 their names; their traffic is shown as such and still counts toward the
-app's slice.
+app's share.
 
 **Does it work with my game's anti-cheat?** It hasn't been tested with
 anti-cheat systems yet. If a game complains, pause SnailNet or stop its
@@ -199,15 +227,15 @@ with no account and no telemetry.
 - A Windows service (`SnailNet`, runs as LocalSystem) does the work. It
   sees this PC's packets through the WinDivert driver, tells which app
   and which website each connection belongs to, and sends them out in
-  the shares you set, slightly below your line speed so the queue stays
-  on your PC and not in your router.
+  the shares you set, slightly below your internet speed so the queue
+  stays on your PC and not in your router.
 - The app (tray icon, flyout, main window) talks to the service over a
   named pipe. Closing the window hides it to the tray while your rules
   keep working; choosing **Quit SnailNet** in the tray stops the service
   cleanly until you open SnailNet again.
 - Modes switch whole sets of rules at once: Balanced, Streaming, Gaming,
   Quiet downloads, and your own copies. Ctrl+Alt+S steps through them
-  (other keys in Settings → Windows).
+  (other keys in Settings → Startup and keys).
 
 ## Help, my internet broke
 
@@ -218,10 +246,10 @@ traffic alone until it's restarted. If something still seems wrong, try
 these in order. Each one is enough on its own.
 
 1. **Pause it.** Click the snail in the tray, then Pause → "Until I
-   resume" (the main window has Pause too). Nothing is shaped
+   resume" (the main window's side rail has Pause too). Nothing is shaped
    or blocked while paused. If the internet comes back, a rule is the
    problem: check for a blocked app ("Using your internet" lists blocked
-   apps with Unblock) or a very small slice.
+   apps with Unblock) or a very small share.
 2. **Stop the service.** Open *Services* (Win+R, `services.msc`), find
    **SnailNet**, click Stop. Or, in a terminal run as administrator:
 
@@ -264,16 +292,15 @@ When you report a problem, the service's logs help: they're in
   - the website and game lists, from the same GitHub releases, once a
     day (two small downloads, checked against SnailNet's signing key
     before use; kept in `C:\ProgramData\SnailNet\packs.toml`). Turn it
-    off in Settings → Version and updates → "Keep app and game lists up
-    to date";
+    off in Settings → Updates → "Keep app and game lists up to date";
   - the speed test, to Cloudflare (`speed.cloudflare.com`), only when
     you click Measure. It downloads, uploads, then downloads once more
-    with SnailNet sharing the line, to measure your ping with it (about
+    with SnailNet sharing your internet, to measure your ping with it (about
     30 seconds in all; on a metered network, Settings shows a note about
     it);
   - pings to your router and to `1.1.1.1` while SnailNet is shaping
-    (once a second while the line is busy, every 30 seconds when it's
-    quiet), to keep the shaping just below what your line can take.
+    (once a second while your internet is busy, every 30 seconds when
+    it's quiet), to keep the shaping just below what it can take.
 
 ## Build
 
@@ -286,8 +313,10 @@ target\debug\snailnet-service.exe run --console
 cd app; npm ci; npm run tauri dev
 # The NSIS installer, signed for updates:
 .\scripts\build-installer.ps1
-# The README's pictures (docs/images), redrawn from the app's look:
+# The README's pictures (docs/images), redrawn in the app's look:
 node scripts/readme-images.cjs
+# The website's link preview (site/og.png), see the script's header:
+node scripts/og-image.cjs
 ```
 
 The website is `site/` (plain HTML, CSS and JS), published to
