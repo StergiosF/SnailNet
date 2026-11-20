@@ -39,10 +39,13 @@
         {#if m.id === "gaming" && service.playing}
           <span class="playing">{t("mode.playing")}</span>
         {/if}
-        <span class="visually-hidden" id="{uid}-{m.id}">{m.body}</span>
       </label>
     {/each}
   </div>
+  <!-- Outside the labels, so each mode's name stays just its name. -->
+  {#each modes as m (m.id)}
+    <span class="visually-hidden" id="{uid}-{m.id}">{m.body}</span>
+  {/each}
   <p class="note" role="status" data-tauri-drag-region>
     {#if service.playing && picked}{t("mode.playing.note", { mode: picked.name })}{/if}
   </p>
@@ -131,6 +134,24 @@
     color: var(--text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* A narrow window: the modes that aren't on show their glyph only (the
+     name stays for screen readers and in the tooltip). */
+  @media (max-width: 1000px) {
+    .k {
+      display: none;
+    }
+    .seg:not(.on) .nm {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .seg:not(.on) {
+      padding: 0 9px;
+    }
   }
   @media (forced-colors: active) {
     .seg.on {
