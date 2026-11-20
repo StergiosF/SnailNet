@@ -636,6 +636,17 @@ As specified in §7.2. In the UI, an expandable row shows member processes; "Spl
   - **App half** (what to show, the "≥ 20 ms clear" rule, ProofRow, grades in Settings, the toast after Measure): docs/HANDOFF-wow.md 1.5–1.6.
   - **Not yet:** the live check (Measure on the real line; `snailnet top` shows `ping:` during a big download; the saved `measured` has `loaded_up_ms` and `with_ms`; *with* clearly below *without*). Required before release: it is a numeric claim.
 
+### 11.11 The one-tap fix: an app left waiting (Smart)
+
+- **What:** when one app fills the line and another is left waiting, the Now page's sentence offers the cure ("Give Brave 60%"). Brief: docs/HANDOFF-wow.md, feature 2.
+- **The signal (built 2026-11-20, scheduler + sim; 2.2 onward not yet):** inside Everything else SnailNet queues fairly per connection (§9.3), so a 16-connection download takes ~16× a one-flow video; nothing reported which app was losing. Now each fq flow remembers its first packet's app tag and counts CoDel drops/ECN marks and queue-limit drops (`acted`); `Scheduler::pressure(out)` returns per tag `{ queued_bytes, acted }` at stats rate. Per-packet cost: one addition; zero allocation on the packet path (retired-owner table, 64 per class, reserved up front; `tests/scheduler_alloc.rs` counts allocations). `acted` is a running total: readers diff ticks with `saturating_sub`.
+- **The rule, proven in `snailnet-sim` (`waiting.rs`, `RULE`):** sampled every 250 ms per app over the last 20 ticks (5 s). *Pressed* in a tick = CoDel acted on it **or** any of its bytes are queued. **Waiting** = pressed in **≥ 14 of 20** ticks **and** it got **< ½ of an equal split** of what was delivered in the window, among the apps that were themselves pressed ≥ 14 ticks.
+  - Why not CoDel actions alone: at longer RTTs CoDel acts on a starved flow less often (ticks acted: 100 % at 20 ms RTT, 83 % at 50, 43 % at 100, 27 % at 150), while its queue is non-empty far more often (100 / 97 / 82 / 73 %). Why not `HELD_BYTES` (6000) per app: the starved video's queue passed it in only 0–17 % of ticks. Why the share test: the hog is pressed too (CoDel acts on it every tick); only the share tells them apart (Steam ~94 %, the video ~6 %).
+  - **Numbers** (25 Mbps line shaped to 23, everything in Everything else, a 16-connection download + a video wanting 8 Mbps, which gets 1.43): flagged after **3.50 s** at 20 and 50 ms RTT, 3.75 s at 100, 4.25 s at 150 (then 92 % of ticks); at 250 ms RTT 5.25 s but only 49 % of ticks (too on-and-off to rely on). Two 8-connection hogs + the video: the video at 3.50 s, neither hog ever.
+  - **Never flagged** (0 ticks): the hog, alone or with any waiter; two equal 8-connection downloads; the video alone; a full-buffer video (4 s chunks every 4 s) at 250, 500 and 750 kbps.
+  - **Limit:** a top-up video's busy share is about its stream rate / its fair share (~1.35 Mbps here). A 1000 kbps top-up (busy 70 %) is flagged in 123 of 199 ticks; at 1250 kbps it is starved in all but name. 16 of 20 would flag it in 20 ticks but long-RTT waiters only 63 %; 17 of 20, 0 ticks but 47 %. 14 of 20 keeps real waiters reliably flagged; the offer's own 12-of-15 s sustain (2.4) and mutes absorb the rest. With that sustain the offer appears ~15.5 s after the video starts.
+- **Next (2.2):** the engine's `Queued` must return its tag from `Packet::tag()` (until then every packet is `NO_TAG`); `FamilyTick.queued_bytes` / `acted` to the app; the app applies the rule above (2.3).
+
 ---
 
 ## 12. Service ↔ app communication (IPC)
@@ -775,7 +786,17 @@ Main window, default 1120 × 740, min 840 × 560, custom title bar (Tauri `decor
 
 A quick panel (380 × 500), anchored above the tray icon, closes on blur and Escape: the snail and Pause (1 h) / Resume; the main window's sentence (or the state that needs attention); the four modes; a small live strip; the slices with − % + (quiet "only when free" ones left out); "Open SnailNet".
 
-Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), not connected (faded). Blocked-apps counter: not yet.
+Tray icon states: normal (snail), paused and safe mode / retrying (amber dot), not connected (faded). Blocked-apps counter: a dark badge top-right (1–9, then +).
+
+The living snail (built 2026-11-20, `tray_icon.rs`): while normal, the snail shows how the line is doing. No animation; it changes only when the mood does, and the tooltip says it in words (never colour alone, §14.9).
+
+| Mood | When | Icon | Tooltip |
+|---|---|---|---|
+| Calm | line not full | the snail | `SnailNet` |
+| Working | full (either direction, ≥ 0.9 × shaped) for 3 s; calm after 10 s not full | cream spiral (cream for what's on) | `SnailNet · line full · ping 19 ms` |
+| Struggling | working and ping ≥ 40 ms above its lowest for 5 s; back after 10 s under 25 ms, or at once without a ping | cream spiral on a coral shell | `SnailNet · ping is up 60 ms · slowing the line a little to bring it down` |
+
+The marks win: amber dot and faded snail always sit on the calm art. Art: `icons/tray/*.svg`, rendered to 32/64 px PNGs by `scripts/tray-icons.cjs` and committed. The handoff's "stalks bent down" for struggling didn't read even at 160 px, let alone 16, so struggling is the coral shell instead. **Not yet seen** in the real tray (100 % / 150 %, light / dark taskbar).
 
 ### 14.5 First-run experience (≤ 60 seconds)
 

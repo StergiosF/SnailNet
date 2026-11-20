@@ -112,7 +112,13 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     }
     tray.build(app)?;
     // Faded until the bridge reaches the service.
-    tray_icon::update(app.handle(), &Link::Connecting, None, 0);
+    tray_icon::update(
+        app.handle(),
+        &Link::Connecting,
+        None,
+        0,
+        tray_icon::Feel::default(),
+    );
     Ok(())
 }
 

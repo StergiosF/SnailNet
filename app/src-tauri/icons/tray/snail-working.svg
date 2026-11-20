@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Tray, "working": the spiral turns cream (cream for what's on, PLAN.md §14.1). -->
+  <!-- foot -->
+  <path d="M64 404c0-18 14-30 34-30h300c34 0 58-26 62-62l4-34c2-16 26-14 26 2v52c0 54-42 98-96 98H98c-20 0-34-10-34-26z" fill="#1F6F64"/>
+  <!-- eye stalks -->
+  <path d="M470 276 442 192M484 276l4-86" stroke="#1F6F64" stroke-width="16" stroke-linecap="round" fill="none"/>
+  <circle cx="440" cy="182" r="17" fill="#1F6F64"/>
+  <circle cx="488" cy="182" r="17" fill="#1F6F64"/>
+  <!-- shell -->
+  <circle cx="224" cy="250" r="150" fill="#2FA88E"/>
+  <path d="M224 250m-22 0a22 22 0 1 1 44 0a50 50 0 1 1-100 0a78 78 0 1 1 156 0a106 106 0 1 1-212 0" stroke="#EFE8D6" stroke-width="20" stroke-linecap="round" fill="none"/>
+</svg>

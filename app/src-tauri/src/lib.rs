@@ -63,7 +63,20 @@ impl Shared {
 struct TauriSink {
     app: AppHandle,
     shared: Arc<Shared>,
+    snail: Mutex<Snail>,
 }
+
+/// The tray snail's mood (PLAN.md §14.4), fed by the stats.
+#[derive(Default)]
+struct Snail {
+    watch: tray_icon::MoodWatch,
+    feel: tray_icon::Feel,
+    /// When the tooltip's ping was last refreshed (`t_ms`).
+    tip_at: u64,
+}
+
+/// The tooltip's ping changes at most this often.
+const TIP_EVERY_MS: u64 = 2_000;
 
 impl TauriSink {
     fn emit<T: Serialize + Clone>(&self, event: &str, payload: &T) {
@@ -81,7 +94,12 @@ impl TauriSink {
                 l.snapshot.as_ref().map_or(0, |s| s.config.blocked.len()),
             )
         };
-        tray_icon::update(&self.app, &link, state.as_ref(), blocked);
+        let feel = self
+            .snail
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .feel;
+        tray_icon::update(&self.app, &link, state.as_ref(), blocked, feel);
     }
 }
 
@@ -93,6 +111,9 @@ impl Sink for TauriSink {
                 l.stats = None;
             }
         });
+        if !matches!(link, Link::Connected { .. }) {
+            *self.snail.lock().unwrap_or_else(PoisonError::into_inner) = Snail::default();
+        }
         self.emit("link", link);
         self.refresh_tray();
     }
@@ -113,6 +134,27 @@ impl Sink for TauriSink {
     fn stats(&self, tick: &StatsTick) {
         self.shared.update(|l| l.stats = Some(tick.clone()));
         self.emit("stats", tick);
+        // Redraw the tray only when the mood changes; the tooltip's ping
+        // at most every couple of seconds.
+        let redraw = {
+            let mut s = self.snail.lock().unwrap_or_else(PoisonError::into_inner);
+            let (full, rise) = tray_icon::mood_of(tick);
+            let mood = s.watch.step(tick.t_ms, full, rise);
+            let moved = mood != s.feel.mood;
+            let tip_due =
+                mood != tray_icon::Mood::Calm && tick.t_ms.saturating_sub(s.tip_at) >= TIP_EVERY_MS;
+            if moved || tip_due {
+                s.feel = tray_icon::Feel {
+                    mood,
+                    ping: tick.ping,
+                };
+                s.tip_at = tick.t_ms;
+            }
+            moved || tip_due
+        };
+        if redraw {
+            self.refresh_tray();
+        }
     }
 }
 
@@ -158,6 +200,7 @@ pub fn run() {
             let sink = TauriSink {
                 app: app.handle().clone(),
                 shared,
+                snail: Mutex::default(),
             };
             let stop = Arc::new(AtomicBool::new(false));
             app.manage(stop.clone());
