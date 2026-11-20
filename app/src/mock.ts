@@ -74,7 +74,7 @@ mockIPC(
     const a = (args ?? {}) as Record<string, unknown>;
     switch (cmd) {
       case "current": {
-        const latest: Latest = { link: { kind: "connected", service_version: "0.0.5" }, snapshot, stats: tick(0) };
+        const latest: Latest = { link: { kind: "connected", service_version: "0.0.6" }, snapshot, stats: tick(0) };
         return structuredClone(latest);
       }
       case "set_rules": {
