@@ -115,7 +115,8 @@
           aria-checked={first === choice}
           onclick={() => choose(choice)}
         >
-          <i class="icon" aria-hidden="true">{first === choice ? "" : ""}</i>{label}
+          <span class="lab">{label}</span>
+          {#if first === choice}<i class="icon tick" aria-hidden="true">&#xE73E;</i>{/if}
         </button>
       {/each}
       <hr />
@@ -183,7 +184,17 @@
   .b:disabled {
     opacity: 0.5;
   }
+  /* Ticked choices carry the mark at the end, so every label in the menu
+     starts on the same line. */
+  .lab {
+    flex: 1;
+    min-width: 0;
+  }
+  .tick {
+    color: var(--shell-hover);
+  }
   .exe {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

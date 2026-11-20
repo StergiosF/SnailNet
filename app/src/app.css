@@ -328,6 +328,7 @@ select {
   /* An app's menu is long (boost, first, grouping, block): it scrolls
      rather than run off a short window. */
   max-height: calc(100vh - 16px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   margin: 0;
@@ -342,6 +343,9 @@ select {
 }
 .popmenu:popover-open {
   transform-origin: top right;
+}
+.popmenu[data-side="above"]:popover-open {
+  transform-origin: bottom right;
   animation: menu-rise 200ms var(--ease-out);
 }
 @keyframes menu-rise {

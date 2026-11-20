@@ -158,7 +158,7 @@
         >
           <AppIcon target={m.fixed ? null : m.target} name={m.name} size={18} />
           {m.fixed ? t("row.unknown") : m.name}
-          <span>{mbps(m.bps)}{#if m.waiting} · <em>{t("status.member.waiting")}</em>{/if}</span>
+          <span>{mbps(m.bps)}{#if m.waiting}<em>· {t("status.member.waiting")}</em>{/if}</span>
         </button>
       {/each}
       {#if !all && slice.members.length > MEMBERS_SHOWN}
@@ -168,7 +168,7 @@
       {/if}
       {#if picked}
         <button type="button" class="give" onclick={() => give(picked)}>
-          <span aria-hidden="true">+</span>{t("row.give", { name: picked.name })}
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>{t("row.give", { name: picked.name })}
         </button>
       {/if}
     </div>
@@ -425,6 +425,7 @@
     color: var(--text-secondary);
   }
   .member em {
+    margin-left: 0.3em;
     font-style: normal;
     color: var(--caution);
   }
@@ -454,9 +455,6 @@
     color: var(--on-accent);
     font-size: 14px;
     font-weight: 600;
-  }
-  .give span {
-    font-size: 17px;
   }
 
   .hint {

@@ -292,7 +292,9 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
     detail = lender
       ? t("glance.borrow.from", { lender: lender.name })
       : t("glance.borrow.spare");
-  } else if (lead.slice.status.kind === "held") {
+  } else if (lead.slice.status.kind === "held" && !lead.member) {
+    // Only an app with a slice of its own is held to it; one in
+    // Everything else just shares that.
     detail = t("glance.held");
   } else {
     detail = "";

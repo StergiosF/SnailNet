@@ -38,6 +38,10 @@ export interface Brand {
   path: string;
   /** What to draw it in on the Garden's dark tiles (see `inkOn`). */
   ink: string;
+  /** The brand's own colour, for a solid app-icon tile. */
+  bg: string;
+  /** The mark on that tile: white or near-black, whichever stands out. */
+  mark: string;
 }
 
 type Icon = { path: string; hex: string };
@@ -76,6 +80,8 @@ const APPS: Record<string, Icon> = {
  *  (--text-primary). */
 const TILE = "#1b443c";
 const CREAM = "#f3eee2";
+/** The Garden's darkest green, for marks on light brand tiles. */
+const DARK = "#0a211d";
 
 function luminance(hex: string): number {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -109,5 +115,12 @@ export function inkOn(hex: string, tile = TILE): string {
 export function brandOf(target: Target): Brand | null {
   const id = target.id.toLowerCase();
   const icon = target.kind === "site" ? SITES[id] : target.kind === "family" ? APPS[id] : undefined;
-  return icon ? { path: icon.path, ink: inkOn(icon.hex) } : null;
+  if (!icon) return null;
+  const bg = `#${icon.hex.toLowerCase()}`;
+  return { path: icon.path, ink: inkOn(icon.hex), bg, mark: markOn(bg) };
+}
+
+/** White or near-black on a brand's tile, whichever has more contrast. */
+export function markOn(bg: string): string {
+  return contrast("#ffffff", bg) >= contrast(DARK, bg) ? "#ffffff" : DARK;
 }

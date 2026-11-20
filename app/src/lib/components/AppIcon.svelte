@@ -56,10 +56,18 @@
     </svg>
   {:else if url}
     <img src={url} alt="" width={size} height={size} />
+  {:else if brand && boxed}
+    <span class="solid" style:background={brand.bg}>
+      <svg class="logo" viewBox="0 0 24 24" width={size * 0.78} height={size * 0.78}>
+        <path d={brand.path} fill={brand.mark} />
+      </svg>
+    </span>
   {:else if brand}
     <svg class="logo" viewBox="0 0 24 24" width={size * 0.86} height={size * 0.86}>
       <path d={brand.path} fill={brand.ink} />
     </svg>
+  {:else if system && boxed}
+    <span class="solid win"><i class="icon" style:font-size="{size * 0.66}px">&#xE7F4;</i></span>
   {:else if system}
     <i class="icon sys" style:font-size="{size * 0.72}px">&#xE7F4;</i>
   {:else if site}
@@ -88,6 +96,20 @@
   .logo {
     display: block;
   }
+  /* A brand's own app-icon tile: it fills the box, so the box's soft
+     surface doesn't show round it as a ghost square. */
+  .solid {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .solid.win {
+    background: #0067c0;
+    color: #ffffff;
+  }
   .sys {
     color: var(--text-secondary);
   }
@@ -100,6 +122,11 @@
     font-size: calc(var(--s) * 0.55);
     font-weight: 700;
     line-height: 1;
+  }
+  .boxed .tile {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
   }
   .tile.wide {
     font-size: calc(var(--s) * 0.42);
@@ -115,6 +142,13 @@
     }
     .tile {
       forced-color-adjust: none;
+    }
+    .solid {
+      background: Canvas !important;
+      outline: 1px solid CanvasText;
+    }
+    .solid .logo path {
+      fill: CanvasText;
     }
   }
 </style>

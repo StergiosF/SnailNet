@@ -72,7 +72,7 @@
     </ul>
     {#if canEdit}
       <button type="button" class="add" onclick={() => (ui.adding = true)}>
-        <span class="plus" aria-hidden="true">+</span>{t("list.add.long")}
+        <span class="plus" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></span>{t("list.add.long")}
       </button>
     {/if}
   {/if}
@@ -209,7 +209,6 @@
     height: 40px;
     border-radius: var(--radius-control);
     box-shadow: inset 0 0 0 1.5px var(--surface-3);
-    font-size: 20px;
   }
   .empty {
     display: flex;
