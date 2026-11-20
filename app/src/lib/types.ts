@@ -200,6 +200,10 @@ export interface FamilyTick {
   name: string;
   bps: number;
   unidentified_bps: number;
+  /** Its bytes queued in the scheduler now (PLAN.md §11.11). */
+  queued_bytes?: number;
+  /** Times CoDel or the queue limit acted on it since the last tick. */
+  acted?: number;
   /** UI only (steady.ts): quiet just now, still listed for a few seconds. */
   held?: boolean;
 }

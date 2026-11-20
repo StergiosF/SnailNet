@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { withSpeeds } from "./line";
 import { withBar } from "./rules";
 import { Steady } from "./steady";
+import { WaitWatch } from "./waiting";
 import type { Families, Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
 
 const notConnected: SaveError = { kind: "failed", message: "not connected" };
@@ -16,6 +17,19 @@ class Service {
   /** The live stats, steadied for the eye (steady.ts). */
   stats = $state<StatsTick | null>(null);
   #steady = new Steady();
+  /** Apps left waiting (waiting.ts), per direction, from the raw ticks:
+   *  the rule needs each tick's pressure, not the steadied rates. */
+  waiting = $state<{ down: string[]; up: string[] }>({ down: [], up: [] });
+  #waitDown = new WaitWatch();
+  #waitUp = new WaitWatch();
+
+  #take(tick: StatsTick) {
+    this.stats = this.#steady.step(tick);
+    const down = this.#waitDown.feed(tick.down?.families ?? []);
+    const up = this.#waitUp.feed(tick.up?.families ?? []);
+    const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+    if (!same(down, this.waiting.down) || !same(up, this.waiting.up)) this.waiting = { down, up };
+  }
 
   /** The freshest service state: the stats stream's, else the snapshot's. */
   state = $derived<ServiceState | null>(
@@ -169,6 +183,9 @@ class Service {
         if (e.payload.kind !== "connected") {
           this.stats = null;
           this.#steady.reset();
+          this.#waitDown.reset();
+          this.#waitUp.reset();
+          this.waiting = { down: [], up: [] };
         }
       }),
       listen<Snapshot>("snapshot", (e) => (this.snapshot = e.payload)),
@@ -176,7 +193,7 @@ class Service {
         if (this.snapshot) this.snapshot.state = e.payload;
       }),
       listen<StatsTick>("stats", (e) => {
-        this.stats = this.#steady.step(e.payload);
+        this.#take(e.payload);
         for (const s of e.payload.down?.sites ?? []) {
           if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
         }
@@ -185,7 +202,7 @@ class Service {
     const now = await invoke<Latest>("current");
     this.link = now.link;
     this.snapshot ??= now.snapshot;
-    if (this.stats === null && now.stats) this.stats = this.#steady.step(now.stats);
+    if (this.stats === null && now.stats) this.#take(now.stats);
   }
 }
 

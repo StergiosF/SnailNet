@@ -158,7 +158,7 @@
         >
           <AppIcon target={m.fixed ? null : m.target} name={m.name} size={18} />
           {m.fixed ? t("row.unknown") : m.name}
-          <span>{mbps(m.bps)}</span>
+          <span>{mbps(m.bps)}{#if m.waiting} · <em>{t("status.member.waiting")}</em>{/if}</span>
         </button>
       {/each}
       {#if !all && slice.members.length > MEMBERS_SHOWN}
@@ -423,6 +423,10 @@
   }
   .member span {
     color: var(--text-secondary);
+  }
+  .member em {
+    font-style: normal;
+    color: var(--caution);
   }
   .member:hover:not(:disabled),
   .member.picked {

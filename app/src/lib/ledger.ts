@@ -42,6 +42,8 @@ export interface Member {
   bps: number;
   /** Unrecognised traffic: can't get a slice. */
   fixed: boolean;
+  /** Keeps asking for more than it gets (waiting.ts). */
+  waiting: boolean;
 }
 
 export interface Slice {
@@ -99,6 +101,7 @@ function status(
 export function membersOf(
   dir: DirStats | null | undefined,
   rules: Rule[],
+  waiting: readonly string[] = [],
 ): Member[] {
   const live = rules.filter((r) => r.enabled);
   const siteRule = (site: string) =>
@@ -111,23 +114,28 @@ export function membersOf(
       .filter((s) => s.family === f.family && siteRule(s.site))
       .reduce((sum, s) => sum + s.bps, 0);
     const bps = Math.max(0, f.bps - toSites);
-    if (bps < QUIET_BPS && !f.held) continue;
+    const fixed = f.family === UNKNOWN_FAMILY;
+    const wants = !fixed && waiting.includes(f.family);
+    if (bps < QUIET_BPS && !f.held && !wants) continue;
     out.push({
       key: `family:${f.family}`,
       target,
       name: f.name,
       bps,
-      fixed: f.family === UNKNOWN_FAMILY,
+      fixed,
+      waiting: wants,
     });
   }
   return out.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
 }
 
-/** The rows for one direction. `label` names a rule's target. */
+/** The rows for one direction. `label` names a rule's target; `waiting`
+ *  lists the families left waiting (service.waiting, waiting.ts). */
 export function ledger(
   rules: Rule[],
   dir: DirStats | null | undefined,
   label: (t: Target) => string,
+  waiting: readonly string[] = [],
 ): Ledger {
   const total = dir ? dir.classes.reduce((sum, c) => sum + c.bps, 0) : 0;
   const shaped = dir && dir.shaped_bps > 0 ? dir.shaped_bps : null;
@@ -180,7 +188,7 @@ export function ledger(
     kept: otherKept,
     status: status(otherBps, otherKept, busy, otherTick),
     active: otherBps >= QUIET_BPS || otherTick?.held === true,
-    members: membersOf(dir, rules),
+    members: membersOf(dir, rules, waiting),
     ink: -1,
   });
   return { slices, total, shaped, busy };
@@ -219,25 +227,31 @@ export interface Glance {
   detail: string;
 }
 
-type Who = { name: string; bps: number; slice: Slice; member: boolean };
+type Who = { name: string; bps: number; slice: Slice; member: Member | null };
+
+/** Left waiting: a slice using all of it and wanting more, or an app in
+ *  Everything else the waiting rule caught. */
+function isWaiting(w: Who): boolean {
+  return w.member ? w.member.waiting : w.slice.status.kind === "held";
+}
 
 /** Everyone moving data (slices with a target, and the apps in Everything
  *  else SnailNet could name), busiest first. */
 function everyoneIn(l: Ledger): Who[] {
   const other = l.slices[l.slices.length - 1];
   const everyone: Who[] = [
-    ...l.slices.filter((s) => s.target !== null).map((s) => ({ name: s.name, bps: s.bps, slice: s, member: false })),
+    ...l.slices.filter((s) => s.target !== null).map((s) => ({ name: s.name, bps: s.bps, slice: s, member: null })),
     ...(other?.members ?? [])
       .filter((m) => !m.fixed)
-      .map((m) => ({ name: m.name, bps: m.bps, slice: other as Slice, member: true })),
-  ].filter((w) => w.bps >= QUIET_BPS);
+      .map((m) => ({ name: m.name, bps: m.bps, slice: other as Slice, member: m })),
+  ].filter((w) => w.bps >= QUIET_BPS || w.member?.waiting === true);
   return everyone.sort((a, b) => b.bps - a.bps);
 }
 
 /** The busiest app or slice's name (the glance's "who uses the most"),
  *  or null when nobody is moving data. */
 export function top(l: Ledger): string | null {
-  return everyoneIn(l)[0]?.name ?? null;
+  return everyoneIn(l).find((w) => w.bps >= QUIET_BPS)?.name ?? null;
 }
 
 /** The sentence at the top: who uses the most, and whether that's a
@@ -245,7 +259,7 @@ export function top(l: Ledger): string | null {
 export function glance(l: Ledger, lineBps: number | null): Glance {
   const other = l.slices[l.slices.length - 1];
   const everyone = everyoneIn(l);
-  const lead = everyone[0];
+  const lead = everyone.find((w) => w.bps >= QUIET_BPS);
   if (!lead) return { title: t("glance.quiet.title"), detail: t("glance.quiet.body") };
 
   if (!l.busy) {
@@ -264,17 +278,11 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
   // the one waiting.
   const otherMembers = other?.members.length ?? 1;
   const fine = everyone
-    .filter((w) => w !== lead)
-    .filter((w) =>
-      w.member
-        ? w.bps < w.slice.bps / Math.max(1, otherMembers)
-        : w.slice.status.kind !== "held",
-    )
+    .filter((w) => w !== lead && !isWaiting(w))
+    .filter((w) => (w.member ? w.bps < w.slice.bps / Math.max(1, otherMembers) : true))
     .slice(0, 2)
     .map((w) => w.name);
-  const waiting = everyone
-    .filter((w) => w !== lead && !w.member && w.slice.status.kind === "held")
-    .map((w) => w.name);
+  const waiting = everyone.filter((w) => w !== lead && isWaiting(w)).map((w) => w.name);
   const lender = l.slices
     .filter((s) => s.status.kind === "lending")
     .sort((a, b) => b.bps - a.bps)[0];

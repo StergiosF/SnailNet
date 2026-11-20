@@ -36,8 +36,8 @@
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
-  const book = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
-  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label) : null);
+  const book = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
+  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
   const proofWatch = new ProofWatch();
   const proof = $derived.by(() => {
     const s = service.stats;

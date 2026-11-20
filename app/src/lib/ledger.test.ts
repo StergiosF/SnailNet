@@ -120,6 +120,35 @@ describe("glance", () => {
     const g = glance(ledger(rules, d, label), 25 * M);
     expect(g.detail).toContain("YouTube wants more room too.");
   });
+
+  it("says an app in Everything else is waiting once the rule caught it", () => {
+    // No rules: Steam's 16 connections take the line, Brave's one video waits.
+    const d = busy();
+    d.classes = [{ name: "everything else", bps: 22 * M, drops: 9, queued_bytes: 80_000 }];
+    d.families = [
+      { family: "steam", name: "Steam", bps: 20.6 * M, unidentified_bps: 0 },
+      { family: "brave", name: "Brave", bps: 1.4 * M, unidentified_bps: 0 },
+    ];
+    d.sites = [];
+    const l = ledger([], d, label, ["brave"]);
+    expect(l.slices[0]?.members.map((m) => [m.name, m.waiting])).toEqual([
+      ["Steam", false],
+      ["Brave", true],
+    ]);
+    const g = glance(l, 25 * M);
+    expect(g.title).toBe("Steam is using the most of your line.");
+    expect(g.detail).toBe("Brave wants more room too.");
+    // Without the rule's word, Brave is just a smaller app.
+    expect(glance(ledger([], d, label), 25 * M).detail).not.toContain("wants more room");
+  });
+
+  it("keeps a waiting app listed even when it moves almost nothing", () => {
+    const d = busy();
+    d.families.push({ family: "zoom", name: "Zoom", bps: 0.01 * M, unidentified_bps: 0 });
+    const m = membersOf(d, rules, ["zoom"]).find((x) => x.name === "Zoom");
+    expect(m?.waiting).toBe(true);
+    expect(membersOf(d, rules).some((x) => x.name === "Zoom")).toBe(false);
+  });
 });
 
 describe("parts", () => {

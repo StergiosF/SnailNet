@@ -54,10 +54,10 @@
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const dirStats = $derived(ui.dir === "down" ? service.stats?.down : service.stats?.up);
-  const book = $derived(connected ? ledger(ui.rules, dirStats, label) : null);
+  const book = $derived(connected ? ledger(ui.rules, dirStats, label, service.waiting[ui.dir]) : null);
   // The Now page always speaks of downloads: that's where the sharing is felt.
-  const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
-  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label) : null);
+  const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
+  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
   // The proof (§11.10): ping with and without SnailNet while the line is
   // full, steadied by ProofWatch.
   const proofWatch = new ProofWatch();

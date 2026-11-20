@@ -90,6 +90,7 @@
   "status.lending": "not using {mbps} Mbps of its slice, so others get it",
   "status.borrowing": "{mbps} Mbps over its slice, from room nobody needs",
   "status.held": "using its whole slice and wants more",
+  "status.member.waiting": "wants more room",
   "status.free": "only when the line is free",
   "status.off": "off, so it's in Everything else",
   "glance.and": "{a} and {b}",
