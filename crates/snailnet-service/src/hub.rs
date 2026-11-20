@@ -872,7 +872,7 @@ fn dir_stats(
             }
         })
         .collect();
-    let (families, sites) = tag_ticks(&now.tags, last.map_or(&[][..], |l| &l.tags), secs, known);
+    let (families, sites) = tag_ticks(now, last, secs, known);
     Some(DirStats {
         shaped_bps: now.rate_bytes_per_sec * 8,
         classes,
@@ -881,49 +881,80 @@ fn dir_stats(
     })
 }
 
+/// One family's sums for a tick.
+#[derive(Default)]
+struct FamilySum {
+    bytes: u64,
+    unidentified: u64,
+    queued: u64,
+    acted: u64,
+}
+
 /// Bytes per tag since `last` (both sorted by tag), summed per family (with
-/// the unidentified part) and per (site, family).
+/// the unidentified part) and per (site, family); and each family's
+/// pressure (PLAN.md §11.11): bytes queued now, CoDel actions since `last`.
 fn tag_ticks(
-    now: &[(Tag, u64)],
-    last: &[(Tag, u64)],
+    now: &DirectionStats,
+    last: Option<&DirectionStats>,
     secs: f64,
     known: Known<'_>,
 ) -> (Vec<FamilyTick>, Vec<SiteTick>) {
     let bps = |bytes: u64| (bytes as f64 * 8.0 / secs) as u64;
-    // (family, name) → (bytes, unidentified bytes)
-    let mut by_family: HashMap<(&str, &str), (u64, u64)> = HashMap::new();
-    // (site slot, family) → bytes
-    let mut by_site: HashMap<(usize, &str), u64> = HashMap::new();
-    for &(tag, bytes) in now {
-        let before = last
-            .binary_search_by_key(&tag, |&(t, _)| t)
-            .map_or(0, |k| last[k].1);
-        let delta = bytes.saturating_sub(before);
-        if delta == 0 {
-            continue;
-        }
+    let family_of = |tag: Tag| {
         let (app, site) = tags::unpack(tag);
         let key = match app.and_then(|a| known.apps.get(a as usize)) {
             Some(a) => (a.family.as_str(), a.name.as_str()),
             None => (UNKNOWN_ID, "Unknown"),
         };
+        (key, site)
+    };
+    let mut by_family: HashMap<(&str, &str), FamilySum> = HashMap::new();
+    // (site slot, family) → bytes
+    let mut by_site: HashMap<(usize, &str), u64> = HashMap::new();
+    let last_tags = last.map_or(&[][..], |l| &l.tags);
+    for &(tag, bytes) in &now.tags {
+        let before = last_tags
+            .binary_search_by_key(&tag, |&(t, _)| t)
+            .map_or(0, |k| last_tags[k].1);
+        let delta = bytes.saturating_sub(before);
+        if delta == 0 {
+            continue;
+        }
+        let (key, site) = family_of(tag);
         let f = by_family.entry(key).or_default();
-        f.0 += delta;
+        f.bytes += delta;
         match site {
-            Site::Unidentified => f.1 += delta,
+            Site::Unidentified => f.unidentified += delta,
             Site::Slot(k) if usize::from(k) < known.sites.len() => {
                 *by_site.entry((usize::from(k), key.0)).or_default() += delta;
             }
             Site::Slot(_) | Site::None => {}
         }
     }
+    let last_pressure = last.map_or(&[][..], |l| &l.pressure);
+    for &(tag, p) in &now.pressure {
+        let before = last_pressure
+            .binary_search_by_key(&tag, |&(t, _)| t)
+            .map_or(0, |k| last_pressure[k].1.acted);
+        let acted = p.acted.saturating_sub(before);
+        if acted == 0 && p.queued_bytes == 0 {
+            continue;
+        }
+        // An app with bytes queued and nothing delivered this tick is
+        // listed too: it is the one waiting hardest.
+        let f = by_family.entry(family_of(tag).0).or_default();
+        f.queued += p.queued_bytes;
+        f.acted += acted;
+    }
     let mut families: Vec<FamilyTick> = by_family
         .into_iter()
-        .map(|((family, name), (bytes, hidden))| FamilyTick {
+        .map(|((family, name), f)| FamilyTick {
             family: family.to_owned(),
             name: name.to_owned(),
-            bps: bps(bytes),
-            unidentified_bps: bps(hidden),
+            bps: bps(f.bytes),
+            unidentified_bps: bps(f.unidentified),
+            queued_bytes: f.queued,
+            acted: f.acted,
         })
         .collect();
     families.sort_by(|a, b| b.bps.cmp(&a.bps).then_with(|| a.family.cmp(&b.family)));
@@ -972,7 +1003,7 @@ fn known_sites(config: &Config) -> Vec<SiteInfo> {
 #[cfg(test)]
 mod tests {
     use snailnet_core::rules::{STRICT_HOLD_SECS, Target};
-    use snailnet_core::scheduler::ClassStats;
+    use snailnet_core::scheduler::{ClassStats, Pressure};
     use snailnet_engine::fastpath::NO_TAG;
 
     use super::*;
@@ -1384,6 +1415,7 @@ mod tests {
                     },
                 )],
                 tags: vec![],
+                pressure: vec![],
             }),
             up: None,
         };
@@ -1446,6 +1478,70 @@ mod tests {
     }
 
     #[test]
+    fn pressure_is_summed_per_family_and_acted_counts_since_the_last_tick() {
+        let (_t, hub) = hub();
+        let app = |family: &str, exe: &str| AppInfo {
+            family: family.into(),
+            name: family.to_uppercase(),
+            exe: exe.into(),
+        };
+        let apps = vec![
+            app("steam", "steam.exe"),
+            app("steam", "steamwebhelper.exe"),
+            app("brave", "brave.exe"),
+        ];
+        let p = |queued_bytes: u64, acted: u64| Pressure {
+            queued_bytes,
+            acted,
+        };
+        let base = Instant::now();
+        let snap =
+            |ms: u64, tags: Vec<(Tag, u64)>, pressure: Vec<(Tag, Pressure)>| EngineSnapshot {
+                taken: Some(base + std::time::Duration::from_millis(ms)),
+                down: Some(DirectionStats {
+                    rate_bytes_per_sec: 1_000_000,
+                    classes: vec![],
+                    tags,
+                    pressure,
+                }),
+                up: None,
+            };
+        let seen = || {
+            Some(Seen {
+                apps: apps.clone(),
+                ..Seen::default()
+            })
+        };
+        hub.publish(
+            &snap(0, vec![(0, 0), (2, 0)], vec![(0, p(0, 10)), (2, p(0, 4))]),
+            seen(),
+        );
+        // Steam's two exes: 1000 + 500 bytes queued, 2 + 3 actions since.
+        // Brave: nothing delivered, 900 queued, 5 actions: still listed.
+        hub.publish(
+            &snap(
+                100,
+                vec![(0, 50_000), (1, 10_000)],
+                vec![(0, p(1_000, 12)), (1, p(500, 3)), (2, p(900, 9))],
+            ),
+            seen(),
+        );
+        let d = hub.latest_tick().down.unwrap();
+        let got: Vec<(String, u64, u64, u64)> = d
+            .families
+            .into_iter()
+            .map(|f| (f.family, f.bps, f.queued_bytes, f.acted))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("steam".to_owned(), 4_800_000, 1_500, 5),
+                ("brave".to_owned(), 0, 900, 5),
+            ]
+        );
+    }
+
+    #[test]
     fn per_family_rates_merge_a_familys_exes_and_skip_idle_ones() {
         let (_t, hub) = hub();
         let app = |family: &str, name: &str, exe: &str| AppInfo {
@@ -1467,6 +1563,7 @@ mod tests {
                 rate_bytes_per_sec: 1_000_000,
                 classes: vec![],
                 tags,
+                pressure: vec![],
             }),
             up: None,
         };
@@ -1545,6 +1642,7 @@ mod tests {
                     rate_bytes_per_sec: 1_000_000,
                     classes: vec![],
                     tags,
+                    pressure: vec![],
                 }),
                 up: None,
             }
@@ -1624,6 +1722,7 @@ mod tests {
                 rate_bytes_per_sec: 1_000_000,
                 classes: vec![],
                 tags: vec![(tag, bytes)],
+                pressure: vec![],
             }),
             up: None,
         };

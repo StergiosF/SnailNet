@@ -645,7 +645,8 @@ As specified in §7.2. In the UI, an expandable row shows member processes; "Spl
   - **Numbers** (25 Mbps line shaped to 23, everything in Everything else, a 16-connection download + a video wanting 8 Mbps, which gets 1.43): flagged after **3.50 s** at 20 and 50 ms RTT, 3.75 s at 100, 4.25 s at 150 (then 92 % of ticks); at 250 ms RTT 5.25 s but only 49 % of ticks (too on-and-off to rely on). Two 8-connection hogs + the video: the video at 3.50 s, neither hog ever.
   - **Never flagged** (0 ticks): the hog, alone or with any waiter; two equal 8-connection downloads; the video alone; a full-buffer video (4 s chunks every 4 s) at 250, 500 and 750 kbps.
   - **Limit:** a top-up video's busy share is about its stream rate / its fair share (~1.35 Mbps here). A 1000 kbps top-up (busy 70 %) is flagged in 123 of 199 ticks; at 1250 kbps it is starved in all but name. 16 of 20 would flag it in 20 ticks but long-RTT waiters only 63 %; 17 of 20, 0 ticks but 47 %. 14 of 20 keeps real waiters reliably flagged; the offer's own 12-of-15 s sustain (2.4) and mutes absorb the rest. With that sustain the offer appears ~15.5 s after the video starts.
-- **Next (2.2):** the engine's `Queued` must return its tag from `Packet::tag()` (until then every packet is `NO_TAG`); `FamilyTick.queued_bytes` / `acted` to the app; the app applies the rule above (2.3).
+- **To the app (2.2, built):** the engine's `Queued` returns its tag, `DirectionStats.pressure` carries `Scheduler::pressure` with each snapshot, and `hub::tag_ticks` sums it per family: `FamilyTick.queued_bytes` (now) and `acted` (since the previous tick), both `serde(default)`. A family with bytes queued but nothing delivered in a tick is listed too (bps 0). `snailnet top` marks `Brave 1.40 (held back 3x)`, the raw signal; the waiting rule itself runs in the app (2.3).
+- **Next:** 2.3 (`Member.waiting` with the rule above), 2.4 (`FixWatch`, `offerOf`, mutes), 2.5 (the button, Undo, the switch).
 
 ---
 

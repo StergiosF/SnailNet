@@ -441,6 +441,11 @@ fn family_line(families: &[FamilyTick]) -> Option<String> {
             if f.unidentified_bps > 0 {
                 s += &format!(" ({:.2} unidentified)", f.unidentified_bps as f64 / 1e6);
             }
+            // The raw signal behind "waiting" (PLAN.md §11.11): SnailNet's
+            // queues held it back this tick.
+            if f.acted > 0 {
+                s += &format!(" (held back {}x)", f.acted);
+            }
             s
         })
         .collect::<Vec<_>>()
@@ -502,6 +507,8 @@ mod tests {
             name: name.into(),
             bps: mbps * 1_000_000,
             unidentified_bps: 0,
+            queued_bytes: 0,
+            acted: 0,
         };
         let mut list: Vec<_> = (0..7).map(|k| f(&format!("App{k}"), 7 - k)).collect();
         assert_eq!(
@@ -513,6 +520,12 @@ mod tests {
             family_line(&list)
                 .unwrap()
                 .starts_with("App0 7.00, App1 6.00 (0.25 unidentified), App2")
+        );
+        list[2].acted = 4;
+        assert!(
+            family_line(&list)
+                .unwrap()
+                .contains("App2 5.00 (held back 4x), App3")
         );
     }
 

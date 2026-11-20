@@ -33,7 +33,8 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TrySendError, bounde
 use snailnet_core::clock::{Clock, MonotonicClock, NANOS_PER_MILLI, Nanos};
 use snailnet_core::parse::ip::{self, PROTO_TCP, PacketInfo, is_local_network};
 use snailnet_core::scheduler::{
-    ClassStats, ConfigError, Dequeue, LiveConfig, Packet, PacketMeta, Scheduler, SchedulerConfig,
+    ClassStats, ConfigError, Dequeue, LiveConfig, Packet, PacketMeta, Pressure, Scheduler,
+    SchedulerConfig,
 };
 
 use crate::batch::DEFAULT_BATCH;
@@ -147,6 +148,10 @@ impl Packet for Queued {
     fn mark_ce(&mut self) -> bool {
         ip::set_ce(&mut self.buf)
     }
+
+    fn tag(&self) -> Tag {
+        self.tag
+    }
 }
 
 struct Item {
@@ -225,6 +230,9 @@ pub struct DirectionStats {
     /// (tag, bytes sent) since the fast path started, by tag. Packets that
     /// bypass the scheduler (LAN, overflow) aren't counted.
     pub tags: Vec<(Tag, u64)>,
+    /// (tag, pressure) by tag: how hard each owner's flows push against
+    /// their share (PLAN.md §11.11). `acted` is cumulative.
+    pub pressure: Vec<(Tag, Pressure)>,
 }
 
 /// What the scheduler thread published last (every ~100 ms).
@@ -688,7 +696,10 @@ fn publish(
     let stats = |s: &Scheduler<Queued>, sent: &SentByTag| {
         let mut tags: Vec<(Tag, u64)> = sent.iter().map(|(&t, &b)| (t, b)).collect();
         tags.sort_unstable();
+        let mut pressure = Vec::new();
+        s.pressure(&mut pressure);
         DirectionStats {
+            pressure,
             rate_bytes_per_sec: s.rate_bytes_per_sec(),
             classes: (0..s.class_count())
                 .map(|i| (s.class_name(i).to_owned(), s.stats(i)))

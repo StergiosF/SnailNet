@@ -487,6 +487,14 @@ pub struct FamilyTick {
     /// site rule exists.
     #[serde(default)]
     pub unidentified_bps: u64,
+    /// Bytes of its connections waiting in SnailNet's queues now (PLAN.md
+    /// §11.11).
+    #[serde(default)]
+    pub queued_bytes: u64,
+    /// Times SnailNet's queues held it back (CoDel drop or mark, queue-limit
+    /// drop) since the previous tick: it keeps asking for more than it gets.
+    #[serde(default)]
+    pub acted: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -725,6 +733,8 @@ mod tests {
                         name: "Brave".into(),
                         bps: 8_500_000,
                         unidentified_bps: 500_000,
+                        queued_bytes: 1_200,
+                        acted: 3,
                     }],
                     sites: vec![SiteTick {
                         site: "youtube".into(),
@@ -811,6 +821,7 @@ mod tests {
         let d = new.down.as_ref().unwrap();
         assert!(d.sites.is_empty());
         assert_eq!(d.families[0].unidentified_bps, 0);
+        assert_eq!((d.families[0].queued_bytes, d.families[0].acted), (0, 0));
 
         let mut tick = new;
         tick.names = Some(NameTick::default());
