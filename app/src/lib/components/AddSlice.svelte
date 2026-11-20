@@ -1,8 +1,9 @@
 <script lang="ts">
   // "Add a slice" (PLAN.md §11.1): a dialog listing the websites SnailNet
   // knows and the apps it has seen, without the ones that have a rule,
-  // with a search box. Picking one gives it a 20% slice (from Everything
-  // else first) and opens its row. A native <dialog>: focus stays inside,
+  // with a search box, each with its real logo where there is one.
+  // Picking one gives it a 20% slice (from Everything else first) in the
+  // Split page's draft and opens its row. A native <dialog>: focus stays inside,
   // Escape closes it, focus goes back to the button that opened it.
   import { quietFocus } from "../focusRing";
   import { tick } from "svelte";
@@ -46,7 +47,7 @@
   }
 
   function pick(target: Target) {
-    ui.change(addRule(ui.rules, target));
+    ui.edit(addRule(ui.rules, target));
     ui.open = `${target.kind}:${target.id.toLowerCase()}`;
     ui.adding = false;
   }

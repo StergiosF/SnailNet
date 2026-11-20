@@ -1,9 +1,9 @@
 <script lang="ts">
-  // Who is using the line right now (PLAN.md §14.2): one strip as long as
-  // the line, a part per slice (Everything else per app) in its ink, and
-  // the bit low-latency mode keeps free hatched at the end. Below it the
-  // biggest users by name, and what all of it adds up to. Download or
-  // upload: the switch on the right.
+  // Who is using the line right now (PLAN.md §14.2): "Right now", what it
+  // all adds up to and the Download / Upload switch on one line; then one
+  // strip as long as the line, a part per slice (Everything else per app)
+  // in its ink, and the bit low-latency mode holds back hatched at the
+  // end; under it the biggest users by name, and the hatch named.
   import { mbps } from "../format";
   import { t } from "../i18n";
   import { parts, type Ledger } from "../ledger";
@@ -45,7 +45,12 @@
   const ink = (ink: number, shade: number) => (ink >= 0 ? `var(--ink-${ink})` : `var(--stone-${shade})`);
 </script>
 
-<section class="strip" aria-label={t(ui.dir === "down" ? "strip.label.down" : "strip.label.up")}>
+<section class="strip" aria-labelledby="strip-h">
+  <div class="top">
+    <h2 id="strip-h">{t("split.now")}</h2>
+    <span class="sum num">{used}</span>
+    <Segmented name="dir" label={t("dir.label")} options={dirs} value={ui.dir} onchange={(d) => (ui.dir = d)} small />
+  </div>
   <div class="bar" role="img" aria-label={summary}>
     {#each list as p (p.key)}
       <i style:width={pct(p.bps)} style:background={ink(p.ink, p.shade)}></i>
@@ -57,22 +62,43 @@
   <div class="labels">
     {#each top as p (p.key)}
       <span class="who">
-        <AppIcon target={p.target} name={p.name} size={16} /><span class="nm">{p.name}</span><b>{mbps(p.bps)}</b>
+        <AppIcon target={p.target} name={p.name} size={16} /><span class="nm">{p.name}</span><b class="num"
+          >{mbps(p.bps)}</b
+        >
       </span>
     {/each}
     {#if top.length > 0 && rest >= 50_000}
-      <span class="who"><span class="nm">{t("strip.others")}</span><b>{mbps(rest)}</b></span>
+      <span class="who"><span class="nm">{t("strip.others")}</span><b class="num">{mbps(rest)}</b></span>
     {/if}
-    <span class="sum">
-      <b>{used}</b>{#if kept}<span class="kept"><span class="dot" aria-hidden="true">·</span>{kept}</span>{/if}
-    </span>
-    <Segmented name="dir" label={t("dir.label")} options={dirs} value={ui.dir} onchange={(d) => (ui.dir = d)} small />
+    {#if kept}
+      <span class="kept"><i class="hatch" aria-hidden="true"></i>{kept}</span>
+    {/if}
   </div>
 </section>
 
 <style>
   .strip {
-    margin: 20px 0 0;
+    margin: 24px 0 0;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 8px 16px;
+    margin-bottom: 10px;
+  }
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .top .sum {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    color: var(--text-secondary);
   }
   .bar {
     display: flex;
@@ -121,17 +147,27 @@
     color: var(--text-primary);
     font-weight: 600;
   }
-  .sum {
-    flex: none;
+  .kept {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    align-items: center;
+    gap: 7px;
     margin-left: auto;
   }
-  .dot {
-    margin: 0 6px;
+  .hatch {
+    flex: none;
+    width: 16px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--free-hatch);
+    box-shadow: inset 0 0 0 1px #2d5a52;
   }
   @media (max-width: 860px) {
     .who:nth-child(3),
-    .who:nth-child(4),
-    .kept {
+    .who:nth-child(4) {
       display: none;
     }
   }

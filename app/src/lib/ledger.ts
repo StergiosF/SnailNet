@@ -186,8 +186,9 @@ export function ledger(
   return { slices, total, shaped, busy };
 }
 
-/** A row's status in words: "gets all it asks for", "lending 6.5 it
- *  isn't using", "7.0 of it is spare room"… */
+/** A row's status in words: "gets all it asks for", "not using 6.5 Mbps
+ *  of its slice, so others get it", "7.0 Mbps over its slice, from room
+ *  nobody needs"… */
 export function statusText(s: Status): string {
   switch (s.kind) {
     case "quiet":
@@ -218,10 +219,11 @@ export interface Glance {
   detail: string;
 }
 
-/** The sentence at the top: who uses the most, and whether that's a
- *  problem for anyone else. `lineBps` is the line as the user set it. */
-export function glance(l: Ledger, lineBps: number | null): Glance {
-  type Who = { name: string; bps: number; slice: Slice; member: boolean };
+type Who = { name: string; bps: number; slice: Slice; member: boolean };
+
+/** Everyone moving data (slices with a target, and the apps in Everything
+ *  else SnailNet could name), busiest first. */
+function everyoneIn(l: Ledger): Who[] {
   const other = l.slices[l.slices.length - 1];
   const everyone: Who[] = [
     ...l.slices.filter((s) => s.target !== null).map((s) => ({ name: s.name, bps: s.bps, slice: s, member: false })),
@@ -229,13 +231,26 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
       .filter((m) => !m.fixed)
       .map((m) => ({ name: m.name, bps: m.bps, slice: other as Slice, member: true })),
   ].filter((w) => w.bps >= QUIET_BPS);
-  everyone.sort((a, b) => b.bps - a.bps);
-  const top = everyone[0];
-  if (!top) return { title: t("glance.quiet.title"), detail: t("glance.quiet.body") };
+  return everyone.sort((a, b) => b.bps - a.bps);
+}
+
+/** The busiest app or slice's name (the glance's "who uses the most"),
+ *  or null when nobody is moving data. */
+export function top(l: Ledger): string | null {
+  return everyoneIn(l)[0]?.name ?? null;
+}
+
+/** The sentence at the top: who uses the most, and whether that's a
+ *  problem for anyone else. `lineBps` is the line as the user set it. */
+export function glance(l: Ledger, lineBps: number | null): Glance {
+  const other = l.slices[l.slices.length - 1];
+  const everyone = everyoneIn(l);
+  const lead = everyone[0];
+  if (!lead) return { title: t("glance.quiet.title"), detail: t("glance.quiet.body") };
 
   if (!l.busy) {
     return {
-      title: t("glance.top.calm", { name: top.name }),
+      title: t("glance.top.calm", { name: lead.name }),
       detail:
         lineBps !== null
           ? t("glance.room", { used: mbps(l.total), line: mbps(lineBps) })
@@ -243,13 +258,13 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
     };
   }
 
-  const title = t("glance.top.busy", { name: top.name });
+  const title = t("glance.top.busy", { name: lead.name });
   // Who else is moving and isn't left waiting. Inside Everything else
   // SnailNet shares fairly, so an app below its fair part there isn't
   // the one waiting.
   const otherMembers = other?.members.length ?? 1;
   const fine = everyone
-    .filter((w) => w !== top)
+    .filter((w) => w !== lead)
     .filter((w) =>
       w.member
         ? w.bps < w.slice.bps / Math.max(1, otherMembers)
@@ -258,18 +273,18 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
     .slice(0, 2)
     .map((w) => w.name);
   const waiting = everyone
-    .filter((w) => w !== top && !w.member && w.slice.status.kind === "held")
+    .filter((w) => w !== lead && !w.member && w.slice.status.kind === "held")
     .map((w) => w.name);
   const lender = l.slices
     .filter((s) => s.status.kind === "lending")
     .sort((a, b) => b.bps - a.bps)[0];
 
   let detail: string;
-  if (top.slice.status.kind === "borrowing") {
+  if (lead.slice.status.kind === "borrowing") {
     detail = lender
       ? t("glance.borrow.from", { lender: lender.name })
       : t("glance.borrow.spare");
-  } else if (top.slice.status.kind === "held") {
+  } else if (lead.slice.status.kind === "held") {
     detail = t("glance.held");
   } else {
     detail = "";

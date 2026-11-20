@@ -1,19 +1,23 @@
 <script lang="ts">
   // The tray flyout (PLAN.md §14.4): the quickest way to see who is using
   // the line and to change it. The snail, Pause / Resume; the main window's
-  // sentence (or the state that needs attention); the modes; a small live
-  // strip; the slices with − % + (quiet "only when free" ones left out);
-  // and the way to the main window. It hides on Escape and when it loses
+  // sentence (or the state that needs attention) and, while the line is
+  // full, the proof's one line (ping with and without SnailNet); the modes; a small live
+  // strip; the boost, if one is on (who goes first, the time left in words
+  // and as a shortening bar, Stop); the slices with − % + (quiet "only
+  // when free" ones left out); and the way to the main window. Its − / +
+  // save by themselves: it's the quick panel (ui.svelte.ts `change`). It hides on Escape and when it loses
   // focus (tray.rs).
   import { getCurrentWindow, Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { glance, ledger, parts, statusText } from "../ledger";
-  import { pause, resume, startService, switchMode } from "../actions";
-  import { availableModes } from "../modes";
+  import { pause, resume, startService, stopBoost, switchMode } from "../actions";
+  import { availableModes, boostLeft, boostShare, liveBoost } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
+  import { ProofWatch, proofOf } from "../proof";
   import { canStep, stepShare } from "../rules";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -33,6 +37,21 @@
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const book = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
+  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label) : null);
+  const proofWatch = new ProofWatch();
+  const proof = $derived.by(() => {
+    const s = service.stats;
+    if (!connected || !s) return proofWatch.step(null, 0, true);
+    const now = proofOf(s, book, upBook, service.snapshot?.config.line.measured);
+    return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
+  });
+  const proofLine = $derived(
+    proof === null
+      ? null
+      : proof.without === null
+        ? t("proof.live", { now: Math.round(proof.now), name: proof.name })
+        : t("proof.flyout", { now: Math.round(proof.now), without: Math.round(proof.without) }),
+  );
   const lineMbps = $derived(service.snapshot?.config.line.down_mbps);
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
   const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
@@ -47,6 +66,8 @@
     ),
   );
   const strip = $derived(book ? parts(book) : []);
+  const boost = $derived(connected ? liveBoost(service.snapshot?.config.boost, ui.now) : null);
+  const boostBar = $derived(boost ? boostShare(boost, ui.now) : null);
   const scale = $derived(Math.max(lineBps ?? book?.shaped ?? 0, book?.total ?? 0, 1));
   const modes = $derived(availableModes(service.snapshot?.config.profiles ?? []));
   const active = $derived(service.snapshot?.config.active_profile ?? "");
@@ -97,6 +118,9 @@
   {:else if sentence}
     <h1>{sentence.title}</h1>
     <p class="detail">{sentence.detail}</p>
+    {#if proofLine}
+      <p class="proof num" aria-live="off">{proofLine}</p>
+    {/if}
   {:else}
     <h1 class="wait">{t("link.connecting")}</h1>
   {/if}
@@ -124,6 +148,21 @@
       {#each strip as p (p.key)}
         <i style:width="{(p.bps / scale) * 100}%" style:background={ink(p.ink, p.shade)}></i>
       {/each}
+    </div>
+  {/if}
+
+  {#if boost}
+    <div class="boost">
+      <AppIcon target={boost.target} name={label(boost.target)} size={18} />
+      <span class="bw">{t("flyout.boost", { name: label(boost.target), left: boostLeft(boost, ui.now) })}</span>
+      <button
+        type="button"
+        aria-label={t("boost.stop.label", { name: label(boost.target) })}
+        onclick={() => void stopBoost()}>{t("boost.stop")}</button
+      >
+      {#if boostBar !== null}
+        <span class="left" aria-hidden="true"><i style:width="{boostBar * 100}%"></i></span>
+      {/if}
     </div>
   {/if}
 
@@ -261,6 +300,18 @@
     line-height: 1.4;
     color: var(--text-secondary);
   }
+  .proof {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 700;
+    color: var(--shell-hover);
+  }
+  @media (forced-colors: active) {
+    .proof {
+      color: CanvasText;
+    }
+  }
   .bar {
     display: flex;
     gap: 2px;
@@ -276,6 +327,68 @@
     flex: 0 1 auto;
     min-width: 2px;
     border-radius: 2px;
+  }
+  .boost {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 8px 10px 10px;
+    border-radius: var(--radius-control);
+    overflow: hidden;
+    background: linear-gradient(90deg, rgb(47 168 142 / 0.26), rgb(47 168 142 / 0.08));
+    box-shadow: inset 0 0 0 1px rgb(47 168 142 / 0.4);
+    animation: rise-in 420ms var(--ease-out) backwards;
+  }
+  .bw {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .boost button {
+    flex: none;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--shell);
+    color: var(--on-shell);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .boost button:hover {
+    background: var(--shell-hover);
+  }
+  .boost .left {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgb(47 168 142 / 0.18);
+  }
+  .boost .left i {
+    display: block;
+    height: 100%;
+    background: var(--shell);
+    transition: width 1200ms linear;
+  }
+  @media (forced-colors: active) {
+    .boost {
+      border: 1px solid Highlight;
+    }
+    .boost .left i,
+    .boost button {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
   }
   ul {
     flex: 1;

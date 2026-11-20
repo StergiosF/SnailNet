@@ -80,6 +80,19 @@ export function boostLeft(boost: Boost, now: number): string {
   return timeLeft(boost.until, now);
 }
 
+/** The boost lengths the Boost menu offers, in minutes. */
+export const BOOST_MINUTES = [60, 240];
+
+/** How much of a boost is left, 0–1, for its countdown bar; null when it
+ *  runs until stopped. The service keeps only the end, so the length is
+ *  the shortest one the menu offers that still holds what's left. */
+export function boostShare(boost: Boost, now: number): number | null {
+  if (boost.until === undefined) return null;
+  const left = Math.max(0, boost.until - now);
+  const total = (BOOST_MINUTES.find((m) => m * 60 >= left) ?? Math.ceil(left / 60)) * 60;
+  return total === 0 ? 0 : Math.min(1, left / total);
+}
+
 /** Time left until `until` (Unix seconds) in words; no end = "until you
  *  stop it". */
 export function timeLeft(until: number | undefined, now: number): string {

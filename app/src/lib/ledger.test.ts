@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glance, ledger, membersOf, parts, statusText, unnamed } from "./ledger";
+import { glance, ledger, membersOf, parts, statusText, top, unnamed } from "./ledger";
 import { setOther } from "./split";
 import type { DirStats, Rule, Target } from "./types";
 
@@ -44,7 +44,7 @@ describe("ledger", () => {
     const [yt, brave, other] = ledger(rules, busy(), label).slices;
     expect(yt?.status).toEqual({ kind: "all" });
     expect(brave?.status.kind).toBe("lending");
-    expect(statusText(brave!.status)).toBe("lending 6.5 it isn't using");
+    expect(statusText(brave!.status)).toBe("not using 6.5 Mbps of its slice, so others get it");
     expect(other?.status.kind).toBe("borrowing");
     expect(other?.kept).toBeCloseTo(5.75 * M);
   });
@@ -164,5 +164,17 @@ describe("unnamed", () => {
       bps: 940_000,
       apps: ["Chrome", "Brave"],
     });
+  });
+});
+
+describe("top", () => {
+  it("names the busiest app or slice, the glance's own", () => {
+    const l = ledger(rules, busy(), label);
+    expect(top(l)).toBe("Steam");
+    expect(glance(l, null).title).toContain("Steam");
+  });
+
+  it("is null when nobody moves data", () => {
+    expect(top(ledger(rules, null, label))).toBeNull();
   });
 });

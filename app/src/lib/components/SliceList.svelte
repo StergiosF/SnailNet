@@ -3,7 +3,8 @@
   // Everything else with its apps, then "Add a slice". Rules that take only
   // what's free and are quiet right now fold into one row that opens (the
   // modes have many: every launcher and updater). While the service is
-  // still answering, three quiet placeholder rows.
+  // still answering, three quiet placeholder rows. Over the rows, what
+  // the columns are, so the percentage says what it means.
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
   import { ui } from "../ui.svelte";
@@ -38,6 +39,10 @@
         <p><strong>{t("list.empty.title")}</strong>{t("list.empty.body")}</p>
       </div>
     {/if}
+    <div class="heads" aria-hidden="true">
+      <span>{t("split.list.who")}</span>
+      <span class="r">{t("split.list.share")}</span>
+    </div>
     <ul>
       {#each shown.slice(0, -1) as s (s.key)}
         <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
@@ -78,8 +83,23 @@
 
 <style>
   .list {
-    margin: 16px -12px 0;
-    padding-bottom: 24px;
+    margin: 20px -12px 0;
+    padding-bottom: 8px;
+  }
+  /* What the columns are: who, and what the percentage means. */
+  .heads {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 12px 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--stroke-card);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .heads .r {
+    text-align: right;
   }
   ul {
     display: flex;

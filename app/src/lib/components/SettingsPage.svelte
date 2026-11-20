@@ -1,19 +1,20 @@
 <script lang="ts">
   // Settings (PLAN.md §14.6), one scrolling page of groups, most used
-  // first: your internet (speed, Measure, the last test with its ping,
+  // first: your internet (speed, Measure, the last test with its grades,
   // following the line, other networks); games and the app you're using;
-  // new apps (notifications, how apps are grouped); Windows (start with
+  // apps (how they are grouped); Windows (start with
   // Windows, the hotkey); version and updates; and last, starting over
   // (this mode's split; all of SnailNet, which shows setup again).
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import { measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
+  import { canMeasure, measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
   import { groupings } from "../families";
-  import { stateKind } from "../format";
+  import { shortDate, stateKind } from "../format";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { modeName } from "../modes";
+  import { grade, rise, type Grade } from "../proof";
   import { service } from "../service.svelte";
   import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
@@ -105,17 +106,29 @@
     return () => (live = false);
   });
   const measuring = $derived(service.state !== null && stateKind(service.state) === "measuring");
-  const measuredOn = $derived(
-    measured ? new Date(measured.at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "",
-  );
+  const measuredOn = $derived(measured ? shortDate(measured.at) : "");
+  // The last test's grades (§11.10): how much ping rose while downloading,
+  // without SnailNet and, after the check, with it. None without pings.
+  type GradeRow = { key: string; who: string; grade: Grade; rise: number };
+  const grades = $derived.by((): GradeRow[] => {
+    const m = measured;
+    if (!m) return [];
+    const out: GradeRow[] = [];
+    const without = rise(m.idle_ms, m.loaded_ms);
+    if (without === null) return out;
+    out.push({ key: "without", who: t("proof.grade.without"), grade: grade(without), rise: Math.round(without) });
+    const withIt = rise(m.idle_ms, m.with_ms);
+    if (withIt !== null) {
+      out.push({ key: "with", who: t("proof.grade.with"), grade: grade(withIt), rise: Math.round(withIt) });
+    }
+    return out;
+  });
   let pinning = $state(false);
   let focusing = $state(false);
   const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
   const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
   // Missing from older services: on.
   const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
-  const notifyNewApps = $derived(service.snapshot?.config.settings.new_apps !== "off");
-  const strictNewApps = $derived(service.snapshot?.config.settings.new_apps === "strict");
   // Missing from older services: on.
   const packUpdates = $derived(service.snapshot?.config.settings.pack_updates !== false);
   // The apps the user marked from their Boost menu (§11.5 overrides).
@@ -186,8 +199,8 @@
         {/if}
       </div>
       <div class="pair">
-        <button type="button" class="btn" disabled={!canEdit || measuring} onclick={() => void measureLine()}>
-          {measuring ? t("measure.running") : t("measure.button")}
+        <button type="button" class="btn" disabled={!canEdit || !canMeasure()} onclick={() => void measureLine()}>
+          {measuring || ui.measuring ? t("measure.running") : t("measure.button")}
         </button>
         <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => lineDialog.show()}>
           {t("settings.line.change")}
@@ -199,9 +212,22 @@
         <div class="words">
           <b>{t("measure.last", { date: measuredOn })}</b>
           <span class="num">{t("settings.line.value", { down: fig(measured.down_mbps), up: fig(measured.up_mbps) })}</span>
-          {#if measured.idle_ms !== undefined && measured.loaded_ms !== undefined}
-            <span class="num"
-              >{t("ping.body", { idle: Math.round(measured.idle_ms), loaded: Math.round(measured.loaded_ms) })}</span
+          {#if grades.length > 0}
+            <ul class="grades">
+              {#each grades as g (g.key)}
+                <li>
+                  <span class="who">{g.who}</span>
+                  <span class="letter g-{g.grade}"
+                    ><span class="visually-hidden">{t("proof.grade.word")} </span>{g.grade}</span
+                  >
+                  <span class="num">{t("proof.grade.rise", { rise: g.rise })}</span>
+                </li>
+              {/each}
+            </ul>
+            <span class="note"
+              >{grades[0]?.grade === "A"
+                ? `${t("proof.grade.calm")} ${t("proof.grade.what")}`
+                : t("proof.grade.what")}</span
             >
           {/if}
         </div>
@@ -311,40 +337,10 @@
   </div>
 </section>
 
+{#if grouped.length > 0}
 <section aria-labelledby="set-apps">
   <h2 class="group-title" id="set-apps">{t("settings.apps")}</h2>
   <div class="card group">
-    <label class="item">
-      <div class="words">
-        <b>{t("settings.newapps")}</b>
-        <span>{t("settings.newapps.body")}</span>
-      </div>
-      <input
-        type="checkbox"
-        role="switch"
-        class="switch"
-        checked={notifyNewApps}
-        disabled={!canEdit || focusing}
-        onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "notify" : "off" })}
-      />
-    </label>
-    {#if notifyNewApps}
-      <label class="item">
-        <div class="words">
-          <b>{t("settings.strict")}</b>
-          <span>{t("settings.strict.body")}</span>
-        </div>
-        <input
-          type="checkbox"
-          role="switch"
-          class="switch"
-          checked={strictNewApps}
-          disabled={!canEdit || focusing}
-          onchange={(e) => void setSetting({ new_apps: e.currentTarget.checked ? "strict" : "notify" })}
-        />
-      </label>
-    {/if}
-    {#if grouped.length > 0}
       <div class="item">
         <div class="words">
           <b>{t("group.list.title")}</b>
@@ -377,9 +373,9 @@
           </ul>
         </div>
       </div>
-    {/if}
   </div>
 </section>
+{/if}
 
 <section aria-labelledby="set-win">
   <h2 class="group-title" id="set-win">{t("settings.windows")}</h2>
@@ -590,6 +586,57 @@
   }
   .nets .num {
     flex: none;
+  }
+  /* The last test's grades: who, the letter, how far ping rose. The
+     letter says it; its colour only echoes it (§14.9). */
+  .grades {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 6px;
+    margin: 10px 0 4px;
+    padding: 0;
+    list-style: none;
+  }
+  .grades li {
+    display: contents;
+  }
+  .grades .who {
+    color: var(--text-primary);
+  }
+  .words .letter {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .words .g-A,
+  .words .g-B {
+    background: var(--shell-soft);
+    color: var(--shell-hover);
+  }
+  .words .g-C {
+    color: var(--caution);
+  }
+  .words .g-D,
+  .words .g-F {
+    color: var(--critical);
+  }
+  .words .note {
+    max-width: 64ch;
+    font-size: 13px;
+  }
+  @media (forced-colors: active) {
+    .letter {
+      border: 1px solid CanvasText;
+    }
   }
   .metered {
     display: flex;

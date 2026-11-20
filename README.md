@@ -57,6 +57,11 @@ nothing sent anywhere.
 - **Keeps ping low.** It sends slightly below your line speed, so the
   queue stays on your PC instead of in your router, and follows your line
   as it gets faster or slower.
+- **Shows it working.** While something fills your line, SnailNet shows
+  your ping next to the ping your last speed test measured without it:
+  *"Ping 19 ms while Steam fills your line"*, with 142 ms beside it for
+  without. Both numbers are measured on your PC, on your network; when
+  there's no difference worth showing, it doesn't claim one.
 - **Switches whole setups in one click.** Four modes, plus your own copies
   of them.
 - **Steps aside rather than break your internet.** If anything goes
@@ -76,8 +81,9 @@ nothing sent anywhere.
    anyway**. Windows asks for administrator permission once, to install
    the SnailNet service and the WinDivert driver.
 3. **Tell it your speed.** On first start SnailNet offers to measure your
-   connection (about 20 seconds, with Cloudflare's speed test), or you can
-   type the speeds a speed test shows. Until it knows your speed, it only
+   connection (about 30 seconds, with Cloudflare's speed test, then a
+   check of your ping with SnailNet on), or you can type the speeds a
+   speed test shows. Until it knows your speed, it only
    watches.
 
 That's it: SnailNet starts sharing your connection, starts with Windows,
@@ -99,6 +105,10 @@ with − and +, and Pause.
   fast, and how it's doing ("gets all it asks for", "using its whole
   slice, wants more"). **Boost** lets one of them go first for a while:
   it gets at least half your line, then everything goes back by itself.
+- While the line is full, a row under the sentence at the top shows your
+  **ping with SnailNet** and, as a second bar, the ping your last speed
+  test found **without** it. With no speed test on this network yet,
+  **Measure to compare** runs one.
 - **The split** shows each slice as a bar. **Fine-tune** opens the Split
   page; **Reset split** puts the mode back how it started.
 
@@ -124,12 +134,13 @@ in Settings → Windows). With *Switch to Gaming while I play* on, SnailNet
 switches to Gaming when a game starts and back when it closes.
 
 **Settings** is grouped the way you'd look for things: your internet
-(speed, **Measure** or **Change**, the last speed test, other networks),
-calls, games and the app you're using (*Put calls first* is on by
-default), new apps, Windows (start with Windows,
-the hotkey), version and updates, and starting over. When a new version
-is out, an **Update** button appears in the side bar; one click installs
-it.
+(speed, **Measure** or **Change**, which can measure again too; the last
+speed test, with a grade from A to F for how much ping rose while
+downloading, without SnailNet and with it; other networks), calls, games
+and the app you're using (*Put calls first* is on by default), how apps
+are grouped, Windows (start with Windows, the hotkey), version and
+updates, and starting over. When a new version is out, an **Update**
+button appears in the side bar; one click installs it.
 
 ### The words SnailNet uses
 
@@ -240,7 +251,10 @@ When you report a problem, the service's logs help: they're in
     off in Settings → Version and updates → "Keep app and game lists up
     to date";
   - the speed test, to Cloudflare (`speed.cloudflare.com`), only when
-    you click Measure;
+    you click Measure. It downloads, uploads, then downloads once more
+    with SnailNet sharing the line, to measure your ping with it (about
+    30 seconds in all; on a metered network, Settings shows a note about
+    it);
   - pings to your router and to `1.1.1.1` while SnailNet is shaping
     (once a second while the line is busy, every 30 seconds when it's
     quiet), to keep the shaping just below what your line can take.

@@ -2,12 +2,14 @@
   // A slice's share with − and + beside it (PLAN.md §14.2), in 5% steps.
   // The main window's rows and the tray flyout both use it; `compact` is
   // the flyout's size. The figure is a live region, so a screen reader
-  // hears the new share after a step.
+  // hears the new share after a step. On the Split page a share changed
+  // but not saved yet shows what it was underneath.
   import { t } from "../i18n";
 
   let {
     name,
     pct,
+    was = null,
     canLess,
     canMore,
     onstep,
@@ -16,6 +18,8 @@
     name: string;
     /** The share in whole percent; null for a slice that takes only what is free. */
     pct: number | null;
+    /** The saved share in whole percent, while a change isn't saved. */
+    was?: number | null;
     canLess: boolean;
     canMore: boolean;
     onstep: (dir: 1 | -1) => void;
@@ -27,9 +31,14 @@
   <button type="button" class="step" disabled={!canLess} aria-label={t("row.less", { name })} onclick={() => onstep(-1)}
     ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9" /></svg></button
   >
-  <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name, pct })}>
-    {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{pct}<small>%</small>{/if}
-  </output>
+  <span class="fig">
+    <output class="n" aria-live="polite" aria-label={pct === null ? t("row.free") : t("row.share", { name, pct })}>
+      {#if pct === null}<span class="free">{t("row.free")}</span>{:else}{pct}<small>%</small>{/if}
+    </output>
+    {#if was !== null && !compact}
+      <span class="was" aria-label={t("row.was.label", { name, pct: was })}>{t("row.was", { pct: was })}</span>
+    {/if}
+  </span>
   <button type="button" class="step" disabled={!canMore} aria-label={t("row.more", { name })} onclick={() => onstep(1)}
     ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M8 3.5v9" /></svg></button
   >
@@ -71,6 +80,17 @@
   }
   .step:disabled {
     opacity: 0.35;
+  }
+  .fig {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .was {
+    margin-top: -2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
   .n {
     width: 72px;

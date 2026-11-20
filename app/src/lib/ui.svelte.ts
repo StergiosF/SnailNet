@@ -1,11 +1,16 @@
 // The main window's own state: which direction the numbers show, which
-// row is open, and rule changes on their way to the service. A change
-// shows at once (`rules` is the draft until the service has it) and saves
-// after a short pause, so a few quick − / + clicks become one save; a
-// save waits for the previous one to come back, so they never race.
+// row is open, and rule changes on their way to the service.
+//
+// Two ways a rule change travels. The Split page edits a draft (draft.ts):
+// nothing reaches the line until Save, and leaving the page or switching
+// mode with unsaved changes asks first (`guard`). The tray flyout's quick
+// − / + still save by themselves (`change`): a change shows at once and
+// saves after a short pause, so a few quick clicks become one save; a save
+// waits for the previous one to come back, so they never race.
 
+import { edit, isDirty, isSavable, isStale, startDraft, type Draft } from "./draft";
 import { t } from "./i18n";
-import { addRule } from "./rules";
+import { modeName } from "./modes";
 import { coachSeen, dismissFirstRun, firstRunDismissed, forgetCoach, forgetFirstRun, markCoachSeen } from "./line";
 import { service } from "./service.svelte";
 import type { Rule, SaveError } from "./types";
@@ -47,6 +52,9 @@ class Ui {
   /** The app picked inside Everything else, or null. */
   member = $state<string | null>(null);
   adding = $state(false);
+  /** A speed test this window started is running, its check with
+   *  SnailNet included (actions.ts measureLine). */
+  measuring = $state(false);
   error = $state<string | null>(null);
 
   #draft = $state<Rule[] | null>(null);
@@ -54,13 +62,117 @@ class Ui {
   #waiting: number | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
 
+  /** The Split page's unsaved copy, or null (nothing changed). */
+  #edit = $state<Draft | null>(null);
+  /** Save is on its way. */
+  committing = $state(false);
+  /** Why the last Save didn't go through, or null. */
+  draftError = $state<string | null>(null);
+  /** What the person asked for (another page, another mode) while there
+   *  were unsaved changes: done once they've said Save or Discard. */
+  pending = $state<{ run: () => void } | null>(null);
+
   /** The active profile's rules, with any change not saved yet. */
   get rules(): Rule[] {
-    return this.#draft ?? service.activeProfile?.rules ?? [];
+    return this.#edit?.rules ?? this.#draft ?? service.activeProfile?.rules ?? [];
   }
 
   get saving(): boolean {
-    return this.#draft !== null;
+    return this.#draft !== null || this.committing;
+  }
+
+  /** The draft, while it differs from what's saved. */
+  get draft(): Draft | null {
+    return this.#edit;
+  }
+
+  /** Unsaved changes on the Split page. */
+  get dirty(): boolean {
+    return isDirty(this.#edit);
+  }
+
+  /** The saved rules changed somewhere else since editing started. */
+  get stale(): boolean {
+    const p = service.activeProfile;
+    return this.dirty && isStale(this.#edit, p?.id ?? null, p?.rules ?? []);
+  }
+
+  /** A Split-page edit: into the draft, not the service. Back to exactly
+   *  what's saved, the draft goes away. */
+  edit(next: Rule[]) {
+    const p = service.activeProfile;
+    if (!p) return;
+    this.draftError = null;
+    const d = edit(this.#edit ?? startDraft(p.id, p.rules), next);
+    this.#edit = isDirty(d) ? d : null;
+  }
+
+  /** Drop the unsaved changes. */
+  discard() {
+    this.#edit = null;
+    this.draftError = null;
+  }
+
+  /** Save the draft (rev-checked, like every change). On a conflict, or
+   *  any failure, the draft stays and says why. */
+  async commit(): Promise<boolean> {
+    const d = this.#edit;
+    if (!d) return true;
+    if (!isSavable(d)) {
+      this.draftError = t("draft.invalid");
+      return false;
+    }
+    this.committing = true;
+    this.draftError = null;
+    try {
+      const rev = await service.saveRulesOf(d.profile, d.rules);
+      const p = service.activeProfile;
+      // Keep showing the saved rules until the snapshot has them.
+      if (p?.id === d.profile) {
+        this.#draft = d.rules;
+        this.#waiting = rev;
+      }
+      this.#edit = null;
+      this.#settle();
+      const mode = modeName(service.snapshot?.config.profiles.find((x) => x.id === d.profile) ?? null);
+      this.say({ message: t("draft.saved", { mode }) });
+      return true;
+    } catch (e) {
+      const err = e as SaveError;
+      this.draftError = err.kind === "conflict" ? t("draft.conflict") : t("draft.failed", { message: err.message });
+      return false;
+    } finally {
+      this.committing = false;
+    }
+  }
+
+  /** Run `go` now, or, with unsaved changes, once the person has said
+   *  what to do with them (LeaveDialog). */
+  guard(go: () => void) {
+    if (this.dirty) this.pending = { run: go };
+    else go();
+  }
+
+  /** The answer to "Save your changes?". */
+  async answer(choice: "save" | "discard" | "stay") {
+    const p = this.pending;
+    if (choice === "stay" || !p) {
+      this.pending = null;
+      return;
+    }
+    if (choice === "save" && !(await this.commit())) {
+      // The bar on the page says why; stay there.
+      this.pending = null;
+      return;
+    }
+    if (choice === "discard") this.discard();
+    this.pending = null;
+    p.run();
+  }
+
+  /** Open a page; leaving the Split page with unsaved changes asks first. */
+  go(page: Page) {
+    if (page !== this.page) this.guard(() => (this.page = page));
   }
 
   change(next: Rule[]) {
@@ -115,18 +227,6 @@ class Ui {
     });
   }
 
-  /** "Give it a slice" on a new-app notification (§11.4): the split, with
-   *  the app added (or its row opened if it has one already). */
-  giveSlice(family: string) {
-    const id = family.toLowerCase();
-    const key = `family:${id}`;
-    this.page = "split";
-    this.adding = false;
-    const has = this.rules.some((r) => r.target.kind === "family" && r.target.id.toLowerCase() === id);
-    if (!has) this.change(addRule(this.rules, { kind: "family", id: family }));
-    this.open = key;
-  }
-
   toggle(key: string) {
     this.open = this.open === key ? null : key;
   }
@@ -145,6 +245,7 @@ class Ui {
 
   /** After "Reset SnailNet": back to the Now page, and first run again. */
   restartFirstRun() {
+    this.discard();
     forgetFirstRun();
     forgetCoach();
     this.coach = true;

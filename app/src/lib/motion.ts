@@ -17,3 +17,14 @@ export const glide = (): { duration: number; easing: (t: number) => number } => 
   duration: ms(320),
   easing: cubicOut,
 });
+
+/** A bar growing out from its start, once, as it appears (the proof's
+ *  ping bars). Reduced motion: it's simply there. */
+export function grow(_node: Element, { delay = 0 }: { delay?: number } = {}) {
+  return {
+    delay: ms(delay),
+    duration: ms(560),
+    easing: cubicOut,
+    css: (t: number) => `transform: scaleX(${t})`,
+  };
+}

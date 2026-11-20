@@ -1,8 +1,10 @@
 <script lang="ts">
   // What an app, a website or Everything else looks like in the list: the
-  // program's own icon (icon.rs), a website's letter tile in its colour, or
-  // four squares for Everything else. Decorative: the name is always
-  // written beside it.
+  // program's own icon (icon.rs); else the brand's real logo (brands/,
+  // Simple Icons) for sites and known apps; else a letter tile in the
+  // site's colour. Windows' own traffic gets a PC glyph, Everything else
+  // four squares. Decorative: the name is always written beside it.
+  import { brandOf } from "../brands";
   import { icons } from "../icons.svelte";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
@@ -29,6 +31,8 @@
   };
 
   const url = $derived(target ? icons.forTarget(target, service.snapshot?.apps ?? []) : null);
+  const brand = $derived(target ? brandOf(target) : null);
+  const system = $derived(target?.kind === "family" && target.id.toLowerCase() === "system");
   const site = $derived(
     target?.kind === "site"
       ? (SITES[target.id.toLowerCase()] ?? { text: name.charAt(0).toUpperCase(), bg: "#3a3835", fg: "#f1ede6" })
@@ -49,6 +53,12 @@
     </svg>
   {:else if url}
     <img src={url} alt="" width={size} height={size} />
+  {:else if brand}
+    <svg class="logo" viewBox="0 0 24 24" width={size * 0.86} height={size * 0.86}>
+      <path d={brand.path} fill={brand.ink} />
+    </svg>
+  {:else if system}
+    <i class="icon sys" style:font-size="{size * 0.72}px">&#xE7F4;</i>
   {:else if site}
     <span class="tile" style:background={site.bg} style:color={site.fg} class:wide={site.text.length > 1}>{site.text}</span>
   {:else}
@@ -71,8 +81,12 @@
     border-radius: var(--radius-control);
     background: var(--surface-2);
   }
-  img {
+  img,
+  .logo {
     display: block;
+  }
+  .sys {
+    color: var(--text-secondary);
   }
   .tile {
     display: grid;
@@ -93,6 +107,9 @@
     color: var(--text-secondary);
   }
   @media (forced-colors: active) {
+    .logo path {
+      fill: CanvasText;
+    }
     .tile {
       forced-color-adjust: none;
     }

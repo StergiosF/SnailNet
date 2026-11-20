@@ -51,3 +51,9 @@ export function stateKind(s: ServiceState): StateKind {
   if ("Paused" in s) return "paused";
   return "Retrying" in s ? "retrying" : "safe_mode";
 }
+
+/** "12 Nov": the day of a speed test (Unix seconds), as the locale writes
+ *  it. */
+export function shortDate(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}

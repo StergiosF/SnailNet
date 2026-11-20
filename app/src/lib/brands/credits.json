@@ -1,0 +1,202 @@
+[
+  {
+    "slug": "youtube",
+    "name": "YouTube",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.youtube.com/howyoutubeworks/resources/brand-resources/#logos-icons-and-colors"
+  },
+  {
+    "slug": "twitch",
+    "name": "Twitch",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://brand.twitch.tv"
+  },
+  {
+    "slug": "netflix",
+    "name": "Netflix",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://brand.netflix.com/en/assets/logos"
+  },
+  {
+    "slug": "spotify",
+    "name": "Spotify",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://developer.spotify.com/documentation/general/design-and-branding/#using-our-logo"
+  },
+  {
+    "slug": "kick",
+    "name": "Kick",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://kick.com"
+  },
+  {
+    "slug": "zoom",
+    "name": "Zoom",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://brand.zoom.us/media-library/"
+  },
+  {
+    "slug": "googlemeet",
+    "name": "Google Meet",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://about.google/brand-resource-center/logos-list/"
+  },
+  {
+    "slug": "brave",
+    "name": "Brave",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://brave.com/brave-branding-assets"
+  },
+  {
+    "slug": "googlechrome",
+    "name": "Google Chrome",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.google.com/chrome"
+  },
+  {
+    "slug": "firefoxbrowser",
+    "name": "Firefox Browser",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://mozilla.design/firefox/logos-usage/"
+  },
+  {
+    "slug": "opera",
+    "name": "Opera",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://brand.opera.com/1472-2/opera-logos/"
+  },
+  {
+    "slug": "discord",
+    "name": "Discord",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://discord.com/branding"
+  },
+  {
+    "slug": "steam",
+    "name": "Steam",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://partner.steamgames.com/doc/marketing/branding"
+  },
+  {
+    "slug": "epicgames",
+    "name": "Epic Games",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://dev.epicgames.com/docs/services/en-US/EpicAccountServices/DesignGuidelines/index.html#epicgamesbrandguidelines"
+  },
+  {
+    "slug": "battledotnet",
+    "name": "Battle.net",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://battle.net"
+  },
+  {
+    "slug": "ea",
+    "name": "EA",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.ea.com"
+  },
+  {
+    "slug": "ubisoft",
+    "name": "Ubisoft",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.ubisoft.com/en-US/company/overview.aspx"
+  },
+  {
+    "slug": "gogdotcom",
+    "name": "GOG.com",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.cdprojekt.com/en/media/logotypes/"
+  },
+  {
+    "slug": "dropbox",
+    "name": "Dropbox",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.dropbox.com/branding"
+  },
+  {
+    "slug": "qbittorrent",
+    "name": "qbittorrent",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://github.com/qbittorrent/qBittorrent/blob/73028f9930d9ab9d89edb60ed4aedb66d75669d9/src/icons/qbittorrent-tray-light.svg"
+  }
+]

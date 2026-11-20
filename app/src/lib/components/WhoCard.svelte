@@ -1,9 +1,12 @@
 <script lang="ts">
   // "Using your internet" (PLAN.md §14.2): who is moving data right now,
   // busiest first, each with what's happening to it and a Boost. The
-  // boosted one says how long it has left, lit by the shell's green. When
-  // the order changes the rows glide to their new places, so the eye can
-  // follow who overtook whom.
+  // boosted one is its own thing: lit by the shell's green, its icon
+  // ringed, a "Boosted" mark, the time it has left in words and as a bar
+  // along its foot that shortens as the boost runs out. The green sweeps
+  // in once when a boost starts; nothing loops. When the order changes
+  // the rows glide to their new places, so the eye can follow who
+  // overtook whom.
   import { mbps, rowMbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { unnamed, type Ledger } from "../ledger";
@@ -11,7 +14,7 @@
   import { fade } from "svelte/transition";
   import { unblock } from "../actions";
   import { glide, ms } from "../motion";
-  import { boostLeft, gameWhy, inCall, liveBoost, users } from "../modes";
+  import { boostLeft, boostShare, gameWhy, inCall, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -28,10 +31,12 @@
   const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
   const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
   const list = $derived(ledger ? users(ledger, live, label, 5, calls) : []);
+  /** What's left of the boost, 0–1, for its bar; null: until stopped. */
+  const left = $derived(live ? boostShare(live, ui.now) : null);
   // The row's second line: a boost's time left, else why a game goes
   // first, else that it's in a call, else what its slice is doing.
   function sub(u: (typeof list)[number]): string {
-    if (u.boosted && live) return t("who.boosted", { left: boostLeft(live, ui.now) });
+    if (u.boosted && live) return t("who.boost.left", { left: boostLeft(live, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
     if (why) return t(`who.game.${why}`);
     return inCall(u.target, service.stats?.calls, callsFirst) ? t("who.call") : u.status;
@@ -70,13 +75,21 @@
     <ul>
       {#each list as u (u.key)}
         <li class:boosted={u.boosted} animate:flip={glide()} in:fade={{ duration: ms(240) }}>
-          <AppIcon target={u.target} name={u.name} size={22} boxed />
+          <span class="ic"><AppIcon target={u.target} name={u.name} size={22} boxed /></span>
           <span class="nm">
-            <b>{u.name}</b>
+            <span class="line1">
+              <b>{u.name}</b>
+              {#if u.boosted}
+                <span class="badge"><i class="icon" aria-hidden="true">&#xE945;</i>{t("who.boost.badge")}</span>
+              {/if}
+            </span>
             <small>{sub(u)}</small>
           </span>
           <span class="mb num">{u.bps > 0 ? rowMbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
           <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />
+          {#if u.boosted && left !== null}
+            <span class="left" aria-hidden="true"><i style:width="{left * 100}%"></i></span>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -129,6 +142,7 @@
     list-style: none;
   }
   li {
+    position: relative;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
@@ -136,17 +150,96 @@
     min-height: 52px;
     padding: 6px 6px;
     border-radius: 12px;
-  }
-  li {
-    background: linear-gradient(90deg, var(--shell-soft), transparent 80%) no-repeat;
+    overflow: hidden;
+    background: linear-gradient(90deg, rgb(47 168 142 / 0.26), rgb(47 168 142 / 0.08) 75%) no-repeat;
     background-size: 0% 100%;
-    transition: background-size 600ms var(--ease-out);
+    transition:
+      background-size 600ms var(--ease-out),
+      box-shadow 400ms var(--ease-out);
   }
   li:hover {
     background-color: rgb(255 255 255 / 0.025);
   }
+  /* A boost: the shell's green sweeps in from the left (once), the row
+     takes a hairline of it and sits a little forward. */
   li.boosted {
+    min-height: 60px;
+    margin: 4px 0;
     background-size: 100% 100%;
+    box-shadow:
+      inset 0 0 0 1px rgb(47 168 142 / 0.4),
+      0 10px 24px -14px rgb(0 0 0 / 0.6);
+  }
+  .ic {
+    position: relative;
+    display: grid;
+  }
+  /* Its icon ringed in the shell's green. */
+  li.boosted .ic::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 13px;
+    box-shadow: 0 0 0 2px var(--shell);
+    animation: ring-in 520ms 120ms var(--ease-out) backwards;
+  }
+  @keyframes ring-in {
+    from {
+      opacity: 0;
+      transform: scale(1.25);
+    }
+  }
+  .line1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .badge {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px 0 5px;
+    border-radius: 6px;
+    background: var(--shell);
+    color: var(--on-shell);
+    font-size: 12px;
+    font-weight: 800;
+    animation: badge-in 480ms 200ms var(--ease-out) backwards;
+  }
+  .badge .icon {
+    font-size: 11px;
+  }
+  @keyframes badge-in {
+    from {
+      opacity: 0;
+      transform: translateX(-6px) scale(0.9);
+    }
+  }
+  /* The time it has left, shortening along the row's foot. */
+  .left {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgb(47 168 142 / 0.18);
+  }
+  .left i {
+    display: block;
+    height: 100%;
+    background: var(--shell);
+    border-radius: 0 2px 2px 0;
+    transition: width 1200ms linear;
+    animation: drain-in 900ms 240ms var(--ease-out) backwards;
+    transform-origin: left;
+  }
+  @keyframes drain-in {
+    from {
+      transform: scaleX(0);
+    }
   }
   .nm {
     display: flex;
@@ -276,6 +369,12 @@
     li.boosted {
       outline: 2px solid Highlight;
       outline-offset: -2px;
+    }
+    .badge,
+    .left i {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
     }
   }
 </style>

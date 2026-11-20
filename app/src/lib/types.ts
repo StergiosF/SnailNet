@@ -10,7 +10,8 @@ export type ServiceState =
   | { SafeMode: { failures: number } }
   /** Paused by the user until `until` (Unix seconds), or until resumed. */
   | { Paused: { until: number | null } }
-  /** Running a speed test: shaping is off for its ~20 s. */
+  /** Running a speed test: shaping is off for its ~20 s (the check with
+   *  SnailNet that follows runs while Shaping). */
   | "Measuring";
 
 export type Link =
@@ -87,6 +88,11 @@ export interface Measured {
   idle_ms?: number;
   /** Ping while downloading, without SnailNet, ms. */
   loaded_ms?: number;
+  /** Ping while uploading, without SnailNet, ms (missing from older tests). */
+  loaded_up_ms?: number;
+  /** Ping during the check download right after, through SnailNet, ms
+   *  (missing until the check finishes, or when it didn't). */
+  with_ms?: number;
 }
 
 /** One app or site going first for a while (snailnet-core `Boost`). */
@@ -236,6 +242,17 @@ export interface StatsTick {
   /** Apps (family ids) in a live call that goes first now (§11.9).
    *  Missing when there are none, or from older services. */
   calls?: string[];
+  /** Live ping to the probe's public host while shaping (feature 1, the
+   *  proof). Missing when there's none (line quiet, ICMP blocked) or from
+   *  older services. */
+  ping?: PingTick;
+}
+
+/** snailnet-ipc `PingTick`: the median of the last 5 s, and the lowest of
+ *  the last 5 minutes, ms. */
+export interface PingTick {
+  now_ms: number;
+  low_ms: number;
 }
 
 /** Why SnailNet counts a program as a game (snailnet-ipc `GameWhy`). */

@@ -1,10 +1,14 @@
 <script lang="ts">
   // The connection-speed dialog (PLAN.md §14.6 Connection, by hand until
   // the speed test arrives in Phase 4): a Windows ContentDialog with the
-  // two speed boxes, filled with what the service holds now. A native
+  // two speed boxes, filled with what the service holds now; when those
+  // speeds came from a speed test, the day it ran, and a way to measure
+  // again (it closes the dialog and runs Settings' measure). A native
   // <dialog> keeps focus inside and closes on Escape; focus goes back to
   // whatever opened it.
   import { tick, untrack } from "svelte";
+  import { canMeasure, measureLine } from "../actions";
+  import { shortDate } from "../format";
   import { t } from "../i18n";
   import { parseSpeed, speedText } from "../line";
   import { lineDialog } from "../lineDialog.svelte";
@@ -19,6 +23,19 @@
   let submitted = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
+
+  const line = $derived(service.snapshot?.config.line);
+  const measured = $derived(line?.measured);
+  /** The speeds in use are the last test's (not typed over since). */
+  const same = (a: number | undefined, b: number) => a !== undefined && Math.abs(a - b) < 0.05;
+  const fromTest = $derived(
+    measured !== undefined && same(line?.down_mbps, measured.down_mbps) && same(line?.up_mbps, measured.up_mbps),
+  );
+
+  function measure() {
+    lineDialog.close();
+    void measureLine();
+  }
 
   /** Fill the boxes with what the service holds now. */
   function load() {
@@ -89,6 +106,9 @@
         <h2 id="line-title">{t("line.title")}</h2>
         <p id="line-body">{t("line.body")}</p>
         <SpeedFields bind:this={fields} bind:down bind:up {submitted} disabled={saving} />
+        {#if fromTest && measured}
+          <p class="source">{t("line.measured", { date: shortDate(measured.at) })}</p>
+        {/if}
         {#if error}
           <p class="error" role="alert">{error}</p>
         {/if}
@@ -97,6 +117,9 @@
         <button type="submit" class="btn btn-accent" disabled={saving}>{t("line.save")}</button>
         <button type="button" class="btn" disabled={saving} onclick={() => lineDialog.close()}>
           {t("line.cancel")}
+        </button>
+        <button type="button" class="btn btn-quiet measure" disabled={saving || !canMeasure()} onclick={measure}>
+          <i class="icon" aria-hidden="true">&#xEC4A;</i>{measured ? t("line.measure") : t("line.measure.first")}
         </button>
       </div>
     </form>
@@ -131,5 +154,18 @@
     flex-direction: row-reverse;
     gap: 8px;
     padding: 16px 24px 24px;
+  }
+  /* Last in the markup, so first in the row: on its own at the left. */
+  .measure {
+    gap: 8px;
+    margin-right: auto;
+  }
+  .measure .icon {
+    font-size: 13px;
+  }
+  .content > .source {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
   }
 </style>

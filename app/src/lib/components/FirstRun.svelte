@@ -1,14 +1,17 @@
 <script lang="ts">
   // First run (PLAN.md §14.5): welcome and the privacy line, then the
-  // connection speed, measured (the service's speed test, ~20 s) or typed,
-  // then done. (The "what matters to you" cards are Phase 5.) It takes the place of the main content until finished; each
+  // connection speed, measured (the service's speed test and its check
+  // with SnailNet, ~30 s) or typed, then done; after a measure, the done
+  // step shows ping with and without SnailNet (the proof, §11.10). (The "what matters to you" cards are Phase 5.) It takes the place of the main content until finished; each
   // step's heading takes focus so screen readers hear where they are.
   import { onMount, tick } from "svelte";
   import { measureLine } from "../actions";
   import { t } from "../i18n";
+  import { CLEAR_MS } from "../proof";
   import { parseSpeed } from "../line";
   import { service } from "../service.svelte";
-  import type { SaveError } from "../types";
+  import type { Measured, SaveError } from "../types";
+  import ProofBars from "./ProofBars.svelte";
   import Snail from "./Snail.svelte";
   import SpeedFields from "./SpeedFields.svelte";
 
@@ -63,14 +66,23 @@
     }
   }
 
-  /** Measure instead of typing: the service tests the line (~20 s) and
+  /** Measure instead of typing: the service tests the line (~30 s) and
    *  saves what it finds. */
   let measuring = $state(false);
+  /** The test's result, for the done step's before and after. */
+  let result = $state<Measured | null>(null);
+  /** Ping with and without SnailNet, when both were measured. */
+  const pings = $derived(
+    result?.loaded_ms !== undefined && result.with_ms !== undefined
+      ? { with: result.with_ms, without: result.loaded_ms, at: result.at }
+      : null,
+  );
   async function measure() {
     error = null;
     measuring = true;
     const m = await measureLine();
     measuring = false;
+    result = m;
     if (m) {
       saved = true;
       void go("done");
@@ -125,6 +137,18 @@
         {saved ? t("firstrun.done.title") : t("firstrun.later.title")}
       </h1>
       <p class="lead">{saved ? t("firstrun.done.body") : t("firstrun.later.body")}</p>
+      {#if saved && pings}
+        {#if pings.without - pings.with >= CLEAR_MS}
+          <div class="proof">
+            <p class="visually-hidden">
+              {t("proof.sr", { now: Math.round(pings.with), without: Math.round(pings.without) })}
+            </p>
+            <ProofBars withMs={pings.with} withoutMs={pings.without} at={pings.at} />
+          </div>
+        {:else}
+          <p class="calm">{t("proof.grade.calm")}</p>
+        {/if}
+      {/if}
       <div class="actions">
         <button type="button" class="btn btn-accent" onclick={onfinish}>{t("firstrun.finish")}</button>
       </div>
@@ -185,6 +209,15 @@
   }
   .privacy .icon {
     margin-top: 2px;
+  }
+  .proof {
+    align-self: stretch;
+    margin-top: 12px;
+  }
+  .calm {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--text-secondary);
   }
   .actions {
     display: flex;

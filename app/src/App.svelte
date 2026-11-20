@@ -3,10 +3,10 @@
   // pages (Now, Split, Settings) and the line; beside it the title bar's
   // caption buttons, a state that needs attention if there is one, and
   // the open page. First run takes the whole window until it's done.
-  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import AddSlice from "./lib/components/AddSlice.svelte";
   import FirstRun from "./lib/components/FirstRun.svelte";
+  import LeaveDialog from "./lib/components/LeaveDialog.svelte";
   import LineDialog from "./lib/components/LineDialog.svelte";
   import NoticeBar from "./lib/components/NoticeBar.svelte";
   import NowPage from "./lib/components/NowPage.svelte";
@@ -18,6 +18,7 @@
   import { targetLabel } from "./lib/format";
   import { t } from "./lib/i18n";
   import { glance, ledger } from "./lib/ledger";
+  import { ProofWatch, proofOf } from "./lib/proof";
   import { needsFirstRun, newNetworkName } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
   import { resume, startService } from "./lib/actions";
@@ -31,14 +32,11 @@
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
-    // "Give it a slice" on a new-app notification (§11.4).
-    const unlisten = listen<{ family: string }>("give-slice", (e) => ui.giveSlice(e.payload.family));
     const stopTick = ui.tick();
     const stopUpdates = updates.watch();
     return () => {
       stopTick();
       stopUpdates();
-      void unlisten.then((u) => u());
     };
   });
 
@@ -59,6 +57,16 @@
   const book = $derived(connected ? ledger(ui.rules, dirStats, label) : null);
   // The Now page always speaks of downloads: that's where the sharing is felt.
   const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label) : null);
+  const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label) : null);
+  // The proof (§11.10): ping with and without SnailNet while the line is
+  // full, steadied by ProofWatch.
+  const proofWatch = new ProofWatch();
+  const proof = $derived.by(() => {
+    const s = service.stats;
+    if (!connected || !s) return proofWatch.step(null, 0, true);
+    const now = proofOf(s, downBook, upBook, service.snapshot?.config.line.measured);
+    return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
+  });
   const lineMbps = $derived(
     ui.dir === "down" ? service.snapshot?.config.line.down_mbps : service.snapshot?.config.line.up_mbps,
   );
@@ -102,7 +110,7 @@
         {#key ui.page}
           <div class="page">
             {#if ui.page === "now"}
-              <NowPage ledger={loading ? null : downBook} glance={sentence} canEdit={connected} />
+              <NowPage ledger={loading ? null : downBook} glance={sentence} {proof} canEdit={connected} />
             {:else if ui.page === "split"}
               {#if service.link.kind === "connecting" || connected}
                 <SplitPage
@@ -124,6 +132,7 @@
   {/if}
   <AddSlice />
   <LineDialog />
+  <LeaveDialog />
 </div>
 
 <style>

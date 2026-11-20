@@ -42,7 +42,7 @@
         type="button"
         class:on={ui.page === p.id}
         aria-current={ui.page === p.id ? "page" : undefined}
-        onclick={() => (ui.page = p.id)}
+        onclick={() => ui.go(p.id)}
       >
         <i class="icon" aria-hidden="true">{p.glyph}</i>{p.label}
       </button>

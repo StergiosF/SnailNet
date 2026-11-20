@@ -1,32 +1,37 @@
 <script lang="ts">
-  // The split in short (PLAN.md §14.2): one bar of the mode's shares in
-  // their inks, a line per slice (what it moves against what its share
-  // keeps for it), how many take only what's free, and the ways on:
-  // Fine-tune (the Split page) and Reset split. Until put away, a one-time
+  // The split in short (PLAN.md §14.2), titled with the mode it belongs
+  // to: one bar of the mode's shares in their inks, a line per slice (its
+  // share, what it moves now and the least it gets when the line is busy),
+  // how many take only what's free, and the ways on: Change the split (the
+  // Split page) and Reset split. Until put away, a one-time
   // hint says how shares change and that unused share is never wasted
   // (§14.5 step 4; − / + replaced dragging, §14.3).
   import { resetSplit } from "../actions";
   import { mbps, percent } from "../format";
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
-  import { summary } from "../modes";
+  import { modeName, summary } from "../modes";
+  import { service } from "../service.svelte";
   import { ui } from "../ui.svelte";
 
   let { ledger, canEdit }: { ledger: Ledger | null; canEdit: boolean } = $props();
 
   const s = $derived(ledger ? summary(ledger) : null);
+  const mode = $derived(modeName(service.activeProfile));
 
   function fineTune() {
     ui.dismissCoach();
-    ui.page = "split";
+    ui.go("split");
   }
   const ink = (x: Slice) => (x.ink >= 0 ? `var(--ink-${x.ink})` : "var(--stone-0)");
   const use = (x: Slice) =>
-    x.kept === null ? `${mbps(x.bps)} ${t("line.unit")}` : `${mbps(x.bps)} / ${mbps(x.kept)} ${t("line.unit")}`;
+    x.kept === null
+      ? t("card.row.now", { used: mbps(x.bps) })
+      : `${t("card.row.now", { used: mbps(x.bps) })} · ${t("card.row.kept", { kept: mbps(x.kept) })}`;
 </script>
 
 <section class="card split" aria-labelledby="split-title">
-  <h2 class="card-title" id="split-title">{t("card.split")}</h2>
+  <h2 class="card-title" id="split-title">{mode ? t("card.split", { mode }) : t("nav.split")}</h2>
   {#if s}
     <div class="bar" aria-hidden="true">
       {#each s.slices as x (x.key)}
@@ -39,8 +44,10 @@
       {#each s.slices as x (x.key)}
         <li>
           <i class="sw" style:background={ink(x)} aria-hidden="true"></i>
-          <span class="nm">{x.name}</span>
-          <span class="use num">{use(x)}</span>
+          <span class="nm">
+            <span class="name">{x.name}</span>
+            <small class="num">{use(x)}</small>
+          </span>
           <b class="num">{percent(x.share ?? 0)}</b>
         </li>
       {/each}
@@ -111,27 +118,40 @@
   }
   li {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto 40px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
     font-size: 14px;
   }
   .sw {
+    align-self: start;
     width: 10px;
     height: 10px;
+    margin-top: 5px;
     border-radius: 3px;
   }
   .nm {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .nm .name,
+  .nm small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .use {
+  .nm .name {
+    font-weight: 600;
+  }
+  .nm small {
     font-size: 13px;
     color: var(--text-secondary);
   }
   b {
+    min-width: 44px;
     text-align: right;
+    font-size: 18px;
     font-weight: 700;
   }
   .free {

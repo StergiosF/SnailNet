@@ -1,24 +1,31 @@
 <script lang="ts">
-  // The Now page (PLAN.md §14.2): "What matters right now?" and the four
-  // modes; who is using the internet, each with a Boost; the split in
-  // short. One plain sentence on how things are going
-  // (who uses the most, and whether anyone is waiting), right under the
-  // question it answers.
+  // The Now page (PLAN.md §14.2), read in the order a glance asks:
+  //   1. What's happening on my line? The sentence on how things are going
+  //      (who uses the most, whether anyone is waiting) is the page's
+  //      heading; under it, while the line is full, the proof: ping with
+  //      SnailNet and without it (ProofRow).
+  //   2. Which mode is on, and what else could it be? "What matters right
+  //      now?" over the four mode tiles.
+  //   3. What can I do? Who is using the internet, each with a Boost,
+  //      beside how the mode shares the line, with the way to change it.
   //
   // Its one authored moment: the snail's shell (the same spiral as the
   // icon) draws itself once, large and faint, behind the question as the
   // page opens. Then the tiles and cards arrive in reading order.
   import { t } from "../i18n";
   import type { Glance, Ledger } from "../ledger";
+  import type { Proof } from "../proof";
   import ModeTiles from "./ModeTiles.svelte";
   import SplitCard from "./SplitCard.svelte";
+  import ProofRow from "./ProofRow.svelte";
   import WhoCard from "./WhoCard.svelte";
 
   let {
     ledger,
     glance,
+    proof,
     canEdit,
-  }: { ledger: Ledger | null; glance: Glance | null; canEdit: boolean } = $props();
+  }: { ledger: Ledger | null; glance: Glance | null; proof: Proof | null; canEdit: boolean } = $props();
 </script>
 
 <div class="now">
@@ -31,12 +38,21 @@
     />
   </svg>
   <header>
-    <h1>{t("now.title")}</h1>
-    {#if glance}
-      <p class="glance" aria-live="off"><b>{glance.title}</b> {glance.detail}</p>
+    <h1 aria-live="off">{glance ? glance.title : t("now.heading")}</h1>
+    {#if glance?.detail}
+      <p class="glance" aria-live="off">{glance.detail}</p>
+    {/if}
+    {#if proof}
+      <ProofRow {proof} />
     {/if}
   </header>
-  <ModeTiles disabled={!canEdit} />
+  <section class="modes" aria-labelledby="modes-h">
+    <div class="sec-head">
+      <h2 id="modes-h">{t("now.title")}</h2>
+      <p>{t("now.modes.body")}</p>
+    </div>
+    <ModeTiles disabled={!canEdit} />
+  </section>
   <div class="cols">
     <div class="arrive" style:--d="220ms"><WhoCard {ledger} {canEdit} /></div>
     <div class="arrive" style:--d="280ms"><SplitCard {ledger} {canEdit} /></div>
@@ -85,12 +101,37 @@
     }
   }
   h1 {
+    max-width: 24ch;
     margin: 4px 0 0;
     font-size: 32px;
     line-height: 38px;
     font-weight: 800;
     letter-spacing: -0.025em;
     text-wrap: balance;
+  }
+  .modes {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 14px;
+  }
+  .sec-head h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .sec-head p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
   }
   .arrive {
     min-width: 0;
@@ -109,14 +150,10 @@
   }
   .glance {
     margin: 0;
-    max-width: 72ch;
-    font-size: 15px;
+    max-width: 68ch;
+    font-size: 16px;
     line-height: 1.45;
     color: var(--text-secondary);
-  }
-  .glance b {
-    color: var(--text-primary);
-    font-weight: 700;
   }
   @media (max-width: 860px) {
     .cols {

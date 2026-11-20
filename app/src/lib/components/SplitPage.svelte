@@ -4,13 +4,20 @@
   // in place, Everything else's apps, Add a slice, Reset split. "Make a
   // copy" starts a mode of your own (§11.2); one of your own has Rename and
   // Delete instead of Reset, since there's no starting split to go back to.
+  //
+  // Read top to bottom: what a slice is (one sentence), what the line is
+  // doing right now, then the slices with what the percentage means over
+  // them. Changes wait in a draft until Save (SaveBar, ui.svelte.ts); the
+  // mode's own buttons ask first when there are unsaved changes.
   import { copyMode, deleteMode, renameMode, resetSplit } from "../actions";
   import { t } from "../i18n";
   import type { Ledger } from "../ledger";
   import { isOwnMode, modeName } from "../modes";
   import { service } from "../service.svelte";
+  import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import NameDialog from "./NameDialog.svelte";
+  import SaveBar from "./SaveBar.svelte";
   import SliceList from "./SliceList.svelte";
   import UsageStrip from "./UsageStrip.svelte";
 
@@ -48,22 +55,23 @@
 
 <div class="head">
   <h1>{mode ? t("split.title", { mode }) : t("nav.split")}</h1>
-  <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => void copyMode()}>
+  <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => ui.guard(() => void copyMode())}>
     <i class="icon" aria-hidden="true">&#xE8C8;</i>{t("mode.copy")}
   </button>
   {#if own}
-    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => (renaming = true)}>
+    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => ui.guard(() => (renaming = true))}>
       <i class="icon" aria-hidden="true">&#xE8AC;</i>{t("mode.rename")}
     </button>
-    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => (deleting = true)}>
+    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => ui.guard(() => (deleting = true))}>
       <i class="icon" aria-hidden="true">&#xE74D;</i>{t("mode.delete")}
     </button>
   {:else}
-    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => void resetSplit()}>
+    <button type="button" class="btn btn-quiet" disabled={!canEdit} onclick={() => ui.guard(() => void resetSplit())}>
       <i class="icon" aria-hidden="true">&#xE777;</i>{t("split.reset")}
     </button>
   {/if}
 </div>
+<p class="intro">{t("split.intro")}</p>
 <NameDialog open={renaming} name={active?.name ?? ""} {busy} onsave={(n) => void rename(n)} oncancel={() => (renaming = false)} />
 <ConfirmDialog
   open={deleting}
@@ -78,6 +86,7 @@
   <UsageStrip {ledger} {lineBps} />
 {/if}
 <SliceList {ledger} {loading} {canEdit} />
+<SaveBar />
 
 <style>
   .head {
@@ -96,5 +105,12 @@
   }
   .icon {
     font-size: 14px;
+  }
+  .intro {
+    max-width: 68ch;
+    margin: 6px 0 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-secondary);
   }
 </style>

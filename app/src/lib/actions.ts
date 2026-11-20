@@ -18,8 +18,16 @@ function failed(key: Key, e: unknown) {
   ui.say({ message: err.kind === "conflict" ? t("editor.conflict") : t(key, { message: err.message ?? "" }) });
 }
 
-export async function switchMode(id: string): Promise<void> {
-  if (service.snapshot?.config.active_profile === id) return;
+/** Switch mode; with unsaved changes on the Split page, ask first (the
+ *  switch then happens once they're saved or dropped). */
+export function switchMode(id: string): Promise<void> {
+  if (service.snapshot?.config.active_profile === id) return Promise.resolve();
+  if (!ui.dirty) return doSwitch(id);
+  ui.guard(() => void doSwitch(id));
+  return Promise.resolve();
+}
+
+async function doSwitch(id: string): Promise<void> {
   ui.open = null;
   ui.member = null;
   try {
@@ -246,10 +254,36 @@ function until(ok: () => boolean, ms: number): Promise<boolean> {
   });
 }
 
+/** Whether a speed test can start now: connected, and not measuring,
+ *  paused or in safe mode (a paused line can't run the check with
+ *  SnailNet, §11.10). */
+export function canMeasure(): boolean {
+  const s = service.state;
+  if (ui.measuring || s === null || service.link.kind !== "connected") return false;
+  const k = stateKind(s);
+  return k !== "measuring" && k !== "paused" && k !== "safe_mode";
+}
+
+/** How long the check with SnailNet may take after the test (§11.10). */
+const CHECK_WAIT_MS = 20_000;
+
 /** Run the speed test (§10.1) and say how it went. The service turns
  *  shaping off, measures for ~20 s and saves the result as the line;
- *  if no new result arrives once it's done, the test failed. */
+ *  if no new result arrives once it's done, the test failed. Then it
+ *  shapes at the new speed and downloads once more (~10 s) for the ping
+ *  with SnailNet (`with_ms`); the toast gives the before and after when
+ *  that arrives, the plain result if it doesn't. */
 export async function measureLine(): Promise<Measured | null> {
+  if (ui.measuring) return null;
+  ui.measuring = true;
+  try {
+    return await measure();
+  } finally {
+    ui.measuring = false;
+  }
+}
+
+async function measure(): Promise<Measured | null> {
   const before = service.snapshot?.config.line.measured?.at;
   try {
     await service.runSpeedTest();
@@ -262,12 +296,31 @@ export async function measureLine(): Promise<Measured | null> {
   await until(() => !measuring(), 90_000);
   // The new line comes as a config change, maybe just after the state.
   const got = await until(() => (service.snapshot?.config.line.measured?.at ?? before) !== before, 3_000);
-  const m = service.snapshot?.config.line.measured;
+  const first = service.snapshot?.config.line.measured;
+  if (!got || !first) {
+    ui.say({ message: t("measure.none") });
+    return null;
+  }
+  // No ping during the test (ICMP blocked): there's nothing to compare.
+  if (first.loaded_ms !== undefined) {
+    ui.say({ message: t("measure.checking") });
+    await until(() => {
+      const m = service.snapshot?.config.line.measured;
+      return m?.at !== first.at || m.with_ms !== undefined;
+    }, CHECK_WAIT_MS);
+  }
+  const now = service.snapshot?.config.line.measured;
+  const m = now?.at === first.at ? now : first;
   ui.say({
     message:
-      got && m
-        ? t("measure.done", { down: m.down_mbps, up: m.up_mbps })
-        : t("measure.none"),
+      m.with_ms !== undefined && m.loaded_ms !== undefined
+        ? t("measure.done.proof", {
+            down: m.down_mbps,
+            up: m.up_mbps,
+            without: Math.round(m.loaded_ms),
+            with: Math.round(m.with_ms),
+          })
+        : t("measure.done", { down: m.down_mbps, up: m.up_mbps }),
   });
-  return got && m ? m : null;
+  return m;
 }

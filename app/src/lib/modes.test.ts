@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, copyName, gameWhy, inCall, liveBoost, modeName, summary, users } from "./modes";
+import { availableModes, boostLeft, boostShare, copyName, gameWhy, inCall, liveBoost, modeName, summary, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -74,13 +74,22 @@ describe("boost", () => {
     expect(boostLeft(b, 10_000 - 4 * 3600)).toBe("4 h left");
     expect(boostLeft({ target: b.target }, 0)).toBe("until you stop it");
   });
+
+  it("gives a countdown share of the length the menu offered", () => {
+    expect(boostShare(b, 10_000 - 30 * 60)).toBeCloseTo(0.5);
+    expect(boostShare(b, 10_000 - 60 * 60)).toBe(1);
+    // More than an hour left: a 4-hour boost.
+    expect(boostShare(b, 10_000 - 120 * 60)).toBeCloseTo(0.5);
+    expect(boostShare(b, 10_001)).toBe(0);
+    expect(boostShare({ target: b.target }, 0)).toBeNull();
+  });
 });
 
 describe("users", () => {
   it("lists who's moving, busiest first, without unrecognised traffic", () => {
     const u = users(ledger(rules, busy(), label), null, label);
     expect(u.map((x) => x.name)).toEqual(["Steam", "YouTube", "Discord", "Brave"]);
-    expect(u[0]?.status).toBe("in Everything else");
+    expect(u[0]?.status).toBe("no slice of its own");
     expect(u[1]?.status).toBe("gets all it asks for");
     expect(u.some((x) => x.boosted)).toBe(false);
   });

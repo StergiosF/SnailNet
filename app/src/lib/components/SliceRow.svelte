@@ -1,12 +1,15 @@
 <script lang="ts">
   // One slice of the line (PLAN.md §14.2): icon, name, what it moves now
   // and what that means in words, a thin bar (its slice, and its use on
-  // the same scale), and − % + to change its share in 5% steps. A rule's
-  // row opens its settings in place: who goes first, "only when the line
-  // is free", a speed limit, remove. Everything else lists its apps; pick
-  // one to give it a slice of its own.
+  // the same scale), and − % + to change its share in 5% steps, with what
+  // it was before while the change isn't saved (draft.ts). A rule's row
+  // opens its settings in place, each with a line on what it does: who
+  // goes first, "only when the line is free", a speed limit, remove.
+  // Everything else says what it is and lists its apps; pick one to give
+  // it a slice of its own. Every edit goes into the page's draft.
   import { mbps } from "../format";
   import { t } from "../i18n";
+  import { wasShare } from "../draft";
   import { statusText, type Member, type Slice } from "../ledger";
   import {
     addRule,
@@ -40,6 +43,12 @@
 
   const canLess = $derived(canEdit && canStep(rules, slice.rule, -1));
   const canMore = $derived(canEdit && canStep(rules, slice.rule, 1));
+  const was = $derived.by(() => {
+    const d = ui.draft;
+    if (!d || !slice.enabled || slice.share === null) return null;
+    const bp = wasShare(d, slice.rule);
+    return bp === null ? null : Math.round(bp / 100);
+  });
 
   const words = $derived(
     slice.status.kind === "quiet" || slice.status.kind === "off" || slice.bps < 50_000
@@ -65,7 +74,7 @@
 
   function give(m: Member) {
     const i = rules.findIndex((r) => sameTarget(r.target, m.target));
-    ui.change(i >= 0 ? setEnabled(rules, i, true) : addRule(rules, m.target));
+    ui.edit(i >= 0 ? setEnabled(rules, i, true) : addRule(rules, m.target));
     ui.member = null;
     ui.open = `${m.target.kind}:${m.target.id.toLowerCase()}`;
   }
@@ -82,7 +91,7 @@
   function setLimit(dir: "down" | "up", text: string, unit: Limit["unit"]) {
     const v = Number(text);
     const limit = text.trim() !== "" && Number.isFinite(v) && v > 0 ? clampLimit({ unit, value: v }) : null;
-    ui.change(setCeiling(rules, slice.rule, dir, limit));
+    ui.edit(setCeiling(rules, slice.rule, dir, limit));
   }
 
   const priorities: { value: Priority; label: string }[] = [
@@ -115,23 +124,28 @@
 
     <div class="pct">
       {#if !slice.enabled && rule}
-        <button type="button" class="btn" disabled={!canEdit} onclick={() => ui.change(setEnabled(rules, slice.rule, true))}>
+        <button type="button" class="btn" disabled={!canEdit} onclick={() => ui.edit(setEnabled(rules, slice.rule, true))}>
           {t("row.turnOn")}
         </button>
       {:else}
         <Stepper
           name={slice.name}
           {pct}
+          {was}
           {canLess}
           {canMore}
-          onstep={(dir) => ui.change(stepShare(rules, slice.rule, dir))}
+          onstep={(dir) => ui.edit(stepShare(rules, slice.rule, dir))}
         />
       {/if}
     </div>
   </div>
 
+  {#if isOther}
+    <p class="hint other">{t("split.other.hint")}</p>
+  {/if}
   {#if isOther && slice.members.length > 0}
-    <div class="members" role="group" aria-label={t("row.members")}>
+    <p class="hint cap" id="{uid}-mem">{t("row.members")}</p>
+    <div class="members" role="group" aria-labelledby="{uid}-mem">
       {#each members as m (m.key)}
         <button
           type="button"
@@ -165,78 +179,91 @@
       {#if slice.target?.kind === "site"}
         <p class="note">{t("edit.site")}</p>
       {/if}
-      <div class="controls">
-        <div class="grp" title={t("edit.priority.hint")}>
+      <div class="opt">
+        <div class="lab">
           <span class="k" id="{uid}-prio">{t("edit.priority")}</span>
-          <Segmented
-            name="{uid}-prio"
-            label={t("edit.priority")}
-            options={priorities}
-            value={rule.priority}
-            disabled={!rule.enabled}
-            onchange={(p) => ui.change(setPriority(rules, slice.rule, p))}
-          />
+          <small>{t("edit.priority.hint")}</small>
         </div>
-        <label class="check">
+        <Segmented
+          name="{uid}-prio"
+          label={t("edit.priority")}
+          options={priorities}
+          value={rule.priority}
+          disabled={!rule.enabled}
+          onchange={(p) => ui.edit(setPriority(rules, slice.rule, p))}
+        />
+      </div>
+      <div class="opt">
+        <label class="check lab">
           <input
             type="checkbox"
             checked={rule.share === 0}
             disabled={!rule.enabled}
-            onchange={(e) => ui.change(setRuleShare(rules, slice.rule, e.currentTarget.checked ? 0 : 2000))}
+            aria-describedby="{uid}-free"
+            onchange={(e) => ui.edit(setRuleShare(rules, slice.rule, e.currentTarget.checked ? 0 : 2000))}
           />
-          <span class="box" aria-hidden="true"></span>{t("edit.free")}
+          <span class="box" aria-hidden="true"></span>
+          <span class="k">{t("edit.free")}</span>
         </label>
-        {#if !showLimits}
+        <small class="side" id="{uid}-free">{t("edit.free.hint")}</small>
+      </div>
+      <div class="opt">
+        <div class="lab">
+          <span class="k">{t("edit.limit")}</span>
+          <small>{t("edit.limit.hint")}</small>
+        </div>
+        {#if showLimits}
+          <div class="limits">
+            {#each ["down", "up"] as const as dir (dir)}
+              {@const lim = limits[dir]}
+              {@const unit = lim?.unit ?? units[dir]}
+              {@const dirLabel = t(dir === "down" ? "editor.ceiling.down" : "editor.ceiling.up")}
+              <div class="limit">
+                <label for="{uid}-lim-{dir}">{dirLabel}</label>
+                <input
+                  id="{uid}-lim-{dir}"
+                  class="field num"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  placeholder="–"
+                  value={lim?.value ?? ""}
+                  disabled={!rule.enabled}
+                  aria-label={t("editor.ceiling.value", { dir: dirLabel })}
+                  onchange={(e) => setLimit(dir, e.currentTarget.value, unit)}
+                />
+                <Segmented
+                  name="{uid}-unit-{dir}"
+                  label={dirLabel}
+                  options={unitOptions}
+                  value={unit}
+                  small
+                  disabled={!rule.enabled}
+                  onchange={(u) => {
+                    units[dir] = u;
+                    if (lim) setLimit(dir, String(lim.value), u);
+                  }}
+                />
+              </div>
+            {/each}
+          </div>
+        {:else}
           <button type="button" class="btn" disabled={!rule.enabled} onclick={() => (limitsAsked = true)}>
             {t("edit.limit.add")}
           </button>
         {/if}
+      </div>
+      <div class="opt end">
+        <small>{t("edit.remove.hint")}</small>
         <button
           type="button"
-          class="btn btn-quiet end"
+          class="btn btn-quiet remove"
           onclick={() => {
-            ui.change(removeRule(rules, slice.rule));
+            ui.edit(removeRule(rules, slice.rule));
             ui.open = null;
-          }}>{t("edit.remove")}</button
+          }}><i class="icon" aria-hidden="true">&#xE74D;</i>{t("edit.remove")}</button
         >
       </div>
-      {#if showLimits}
-        <div class="limits">
-          <span class="k">{t("edit.limit")}</span>
-          {#each ["down", "up"] as const as dir (dir)}
-            {@const lim = limits[dir]}
-            {@const unit = lim?.unit ?? units[dir]}
-            {@const dirLabel = t(dir === "down" ? "editor.ceiling.down" : "editor.ceiling.up")}
-            <div class="limit">
-              <label for="{uid}-lim-{dir}">{dirLabel}</label>
-              <input
-                id="{uid}-lim-{dir}"
-                class="field num"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="–"
-                value={lim?.value ?? ""}
-                disabled={!rule.enabled}
-                aria-label={t("editor.ceiling.value", { dir: dirLabel })}
-                onchange={(e) => setLimit(dir, e.currentTarget.value, unit)}
-              />
-              <Segmented
-                name="{uid}-unit-{dir}"
-                label={dirLabel}
-                options={unitOptions}
-                value={unit}
-                small
-                disabled={!rule.enabled}
-                onchange={(u) => {
-                  units[dir] = u;
-                  if (lim) setLimit(dir, String(lim.value), u);
-                }}
-              />
-            </div>
-          {/each}
-        </div>
-      {/if}
     </div>
   {/if}
 </li>
@@ -255,9 +282,37 @@
       </span>
     {/if}
   </span>
+  {#if rule && canEdit}
+    <span class="more-k" aria-hidden="true">
+      {t("row.settings")}<i class="icon chev" class:open>&#xE70D;</i>
+    </span>
+  {/if}
 {/snippet}
 
 <style>
+  /* Says the row opens: its settings are a click away. */
+  .more-k {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    opacity: 0.85;
+    transition: opacity 120ms linear;
+  }
+  .slice:hover .more-k,
+  .slice.open .more-k {
+    opacity: 1;
+    color: var(--text-primary);
+  }
+  .chev {
+    font-size: 10px;
+    transition: transform 200ms var(--ease-out);
+  }
+  .chev.open {
+    transform: rotate(180deg);
+  }
   .slice {
     list-style: none;
     border-radius: var(--radius-card);
@@ -349,7 +404,6 @@
     flex-wrap: wrap;
     gap: 8px;
     padding: 0 12px 14px 66px;
-    margin-top: -4px;
   }
   .member {
     display: flex;
@@ -397,36 +451,75 @@
     font-size: 17px;
   }
 
+  .hint {
+    margin: 0;
+    padding: 0 12px 0 66px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+  }
+  .hint.other {
+    max-width: calc(66px + 62ch);
+    margin: -6px 0 12px;
+  }
+  .hint.cap {
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  /* The settings, one per line: what it is and what it does on the left,
+     its control on the right. */
   .ed {
-    padding: 0 12px 16px 66px;
+    margin: 0 12px 0 66px;
+    padding-bottom: 8px;
     font-size: 14px;
   }
   .note {
-    margin: -2px 0 12px;
+    margin: 0 0 4px;
     color: var(--text-secondary);
   }
-  .controls {
+  .opt {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px 24px;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--stroke-card);
   }
-  .grp {
+  .lab {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 260px;
+    min-width: 0;
   }
-  .k {
+  .lab small,
+  .opt small {
+    font-size: 13px;
+    line-height: 1.4;
     color: var(--text-secondary);
   }
-  .end {
-    margin-left: auto;
+  .k {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .opt .side {
+    flex: 1 1 260px;
+    max-width: 46ch;
+  }
+  .opt.end {
+    justify-content: flex-end;
+  }
+  .remove .icon {
+    font-size: 13px;
   }
   .check {
-    display: flex;
+    position: relative;
+    flex-direction: row;
     align-items: center;
     gap: 10px;
-    position: relative;
   }
   .check input {
     position: absolute;
@@ -467,8 +560,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px 24px;
-    margin-top: 14px;
+    gap: 10px 20px;
   }
   .limit {
     display: flex;
