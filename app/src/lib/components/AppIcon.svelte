@@ -32,7 +32,10 @@
 
   const url = $derived(target ? icons.forTarget(target, service.snapshot?.apps ?? []) : null);
   const brand = $derived(target ? brandOf(target) : null);
-  const system = $derived(target?.kind === "family" && target.id.toLowerCase() === "system");
+  /** Windows' own traffic: the system, its services, Windows Update
+   *  (snailnet-core classify/family.rs). */
+  const WINDOWS = new Set(["system", "windows-services", "windows-update"]);
+  const system = $derived(target?.kind === "family" && WINDOWS.has(target.id.toLowerCase()));
   const site = $derived(
     target?.kind === "site"
       ? (SITES[target.id.toLowerCase()] ?? { text: name.charAt(0).toUpperCase(), bg: "#3a3835", fg: "#f1ede6" })
