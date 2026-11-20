@@ -3,8 +3,8 @@
   // Everything else with its apps, then "Add a slice". Rules that take only
   // what's free and are quiet right now fold into one row that opens (the
   // modes have many: every launcher and updater). While the service is
-  // still answering, three quiet placeholder rows. Over the rows, what
-  // the columns are, so the percentage says what it means.
+  // still answering, three quiet placeholder rows. (No column headings:
+  // the page's sentence says what a percentage means.)
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
   import { ui } from "../ui.svelte";
@@ -39,13 +39,9 @@
         <p><strong>{t("list.empty.title")}</strong>{t("list.empty.body")}</p>
       </div>
     {/if}
-    <div class="heads" aria-hidden="true">
-      <span>{t("split.list.who")}</span>
-      <span class="r">{t("split.list.share")}</span>
-    </div>
     <ul>
       {#each shown.slice(0, -1) as s (s.key)}
-        <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
+        <SliceRow slice={s} {canEdit} />
       {/each}
       {#if rest.length > 0}
         <li class="fold">
@@ -62,12 +58,12 @@
         </li>
         {#if unfold}
           {#each rest as s (s.key)}
-            <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
+            <SliceRow slice={s} {canEdit} />
           {/each}
         {/if}
       {/if}
       {#each shown.slice(-1) as s (s.key)}
-        <SliceRow slice={s} shaped={ledger.shaped} {canEdit} />
+        <SliceRow slice={s} {canEdit} />
       {/each}
     </ul>
     {#if canEdit}
@@ -85,21 +81,6 @@
   .list {
     margin: 20px -12px 0;
     padding-bottom: 8px;
-  }
-  /* What the columns are: who, and what the percentage means. */
-  .heads {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 0 12px 8px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--stroke-card);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-  .heads .r {
-    text-align: right;
   }
   ul {
     display: flex;

@@ -9,9 +9,13 @@
   // What made the old bar hard is answered here: the handle catches a
   // press 32 px wide over the bar's full height; a segment too thin for its
   // name shows only its %, thinner still nothing (its row says it); and
-  // while dragging, a readout over the handle says what each side gets in
+  // while dragging, a readout under the handle says what each side gets in
   // Mbps. Each handle is a slider for the keyboard. Hovering a segment, or
   // holding a handle, lights up the rows it means.
+  //
+  // Live use rides along the bar's foot (DESIGN.md, Split): under each
+  // segment a thin line fills as its slice is used, so the page has one
+  // picture of the split, not a second strip above it.
   import { mbps } from "../format";
   import { t } from "../i18n";
   import type { Ledger, Slice } from "../ledger";
@@ -34,7 +38,8 @@
 
   /** The bar's segments: the slices with a share, Everything else last. */
   const segs = $derived(ledger.slices.filter((s) => s.share !== null && s.enabled));
-  const free = $derived(ledger.slices.filter((s) => s.rule >= 0 && s.enabled && s.share === null));
+  /** How full each segment's slice is now, 0–1; null while not shaping. */
+  const fill = (s: Slice) => (s.kept === null || s.kept <= 0 ? null : Math.min(1, s.bps / s.kept));
   const shares = $derived(barShares(ui.rules));
   const pos = $derived(handlePositions(shares));
   const ticks = $derived(ui.draft ? savedTicks(ui.draft.base, ui.draft.rules) : null);
@@ -234,6 +239,22 @@
     {/if}
   </div>
 
+  {#if ledger.shaped !== null}
+    <div class="live" aria-hidden="true">
+      {#each segs as s, k (s.key)}
+        {@const first = k === 0}
+        {@const last = k === segs.length - 1}
+        {@const f = fill(s)}
+        <span
+          style:left="calc({startOf(k)}% + {first ? 0 : 2}px)"
+          style:width="max(0px, calc({(s.share ?? 0) / 100}% - {(first ? 0 : 2) + (last ? 0 : 2)}px))"
+        >
+          {#if f !== null}<i style:width="{f * 100}%" style:background={ink(s)}></i>{/if}
+        </span>
+      {/each}
+    </div>
+  {/if}
+
   {#if ticks}
     <div class="ticks" aria-hidden="true">
       {#each ticks as p, i (i)}
@@ -242,12 +263,6 @@
     </div>
   {/if}
 
-  {#if free.length > 0}
-    <p class="free">{t("bar.free", { names: free.map((s) => s.name).join(", ") })}</p>
-  {/if}
-  {#if canEdit && segs.length > 1}
-    <p class="hint">{t("bar.hint")}</p>
-  {/if}
 </section>
 
 <style>
@@ -354,7 +369,9 @@
   /* While dragging (or on the keyboard): each side, in % and Mbps. */
   .readout {
     position: absolute;
-    bottom: calc(100% + 12px);
+    /* Under the bar: over it sits the page's sentence. */
+    top: calc(100% + 14px);
+    z-index: 3;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -397,19 +414,25 @@
     background: var(--text-tertiary);
     opacity: 0.8;
   }
-  .free,
-  .hint {
-    margin: 10px 0 0;
-    font-size: 14px;
-    line-height: 1.45;
-    color: var(--text-secondary);
+  /* Live use along the foot: each slice's line fills as it's used. */
+  .live {
+    position: relative;
+    height: 4px;
+    margin-top: 6px;
   }
-  .hint {
-    font-size: 13px;
+  .live span {
+    position: absolute;
+    top: 0;
+    height: 4px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.07);
+    overflow: hidden;
   }
-  .ticks + .free,
-  .ticks + .hint {
-    margin-top: 4px;
+  .live i {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    transition: width 900ms var(--ease-out);
   }
 
   @media (forced-colors: active) {

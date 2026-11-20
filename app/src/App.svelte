@@ -68,10 +68,6 @@
     const now = proofOf(s, downBook, upBook, service.snapshot?.config.line.measured);
     return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
   });
-  const lineMbps = $derived(
-    ui.dir === "down" ? service.snapshot?.config.line.down_mbps : service.snapshot?.config.line.up_mbps,
-  );
-  const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
   const downLine = $derived(service.snapshot?.config.line.down_mbps);
   const loading = $derived(
     service.link.kind === "connecting" || (service.link.kind === "connected" && service.stats === null),
@@ -124,13 +120,7 @@
               />
             {:else if ui.page === "split"}
               {#if service.link.kind === "connecting" || connected}
-                <SplitPage
-                  ledger={book}
-                  {lineBps}
-                  {loading}
-                  canEdit={connected}
-                  showStrip={book !== null && service.stats !== null}
-                />
+                <SplitPage ledger={book} {loading} canEdit={connected} />
               {/if}
             {:else}
               <SettingsPage canEdit={connected} />

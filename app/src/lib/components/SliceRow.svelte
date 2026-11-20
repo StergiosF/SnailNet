@@ -1,7 +1,8 @@
 <script lang="ts">
   // One slice of the line (PLAN.md §14.2): icon, name, what it moves now
-  // and what that means in words, a thin bar (its slice, and its use on
-  // the same scale), and − % + to change its share in 5% steps, with what
+  // and what that means in words, and − % + to change its share in 5%
+  // steps (no bar of its own: the drag bar above is the one picture of the
+  // split, its foot the live use), with what
   // it was before while the change isn't saved (draft.ts). A rule's row
   // opens its settings in place, each with a line on what it does: who
   // goes first, "only when the line is free", a speed limit, remove.
@@ -30,7 +31,7 @@
   import Segmented from "./Segmented.svelte";
   import Stepper from "./Stepper.svelte";
 
-  let { slice, shaped, canEdit }: { slice: Slice; shaped: number | null; canEdit: boolean } = $props();
+  let { slice, canEdit }: { slice: Slice; canEdit: boolean } = $props();
 
   const MEMBERS_SHOWN = 4;
   const uid = $props.id();
@@ -56,16 +57,6 @@
       : t("row.moving", { mbps: mbps(slice.bps), status: statusText(slice.status) }),
   );
 
-  // The bar: the slice, and its use on the same scale (both as % of what
-  // SnailNet shares out); use beyond the slice is hatched.
-  const track = $derived.by(() => {
-    if (slice.share === null) return null;
-    const share = slice.share / 100;
-    if (shaped === null || slice.kept === null) return { share, use: 0, over: 0 };
-    const use = Math.min(100, (slice.bps / shaped) * 100);
-    return { share, use: Math.min(use, share), over: Math.max(0, use - share) };
-  });
-  const ink = $derived(slice.ink >= 0 ? `var(--ink-${slice.ink})` : "var(--stone-0)");
 
   // Everything else's apps.
   let all = $state(false);
@@ -272,15 +263,6 @@
   <AppIcon target={slice.target} name={slice.name} size={24} boxed />
   <span class="text">
     <span class="line1"><b>{slice.name}</b><span class="st">{words}</span></span>
-    {#if track}
-      <span class="trk" aria-hidden="true">
-        <i style:width="{track.share}%" style:background="color-mix(in srgb, {ink} 28%, transparent)"></i>
-        <i style:width="{track.use}%" style:background={ink}></i>
-        {#if track.over > 0}
-          <i class="over" style:left="{track.share}%" style:width="{track.over}%" style:color={ink}></i>
-        {/if}
-      </span>
-    {/if}
   </span>
   {#if rule && canEdit}
     <span class="more-k" aria-hidden="true">
@@ -374,27 +356,6 @@
   .off b,
   .off :global(.wrap) {
     opacity: 0.6;
-  }
-  .trk {
-    position: relative;
-    display: block;
-    max-width: 420px;
-    height: 6px;
-    margin-top: 8px;
-    border-radius: 3px;
-    background: var(--surface-3);
-    overflow: hidden;
-  }
-  .trk i {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    border-radius: 3px;
-    transition: width 400ms var(--ease-out);
-  }
-  .trk i.over {
-    background: repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 5px);
   }
   .pct {
     display: flex;
@@ -583,7 +544,6 @@
   /* High contrast drops box-shadows, so the rings drawn with them come
      back as outlines and borders in system colours. */
   @media (forced-colors: active) {
-    .trk i,
     .member {
       forced-color-adjust: none;
       border: 1px solid ButtonText;
