@@ -96,7 +96,10 @@ Linux or ARM PCs.
 
 **The tray.** Click the snail in the notification area for the quick
 panel: who is using the internet right now, the four modes, each slice
-with − and +, and Pause.
+with − and +, and Pause. The snail itself shows how the line is doing:
+as always while the line is quiet, a cream spiral while the line is full
+and SnailNet is sharing it, a coral shell when ping is well up anyway.
+Hover it for the same in words, with the ping.
 
 **Now** (the main window's first page) answers *what matters right now?*
 
