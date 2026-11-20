@@ -903,7 +903,7 @@ Pin exact versions at project setup after checking current docs (Context7 / crat
 5. Registers the tray app autostart (per user, HKCU Run via the autostart plugin).
 6. Starts the service, launches the app → first run.
 
-WinDivert installs its own kernel driver service on first `WinDivertOpen` and unloads it when the last handle closes. **Uninstall:** stop the service → (WinDivert unloads) → `snailnet-service.exe uninstall` → remove files; ask whether to keep config.
+WinDivert installs its own kernel driver service (`WinDivert`) on first `WinDivertOpen`. Closing the last handle does **not** unload it: the driver stays loaded until `sc stop WinDivert` or a restart, and Windows keeps a loaded driver's file locked (the v0.0.6 → v0.0.7 update failed on `WinDivert64.sys`, 2026-11-20). So the installer's hooks stop the SnailNet service, then `sc stop WinDivert`, wait up to 5 s for the file to free, and else move it aside to go at the next restart (`app/src-tauri/windows/hooks.nsh`). **Uninstall:** stop the service → `snailnet-service.exe uninstall` → unload the driver → remove files; ask whether to keep config.
 
 - **Built (2026-11-18), decisions taken:**
   - **Release-only bundle config.** `app/src-tauri/tauri.release.conf.json` is merged in with `tauri build --config …`; it turns the bundle on (NSIS only, `perMachine` → `C:\Program Files\SnailNet\`), adds the files and the hooks. It stays out of `tauri.conf.json` because `tauri-build` copies `bundle.resources` on every cargo build, and `target\release\snailnet-service.exe` doesn't exist in a plain `cargo clippy`/`test`.

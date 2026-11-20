@@ -10,15 +10,58 @@
 
 !define SNAILNET_SERVICE "SnailNet"
 
+!define SNAILNET_DRIVER "WinDivert"
+
+; Unload the WinDivert driver so WinDivert64.sys can be replaced or
+; removed. Closing the last WinDivert handle does NOT unload it: WinDivert
+; 2.2 leaves its kernel service running until `sc stop WinDivert` or a
+; restart, and Windows keeps a loaded driver's file locked ("Error opening
+; file for writing: ...\WinDivert64.sys" on the v0.0.6 -> v0.0.7 update).
+; Call after the SnailNet service has stopped (it holds the handles).
+; sc.exe returns at once, so wait up to 5 s for the file to come free. If
+; it never does (another program uses WinDivert too), move the file aside:
+; Windows lets a loaded driver's file be renamed, the new one is written
+; under the real name, and the old one goes at the next restart.
+!macro SNAILNET_UNLOAD_DRIVER
+  Push $2
+  Push $3
+  DetailPrint "Unloading the ${SNAILNET_DRIVER} driver..."
+  nsExec::ExecToLog '"$SYSDIR\sc.exe" stop ${SNAILNET_DRIVER}'
+  Pop $2
+  Delete "$INSTDIR\WinDivert64.sys.old"
+  ${If} ${FileExists} "$INSTDIR\WinDivert64.sys"
+    StrCpy $2 0
+    ${Do}
+      ClearErrors
+      FileOpen $3 "$INSTDIR\WinDivert64.sys" a
+      ${IfNot} ${Errors}
+        FileClose $3
+        ${ExitDo}
+      ${EndIf}
+      IntOp $2 $2 + 1
+      ${If} $2 >= 25
+        DetailPrint "${SNAILNET_DRIVER} is still loaded; replacing its file after a restart."
+        Rename "$INSTDIR\WinDivert64.sys" "$INSTDIR\WinDivert64.sys.old"
+        Delete /REBOOTOK "$INSTDIR\WinDivert64.sys.old"
+        ${ExitDo}
+      ${EndIf}
+      Sleep 200
+    ${Loop}
+  ${EndIf}
+  Pop $3
+  Pop $2
+!macroend
+
 ; Before files are copied: on an upgrade or an update (the updater runs
 ; this installer with /UPDATE) the running service holds
-; snailnet-service.exe and WinDivert.dll open, so stop it first. Stopping
-; closes the last WinDivert handle, which unloads the driver. Nothing to
-; do on a fresh install; net.exe just fails quietly.
+; snailnet-service.exe and WinDivert.dll open, so stop it first, then
+; unload the driver (above). Nothing to do on a fresh install; net.exe and
+; sc.exe just fail quietly.
 !macro NSIS_HOOK_PREINSTALL
   DetailPrint "Stopping the ${SNAILNET_SERVICE} service if it runs..."
   nsExec::ExecToLog '"$SYSDIR\net.exe" stop ${SNAILNET_SERVICE}'
   Pop $0
+  !insertmacro SNAILNET_UNLOAD_DRIVER
   ; Earlier installs left the app as snailnet.exe. Copying SnailNet.exe
   ; over it keeps the old lower-case name (NTFS keeps a file's case), and
   ; Task Manager then lists the app as "snailnet". Rename it first.
@@ -59,6 +102,7 @@
   ${If} $UpdateMode = 1
     nsExec::ExecToLog '"$SYSDIR\net.exe" stop ${SNAILNET_SERVICE}'
     Pop $0
+    !insertmacro SNAILNET_UNLOAD_DRIVER
   ${ElseIf} ${FileExists} "$INSTDIR\snailnet-service.exe"
     StrCpy $1 ""
     ${IfNot} ${Silent}
@@ -73,5 +117,8 @@
     ${If} $0 != 0
       DetailPrint "snailnet-service uninstall failed ($0)"
     ${EndIf}
+    ; The service is gone, so its handles are closed: unload the driver so
+    ; WinDivert64.sys can be deleted with the rest.
+    !insertmacro SNAILNET_UNLOAD_DRIVER
   ${EndIf}
 !macroend
