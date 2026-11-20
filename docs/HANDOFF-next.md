@@ -6,7 +6,45 @@ continue"**. Older briefs it points to: `docs/HANDOFF-wow.md` (features
 1–3), PLAN.md §11.10 (the proof), §11.11 (the fix), §14.3 (the split),
 §14.4 (the tray).
 
-## Where things stand
+## Update, later on 2026-11-20: A–F built, and the service is "never slower"
+
+**A–F are built and pushed:**
+
+| Item | Commit |
+|---|---|
+| Icons and logo tiles (C, D) | `da6dcf2` |
+| Now page and mode switch (A) | `3d34ca9` |
+| Split page (A) | `8c8363c` |
+| Settings (B) | `f8dc7e4` |
+| Pause, and Pause in the tray menu (E) | `12bc923` |
+| Change warmth (F) | `b5d9cef` |
+| DESIGN.md and audit fixes | `f2c942a` |
+
+The user picked Direction 1 from mockups in `.impeccable/mocks/redesign/`. Pause hides in the window but the tray keeps it. Numbers are drawn in Segoe UI. DESIGN.md is now the design brief.
+
+**The user's new rule: "the service must not make the internet slower"** (`f374868`):
+
+- The estimator can't ratchet down any more. It cuts only on a median ping rise held for 3 s, never below 85% of the line, and recovers while the line is idle.
+- The root burst is now 10 ms (the simulator now models late wake-ups).
+- The scheduler and receive threads run at high priority.
+
+**Installed state:** the installed v0.0.5 config says 19.4 Mbps down (measured), so it shapes at 17.8, and the old estimator could fall to about 5 Mbps. That is the likely cause of the "slow while browsing" seen today. It's fixed only after a release.
+
+**Not done:**
+
+- Live checks: the fix, the proof, the tray moods, the new pages in a real window.
+- The exe-icon check per family on the user's PC.
+- Impeccable's rendered audit: it needs CDP, so a browser.
+- Remaining Segoe Fluent glyphs in menus and dialogs.
+- Release v0.0.6.
+
+**Follow-ups from the service audit, not built yet:**
+
+- A self-check that fails a direction open when it sends under 90% of its rate while backlogged.
+- Express traffic not waiting on root debt from 64 KB coalesced packets.
+- A speed-test sanity check: warn on a result far below the last; count upload bytes when the server acknowledges them, not when they're written.
+
+## Where things stand (earlier on 2026-11-20)
 
 On `main`, pushed. App gates green: in `app\` `npm run check`, `lint`,
 `npx vitest run` (174 tests), `build`. No Rust changed since `aa5a025`
