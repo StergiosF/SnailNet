@@ -2,12 +2,35 @@
 
 Start a fresh session with: **"read docs/HANDOFF.md and continue"**.
 
-## Next (2026-11-20, later): read docs/HANDOFF-next.md
+## Next (2026-11-20, after the release): the live checks
 
-Features 1 and 3 are built, feature 2 half built, the app redesigned, no
-more notifications. What's left (the drag slider the user asked for,
-the rest of feature 2, the live check, v0.0.6) is in
-**`docs/HANDOFF-next.md`**.
+v0.0.6 is out (below). What's left is the live checks and the small
+follow-ups in **`docs/HANDOFF-next.md`**: the fix, the proof and the
+tray moods on the user's line, the new pages in a real window, the
+exe-icon check per family.
+
+## v0.0.6 (2026-11-20): the redesign, the proof, the fix, never slower
+
+- Released as v0.0.6 (the user asked to publish; the live checks are
+  still owed, and the release notes say so). Everything since v0.0.5
+  in one release: the A–F redesign (Now, Split, Settings, drawn icons,
+  Pause only when doing something, change warmth), the proof (ping
+  with/without SnailNet, A–F grades), the one-tap fix, the living tray
+  snail, no Windows notifications, and the service's "never slower"
+  rule (the estimator can't ratchet down, 85% floor, 10 ms root burst,
+  high-priority threads).
+- Gates green before the tag: cargo fmt/clippy/test (446 passed), app
+  check/lint/vitest (179)/build. Two fmt lines fixed first (`bb50f7b`).
+- Version bumped everywhere (`b01e3e5`), tag v0.0.6, release.yml built
+  the signed installer (run 44656321035), draft published 2026-11-20.
+  `releases/latest/download/latest.json` now answers 0.0.6: the app
+  updater and the site's fixed download link are live.
+- The installed 0.0.5 should offer the update in the side bar. After
+  it updates, run Measure once: it re-baselines the line (the old
+  config shapes at 17.8 of 19.4 Mbps) and gives the proof its
+  "without" ping on the new build.
+- Still owed: the live checks (the fix, the proof, the tray moods, the
+  new pages in a real window), the exe-icon check per family.
 
 ## Earlier (2026-11-20): three wow features, planned
 

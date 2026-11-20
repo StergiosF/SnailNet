@@ -30,13 +30,14 @@ The user picked Direction 1 from mockups in `.impeccable/mocks/redesign/`. Pause
 
 **Installed state:** the installed v0.0.5 config says 19.4 Mbps down (measured), so it shapes at 17.8, and the old estimator could fall to about 5 Mbps. That is the likely cause of the "slow while browsing" seen today. It's fixed only after a release.
 
+**Released (2026-11-20, later still): v0.0.6 is out.** The user asked to publish; everything since v0.0.5 went in one release, and the notes say what wasn't seen live. Gates green, version bumped as in `79ad30e`, tag v0.0.6, release.yml built the signed installer and the draft was published. The updater feed and the site's download link now answer 0.0.6. The live checks below are still owed; after the installed app updates, run Measure once (re-baselines the line, gives the proof its "without" ping).
+
 **Not done:**
 
 - Live checks: the fix, the proof, the tray moods, the new pages in a real window.
 - The exe-icon check per family on the user's PC.
 - Impeccable's rendered audit: it needs CDP, so a browser.
 - Remaining Segoe Fluent glyphs in menus and dialogs.
-- Release v0.0.6.
 
 **Follow-ups from the service audit, not built yet:**
 
@@ -216,9 +217,11 @@ each invent one.
    user's line; if it isn't, find out why before releasing.
 3. **The user's look** at the tray moods (100 % / 150 % scaling, light
    and dark taskbar).
-4. **Release:** v0.0.6 after A–F and the live checks (one release for
+4. ~~**Release:** v0.0.6 after A–F and the live checks (one release for
    everything is fine now). Bump the version as in `79ad30e`; the
-   release notes say what wasn't seen live.
+   release notes say what wasn't seen live.~~ **Done (2026-11-20):**
+   published with the notes saying what wasn't seen live; the live
+   checks (1–3) are still owed.
 
 ## Notes for whoever picks this up
 
