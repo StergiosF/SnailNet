@@ -40,7 +40,7 @@ export interface Brand {
   ink: string;
   /** The brand's own colour, for a solid app-icon tile. */
   bg: string;
-  /** The mark on that tile: white or near-black, whichever stands out. */
+  /** The mark on that tile: white, as on the brands' own app icons. */
   mark: string;
 }
 
@@ -120,7 +120,14 @@ export function brandOf(target: Target): Brand | null {
   return { path: icon.path, ink: inkOn(icon.hex), bg, mark: markOn(bg) };
 }
 
-/** White or near-black on a brand's tile, whichever has more contrast. */
+/** Below this, white would all but vanish on the tile. */
+const WHITE_MIN = 1.6;
+
+/** The mark is white on its brand's tile, as on most real app icons
+ *  (Brave's lion, Discord's controller). Picking whichever contrasts more
+ *  drew Brave's lion black on its orange (the user, 2026-11-20). Only a
+ *  tile so light that white would vanish (Kick's green) takes the dark
+ *  green. */
 export function markOn(bg: string): string {
-  return contrast("#ffffff", bg) >= contrast(DARK, bg) ? "#ffffff" : DARK;
+  return contrast("#ffffff", bg) >= WHITE_MIN ? "#ffffff" : DARK;
 }

@@ -31,6 +31,15 @@ describe("brand logos", () => {
     expect(contrast("#000000", "#ffffff")).toBeCloseTo(21, 0);
   });
 
+  it("draws the mark white on its brand tile, as the real app icons do", () => {
+    // Brave's lion was drawn black on its orange (2026-11-20).
+    expect(brandOf({ kind: "family", id: "brave" })?.mark).toBe("#ffffff");
+    expect(brandOf({ kind: "family", id: "discord" })?.mark).toBe("#ffffff");
+    expect(brandOf({ kind: "family", id: "steam" })?.mark).toBe("#ffffff");
+    // White would vanish on Kick's light green.
+    expect(brandOf({ kind: "site", id: "kick" })?.mark).toBe("#0a211d");
+  });
+
   it("credits every logo it ships", () => {
     expect(credits.every((c) => c.licence === "CC0-1.0" && c.trademark)).toBe(true);
     expect(credits.length).toBe(20);

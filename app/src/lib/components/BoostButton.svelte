@@ -6,6 +6,7 @@
   // that's boosted. The menu is a native popover, so Escape and a click
   // outside close it.
   import { block, boost, mergeInto, putBack, setFirstChoice, splitOut, stopBoost } from "../actions";
+  import Glyph from "./Glyph.svelte";
   import { members, splitExe } from "../families";
   import { firstChoiceOf, type FirstChoice } from "../firstChoice";
   import { t } from "../i18n";
@@ -98,7 +99,7 @@
     {disabled}
     popovertarget="{uid}-menu"
     aria-haspopup="menu"
-    aria-label={t("boost.label", { name })}>{t("boost")}</button
+    aria-label={t("boost.label", { name })}><Glyph name="boost" size={16} />{t("boost")}</button
   >
   <div bind:this={menu} id="{uid}-menu" class="popmenu" popover="auto" role="menu" ontoggle={place}>
     <p class="title">{t("boost.menu.title", { name })}</p>
@@ -155,6 +156,9 @@
 
 <style>
   .b {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     height: 32px;
     padding: 0 12px;
     border: 0;
@@ -177,6 +181,10 @@
   .b.live {
     background: var(--shell);
     color: var(--on-shell);
+  }
+  .b :global(.glyph) {
+    margin-left: -2px;
+    color: var(--shell);
   }
   .b.live:hover:not(:disabled) {
     background: var(--shell-hover);

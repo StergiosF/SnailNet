@@ -9,13 +9,14 @@
   import { service } from "../service.svelte";
   import { ui, type Page } from "../ui.svelte";
   import { updates } from "../update.svelte";
+  import Glyph, { type GlyphName } from "./Glyph.svelte";
   import PauseControl from "./PauseControl.svelte";
   import Snail from "./Snail.svelte";
 
-  const pages: { id: Page; label: string; glyph: string }[] = [
-    { id: "now", label: t("nav.now"), glyph: "" },
-    { id: "split", label: t("nav.split"), glyph: "" },
-    { id: "settings", label: t("nav.settings"), glyph: "" },
+  const pages: { id: Page; label: string; glyph: GlyphName }[] = [
+    { id: "now", label: t("nav.now"), glyph: "now" },
+    { id: "split", label: t("nav.split"), glyph: "split" },
+    { id: "settings", label: t("nav.settings"), glyph: "settings" },
   ];
 
   const line = $derived(service.snapshot?.config.line ?? {});
@@ -44,7 +45,7 @@
         aria-current={ui.page === p.id ? "page" : undefined}
         onclick={() => ui.go(p.id)}
       >
-        <i class="icon" aria-hidden="true">{p.glyph}</i>{p.label}
+        <Glyph name={p.glyph} />{p.label}
       </button>
     {/each}
   </nav>
@@ -153,12 +154,10 @@
   nav button.on:hover {
     background: transparent;
   }
-  nav .icon {
-    width: 18px;
-    font-size: 16px;
+  nav :global(.glyph) {
     transition: color 200ms linear;
   }
-  nav button.on .icon {
+  nav button.on :global(.glyph) {
     color: var(--shell);
   }
   .line {

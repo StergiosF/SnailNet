@@ -3,6 +3,7 @@
   // opens a menu (15 minutes, 1 hour, until I resume). While paused it
   // becomes Resume, with the time left under it.
   import { pause, resume } from "../actions";
+  import Glyph from "./Glyph.svelte";
   import { t } from "../i18n";
   import { timeLeft } from "../modes";
   import { placeMenu } from "../popover";
@@ -39,7 +40,7 @@
 
 {#if paused}
   <button type="button" class="ctl resume" {disabled} onclick={() => void resume()}>
-    <i class="icon" aria-hidden="true">&#xE768;</i>
+    <Glyph name="play" size={18} />
     <span class="txt">
       <b>{t("pause.resume")}</b>
       <small>{timeLeft(paused.until, ui.now)}</small>
@@ -55,7 +56,7 @@
     aria-haspopup="menu"
     aria-label={t("pause.label")}
   >
-    <i class="icon" aria-hidden="true">&#xE769;</i>
+    <Glyph name="pause" size={18} />
     <span class="txt"><b>{t("pause")}</b></span>
   </button>
   <div bind:this={menu} id="{uid}-menu" class="popmenu" popover="auto" role="menu" ontoggle={place}>
@@ -87,10 +88,6 @@
   }
   .ctl:disabled {
     opacity: 0.5;
-  }
-  .icon {
-    width: 18px;
-    font-size: 14px;
   }
   .txt {
     display: flex;
