@@ -32,7 +32,7 @@ const profiles: Profile[] = [
     rules: [site("youtube", 4000), rule("discord", 1000, { priority: "high" }), rule("steam", 2500), rule("epic", 0)],
   },
   { id: "gaming", name: "Gaming", rules: [rule("discord", 1500, { priority: "high" })] },
-  { id: "quiet", name: "Quiet downloads", rules: [rule("steam", 0), rule("epic", 0)] },
+  { id: "quiet-downloads", name: "Quiet downloads", rules: [rule("steam", 0), rule("epic", 0)] },
 ];
 
 const snapshot: Snapshot = {

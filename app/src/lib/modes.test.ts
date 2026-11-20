@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, boostShare, copyName, gameWhy, inCall, liveBoost, modeName, summary, users } from "./modes";
+import { availableModes, boostLeft, boostShare, copyName, gameWhy, inCall, liveBoost, modeName, users } from "./modes";
 import type { Boost, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
@@ -89,7 +89,10 @@ describe("users", () => {
   it("lists who's moving, busiest first, without unrecognised traffic", () => {
     const u = users(ledger(rules, busy(), label), null, label);
     expect(u.map((x) => x.name)).toEqual(["Steam", "YouTube", "Discord", "Brave"]);
-    expect(u[0]?.status).toBe("no slice of its own");
+    // Steam moves 10.3 of the 23 Mbps SnailNet shares out.
+    expect(u[0]?.status).toBe("a big part of the line");
+    expect(u[0]?.part).toBeCloseTo(10.3 / 23);
+    expect(u[0]?.ink).toBe(-1);
     expect(u[1]?.status).toBe("gets all it asks for");
     expect(u.some((x) => x.boosted)).toBe(false);
   });
@@ -118,14 +121,6 @@ describe("users", () => {
   it("keeps a busy boosted one that falls past the cut", () => {
     const u = users(ledger(rules, busy(), label), { target: { kind: "family", id: "brave" } }, label, 2);
     expect(u.map((x) => x.name)).toEqual(["Steam", "Brave"]);
-  });
-});
-
-describe("summary", () => {
-  it("has the slices with a share and counts the free-only ones", () => {
-    const s = summary(ledger(rules, busy(), label));
-    expect(s.slices.map((x) => x.name)).toEqual(["YouTube", "Brave", "Everything else"]);
-    expect(s.free).toBe(1);
   });
 });
 

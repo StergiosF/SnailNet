@@ -44,7 +44,7 @@ describe("ledger", () => {
     const [yt, brave, other] = ledger(rules, busy(), label).slices;
     expect(yt?.status).toEqual({ kind: "all" });
     expect(brave?.status.kind).toBe("lending");
-    expect(statusText(brave!.status)).toBe("not using 6.5 Mbps of its slice, so others get it");
+    expect(statusText(brave!.status)).toBe("6.5 Mbps of its slice spare for others");
     expect(other?.status.kind).toBe("borrowing");
     expect(other?.kept).toBeCloseTo(5.75 * M);
   });
@@ -140,6 +140,26 @@ describe("glance", () => {
     expect(g.detail).toBe("Brave wants more room too.");
     // Without the rule's word, Brave is just a smaller app.
     expect(glance(ledger([], d, label), 25 * M).detail).not.toContain("wants more room");
+  });
+
+  it("never calls a slice the lender while one of its own apps waits", () => {
+    // Streaming: Steam has a slice and runs over it; Brave, inside
+    // Everything else, is left waiting. Everything else's numbers say it
+    // isn't using its part, but it isn't lending room Brave wants.
+    const d = busy();
+    d.classes = [
+      { name: "family:steam", bps: 20 * M, drops: 0, queued_bytes: 0 },
+      { name: "everything else", bps: 1.4 * M, drops: 0, queued_bytes: 0 },
+    ];
+    d.families = [
+      { family: "steam", name: "Steam", bps: 20 * M, unidentified_bps: 0 },
+      { family: "brave", name: "Brave", bps: 1.4 * M, unidentified_bps: 0 },
+    ];
+    d.sites = [];
+    const steam: Rule = { target: { kind: "family", id: "steam" }, share: 2500, priority: "normal", enabled: true };
+    const g = glance(ledger([steam], d, label, ["brave"]), 25 * M);
+    expect(g.detail).not.toContain("Everything else isn't using");
+    expect(g.detail).toBe("It runs on spare room. Brave wants more room too.");
   });
 
   it("keeps a waiting app listed even when it moves almost nothing", () => {

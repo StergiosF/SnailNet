@@ -194,9 +194,9 @@ export function ledger(
   return { slices, total, shaped, busy };
 }
 
-/** A row's status in words: "gets all it asks for", "not using 6.5 Mbps
- *  of its slice, so others get it", "7.0 Mbps over its slice, from room
- *  nobody needs"… */
+/** A row's status in words, short (the user found the long ones technical,
+ *  2026-11-20): "gets all it asks for", "6.5 Mbps of its slice spare for
+ *  others", "using 7.0 Mbps of spare room too", "full, wants more"… */
 export function statusText(s: Status): string {
   switch (s.kind) {
     case "quiet":
@@ -283,8 +283,12 @@ export function glance(l: Ledger, lineBps: number | null): Glance {
     .slice(0, 2)
     .map((w) => w.name);
   const waiting = everyone.filter((w) => w !== lead && isWaiting(w)).map((w) => w.name);
+  // A slice with one of its own apps left waiting isn't lending, whatever
+  // its numbers say: "It runs on room Everything else isn't using. Brave
+  // wants more room too." with Brave inside Everything else contradicted
+  // itself (seen 2026-11-20).
   const lender = l.slices
-    .filter((s) => s.status.kind === "lending")
+    .filter((s) => s.status.kind === "lending" && !s.members.some((m) => m.waiting))
     .sort((a, b) => b.bps - a.bps)[0];
 
   let detail: string;

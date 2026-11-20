@@ -8,11 +8,14 @@
   // workaround is a hack (native overlay window or faked Win+Z). Win+Z
   // itself still opens them.
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, type Snippet } from "svelte";
   import { t } from "../i18n";
   import Snail from "./Snail.svelte";
 
-  let { brand = false }: { brand?: boolean } = $props();
+  // `lead`: what the main window puts in the strip (the mode switch, on
+  // Now and Split); the strip then grows to hold it, and the rest of it
+  // stays the drag region.
+  let { brand = false, lead }: { brand?: boolean; lead?: Snippet } = $props();
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -26,12 +29,13 @@
   });
 </script>
 
-<header class="titlebar" data-tauri-drag-region>
+<header class="titlebar" class:tall={lead !== undefined} data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
     {#if brand}
       <Snail size={16} light />
       <span data-tauri-drag-region>{t("app.name")}</span>
     {/if}
+    {#if lead}{@render lead()}{/if}
   </div>
   <div class="caption">
     <button type="button" aria-label={t("window.minimize")} onclick={() => win.minimize()}>
@@ -56,6 +60,16 @@
     align-items: stretch;
     height: var(--titlebar-h);
     flex: none;
+  }
+  .titlebar.tall {
+    height: 60px;
+  }
+  .tall .brand {
+    padding: 14px 0 6px var(--gutter);
+  }
+  .tall .caption {
+    align-self: flex-start;
+    height: var(--titlebar-h);
   }
   .brand {
     display: flex;

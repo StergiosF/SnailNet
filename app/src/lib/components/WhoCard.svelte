@@ -22,7 +22,9 @@
   import BoostButton from "./BoostButton.svelte";
   import Snail from "./Snail.svelte";
 
-  let { ledger, canEdit }: { ledger: Ledger | null; canEdit: boolean } = $props();
+  let { ledger, canEdit, lineBps = null }: { ledger: Ledger | null; canEdit: boolean; lineBps?: number | null } =
+    $props();
+  const ink = (n: number) => (n >= 0 ? `var(--ink-${n})` : "var(--stone-0)");
 
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
@@ -59,7 +61,12 @@
 </script>
 
 <section class="card who" aria-labelledby="who-title">
-  <h2 class="card-title" id="who-title">{t("who.title")}</h2>
+  <div class="hd">
+    <h2 class="card-title" id="who-title">{t("who.title")}</h2>
+    {#if ledger && ledger.total > 0 && lineBps}
+      <span class="total num">{t("who.total", { used: mbps(ledger.total), line: mbps(lineBps) })}</span>
+    {/if}
+  </div>
   {#if !ledger}
     <ul aria-hidden="true">
       {#each [0.5, 0.4, 0.55] as w, i (i)}
@@ -83,7 +90,8 @@
                 <span class="badge"><i class="icon" aria-hidden="true">&#xE945;</i>{t("who.boost.badge")}</span>
               {/if}
             </span>
-            <small>{sub(u)}</small>
+            <small class:wait={u.waiting && !u.boosted}>{sub(u)}</small>
+            <span class="use" aria-hidden="true"><i style:width="{u.part * 100}%" style:background={ink(u.ink)}></i></span>
           </span>
           <span class="mb num">{u.bps > 0 ? rowMbps(u.bps) : ""}<small>{u.bps > 0 ? ` ${t("line.unit")}` : ""}</small></span>
           <BoostButton target={u.target} name={u.name} boosted={u.boosted} disabled={!canEdit} />
@@ -130,8 +138,36 @@
     padding: 16px 12px 10px;
     min-width: 0;
   }
-  h2 {
+  .hd {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
     padding: 0 6px 4px;
+  }
+  .total {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+  }
+  /* How much of the line it takes: a thin bar under its name, in its
+     slice's ink (stone inside Everything else). Its words say it too. */
+  .use {
+    display: block;
+    height: 4px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.06);
+    overflow: hidden;
+  }
+  .use i {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+    border-radius: 2px;
+    transition: width 900ms var(--ease-out);
+  }
+  .nm small.wait {
+    color: var(--caution);
   }
   ul {
     display: flex;
@@ -147,7 +183,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 12px;
-    min-height: 52px;
+    min-height: 58px;
     padding: 6px 6px;
     border-radius: 12px;
     overflow: hidden;

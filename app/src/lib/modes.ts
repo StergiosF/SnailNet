@@ -3,7 +3,7 @@
 // the split in short. Pure, so it's tested.
 
 import { sameTarget } from "./rules";
-import { statusText, type Ledger, type Slice } from "./ledger";
+import { statusText, type Ledger } from "./ledger";
 import { t, type Key } from "./i18n";
 import type { Boost, GameTick, GameWhy, Profile, Target } from "./types";
 
@@ -113,6 +113,20 @@ export interface User {
   /** What's happening to it, in words. */
   status: string;
   boosted: boolean;
+  /** Its part of the line now, 0–1 (the row's bar). */
+  part: number;
+  /** Its slice's colour slot; -1 inside Everything else. */
+  ink: number;
+  /** Left waiting for room (waiting.ts, or a full slice wanting more). */
+  waiting: boolean;
+}
+
+/** How much of the line `part` (0–1) is, in words. */
+export function amount(part: number): string {
+  if (part >= 0.5) return t("who.amount.most");
+  if (part >= 0.2) return t("who.amount.big");
+  if (part >= 0.05) return t("who.amount.some");
+  return t("who.amount.little");
 }
 
 const keyOf = (t: Target) => `${t.kind}:${t.id.toLowerCase()}`;
@@ -128,16 +142,40 @@ export function users(
   calls: string[] = [],
 ): User[] {
   const out: User[] = [];
+  // The line the bars measure against: what SnailNet shares out, else
+  // what moves now.
+  const line = l.shaped ?? l.total;
+  const part = (bps: number) => (line > 0 ? Math.min(1, bps / line) : 0);
   for (const s of l.slices) {
     if (s.target !== null) {
       if (s.active) {
-        out.push({ key: s.key, target: s.target, name: s.name, bps: s.bps, status: statusText(s.status), boosted: false });
+        out.push({
+          key: s.key,
+          target: s.target,
+          name: s.name,
+          bps: s.bps,
+          status: statusText(s.status),
+          boosted: false,
+          part: part(s.bps),
+          ink: s.ink,
+          waiting: s.status.kind === "held",
+        });
       }
       continue;
     }
     for (const m of s.members) {
       if (m.fixed) continue;
-      out.push({ key: m.key, target: m.target, name: m.name, bps: m.bps, status: t("who.inOther"), boosted: false });
+      out.push({
+        key: m.key,
+        target: m.target,
+        name: m.name,
+        bps: m.bps,
+        status: m.waiting ? t("who.waiting") : amount(part(m.bps)),
+        boosted: false,
+        part: part(m.bps),
+        ink: -1,
+        waiting: m.waiting,
+      });
     }
   }
   out.sort((a, b) => b.bps - a.bps || a.name.localeCompare(b.name));
@@ -167,6 +205,9 @@ export function users(
         bps: 0,
         status: t("status.quiet"),
         boosted: true,
+        part: 0,
+        ink: -1,
+        waiting: false,
       });
       if (shown.length > max) shown.pop();
     }
@@ -185,13 +226,4 @@ export function gameWhy(target: Target, games: GameTick[] | undefined, focusBoos
 export function inCall(target: Target, calls: string[] | undefined, on: boolean): boolean {
   const id = target.id.toLowerCase();
   return on && target.kind === "family" && (calls?.some((c) => c.toLowerCase() === id) ?? false);
-}
-
-/** The split in short: the slices with a share (Everything else last), and
- *  how many take only what's free. */
-export function summary(l: Ledger): { slices: Slice[]; free: number } {
-  return {
-    slices: l.slices.filter((s) => s.share !== null && s.enabled),
-    free: l.slices.filter((s) => s.enabled && s.share === null).length,
-  };
 }

@@ -13,6 +13,7 @@
   import SettingsPage from "./lib/components/SettingsPage.svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import SplitPage from "./lib/components/SplitPage.svelte";
+  import ModeSwitch from "./lib/components/ModeSwitch.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import Toast from "./lib/components/Toast.svelte";
   import { targetLabel } from "./lib/format";
@@ -90,6 +91,10 @@
   );
 </script>
 
+{#snippet modeSwitch()}
+  <ModeSwitch disabled={!connected} />
+{/snippet}
+
 <div class="window">
   {#if firstRun}
     <div class="first">
@@ -99,7 +104,7 @@
   {:else}
     <Sidebar />
     <div class="col">
-      <TitleBar />
+      <TitleBar lead={ui.page === "settings" ? undefined : modeSwitch} />
       <main>
         {#if service.link.kind === "connecting"}
           <p class="visually-hidden" role="status">{t("link.connecting")}</p>
@@ -110,7 +115,13 @@
         {#key ui.page}
           <div class="page">
             {#if ui.page === "now"}
-              <NowPage ledger={loading ? null : downBook} glance={sentence} {proof} canEdit={connected} />
+              <NowPage
+                ledger={loading ? null : downBook}
+                glance={sentence}
+                {proof}
+                canEdit={connected}
+                lineBps={downLine === undefined ? null : downLine * 1e6}
+              />
             {:else if ui.page === "split"}
               {#if service.link.kind === "connecting" || connected}
                 <SplitPage

@@ -12,7 +12,7 @@ import { forgetFix } from "./fix";
 import { edit, isDirty, isSavable, isStale, startDraft, type Draft } from "./draft";
 import { t } from "./i18n";
 import { modeName } from "./modes";
-import { coachSeen, dismissFirstRun, firstRunDismissed, forgetCoach, forgetFirstRun, markCoachSeen } from "./line";
+import { dismissFirstRun, firstRunDismissed, forgetFirstRun } from "./line";
 import { service } from "./service.svelte";
 import type { Rule, SaveError } from "./types";
 
@@ -39,8 +39,6 @@ class Ui {
   page = $state<Page>("now");
   /** First run (§14.5) was finished or skipped. */
   firstRunDone = $state(firstRunDismissed());
-  /** The one-time hint on "The split" still to show (§14.5 step 4). */
-  coach = $state(!coachSeen());
   dir = $state<Dir>("down");
   toast = $state<Toast | null>(null);
   /** Unix seconds, ticking every few seconds (boost countdowns). */
@@ -240,20 +238,11 @@ class Ui {
     this.firstRunDone = true;
   }
 
-  /** Put the split hint away for good (Got it, or Fine-tune used). */
-  dismissCoach() {
-    if (!this.coach) return;
-    markCoachSeen();
-    this.coach = false;
-  }
-
   /** After "Reset SnailNet": back to the Now page, and first run again. */
   restartFirstRun() {
     this.discard();
     forgetFirstRun();
-    forgetCoach();
     forgetFix();
-    this.coach = true;
     this.firstRunDone = false;
     this.page = "now";
     this.open = null;
