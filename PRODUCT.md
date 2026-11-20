@@ -56,7 +56,8 @@ priorities and absolute limits and make the user do the arithmetic.
 - Line speed: typed, or measured by the speed test (Cloudflare, ~20 s,
   shaping off meanwhile), then followed live by the estimator from the
   ping (unless pinned). Modes (four built-in profiles), Boost, Pause and
-  blocking an app are built; notifications, hotkeys and per-network
+  blocking an app are built; notifications (beyond the one-time "still
+  running in the tray"), hotkeys and per-network
   speeds are not. `FocusChanged`, `AnswerPrompt` answer Unsupported.
 - Service states the UI must show: Starting, Shaping, Measuring, Unshaped (no line
   speed), Retrying (failed open), Safe mode, Paused, not running.

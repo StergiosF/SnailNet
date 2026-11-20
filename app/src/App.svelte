@@ -4,7 +4,9 @@
   // caption buttons, a state that needs attention if there is one, and
   // the open page. First run takes the whole window until it's done.
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import AddSlice from "./lib/components/AddSlice.svelte";
+  import AutostartDialog from "./lib/components/AutostartDialog.svelte";
   import FirstRun from "./lib/components/FirstRun.svelte";
   import LeaveDialog from "./lib/components/LeaveDialog.svelte";
   import LineDialog from "./lib/components/LineDialog.svelte";
@@ -27,12 +29,16 @@
   import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
   import { updates } from "./lib/update.svelte";
+  import { askAutostartNow } from "./lib/autostart";
   import type { Target } from "./lib/types";
 
   onMount(() => {
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
+    invoke<boolean>("autostart_ask")
+      .then((ask) => (autostartPending = ask))
+      .catch(() => {});
     const stopTick = ui.tick();
     const stopUpdates = updates.watch();
     return () => {
@@ -51,6 +57,11 @@
     ui.finishFirstRun();
     firstRun = false;
   }
+
+  // A fresh install asks once whether to start with Windows, after first
+  // run (autostart.rs remembers the answer).
+  let autostartPending = $state(false);
+  const askAutostart = $derived(askAutostartNow(autostartPending, firstRun, service.link, service.snapshot));
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
@@ -137,6 +148,7 @@
   <AddSlice />
   <LineDialog />
   <LeaveDialog />
+  <AutostartDialog open={askAutostart} ondone={() => (autostartPending = false)} />
 </div>
 
 <style>

@@ -8,6 +8,7 @@
   // setting with a short "what it does"; lists you need once fold.
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { canMeasure, measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
   import { groupings } from "../families";
@@ -39,9 +40,13 @@
     invoke<boolean>("autostart_enabled")
       .then((on) => (autostart = on))
       .catch(() => (autostart = null));
+    // The tray's "Start with Windows" and the first-run question change it
+    // too (autostart.rs `sync`).
+    const unlisten = listen<boolean>("autostart-changed", (e) => (autostart = e.payload));
     invoke<HotkeyInfo>("hotkey_info")
       .then((info) => (hotkey = info))
       .catch(() => (hotkey = null));
+    return () => void unlisten.then((stop) => stop()).catch(() => {});
   });
 
   // A hotkey switches mode (§11.2), Ctrl+Alt+S unless another is picked.

@@ -47,6 +47,50 @@ pub fn sync_pause(app: &AppHandle, paused: bool) {
     }
 }
 
+/// The tray menu's "Start with Windows" check, kept in step with Settings.
+pub struct StartupItem(tauri::menu::CheckMenuItem<tauri::Wry>);
+
+/// Check the tray's "Start with Windows" as the registry says.
+pub fn sync_startup(app: &AppHandle, on: bool) {
+    if let Some(item) = app.try_state::<StartupItem>() {
+        let _ = item.0.set_checked(on);
+    }
+}
+
+/// Present once the "still running in the tray" notification was shown.
+const TRAY_NOTICE: &str = "tray-notice-shown";
+
+/// The first time the main window is closed, say once, in a Windows
+/// notification, that SnailNet keeps running in the tray (the user's call,
+/// 2026-11-20, the one notification SnailNet shows). Never again after.
+fn first_close_notice(app: &AppHandle) {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
+    if !first_time(&dir.join(TRAY_NOTICE)) {
+        return;
+    }
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app
+        .notification()
+        .builder()
+        .title("SnailNet is still running")
+        .body("It keeps sharing your internet from the tray. Click the snail there to open it, or right-click it to quit.")
+        .show();
+}
+
+/// True the first time it's called for `marker`, which it then creates.
+fn first_time(marker: &std::path::Path) -> bool {
+    if marker.exists() {
+        return false;
+    }
+    if let Some(dir) = marker.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(marker, b"");
+    true
+}
+
 /// When the flyout last hid because it lost focus.
 #[derive(Default)]
 struct Blurred(Mutex<Option<Instant>>);
@@ -82,13 +126,16 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         }
     });
 
-    // Closing the main window keeps SnailNet in the tray.
+    // Closing the main window keeps SnailNet in the tray, and says so the
+    // first time.
     if let Some(main) = app.get_webview_window(MAIN) {
         let w = main.clone();
+        let handle = app.handle().clone();
         main.on_window_event(move |e| {
             if let WindowEvent::CloseRequested { api, .. } = e {
                 api.prevent_close();
                 let _ = w.hide();
+                first_close_notice(&handle);
             }
         });
     }
@@ -104,6 +151,7 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         crate::autostart::enabled(app.handle()),
         None::<&str>,
     )?;
+    app.manage(StartupItem(startup.clone()));
     let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit SnailNet", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &pause, &startup, &sep, &quit])?;
@@ -128,11 +176,12 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
                 }
             }
             // The click already flipped the check; follow it, then show
-            // what the registry really says (the write can fail).
+            // what the registry really says (the write can fail), here and
+            // in Settings.
             "startup" => {
                 let want = startup.is_checked().unwrap_or(false);
                 let _ = crate::autostart::set(app, want);
-                let _ = startup.set_checked(crate::autostart::enabled(app));
+                crate::autostart::sync(app);
             }
             // Quit stops snailnet-service cleanly before exiting the app.
             "quit" => quit_app(app),
@@ -390,5 +439,15 @@ mod tests {
         };
         let (x, y) = flyout_origin(icon, work, (540.0, 630.0), 18.0);
         assert_eq!((x, y), (-558.0, 744.0));
+    }
+
+    #[test]
+    fn the_tray_notice_is_shown_once() {
+        let dir = std::env::temp_dir().join(format!("snailnet-tray-notice-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let marker = dir.join(TRAY_NOTICE);
+        assert!(first_time(&marker));
+        assert!(!first_time(&marker));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

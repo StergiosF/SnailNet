@@ -93,8 +93,11 @@ mockIPC(
       case "hotkey_info":
         return { keys: "Ctrl+Alt+S", registered: true };
       case "autostart_enabled":
+      case "autostart_ask":
       case "network_metered":
         return false;
+      case "autostart_answer":
+        return a.on === true;
       default:
         return null;
     }

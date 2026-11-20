@@ -23,6 +23,9 @@ tauri = { version = "2.12.5", features = ["tray-icon"] }
 tauri-plugin-single-instance = "=2.5.5"
 # Start with Windows: the per-user HKCU Run value (PLAN.md §4, §15).
 tauri-plugin-autostart = "=2.7.0"
+# The one Windows notification: closing the window the first time says
+# SnailNet keeps running in the tray (tray.rs; the user's call, 2026-11-20).
+tauri-plugin-notification = "=2.8.1"
 # Ctrl+Alt+S switches mode (hotkey.rs, PLAN.md §11.2).
 tauri-plugin-global-shortcut = "=2.4.1"
 # Settings → Check for updates (updates.rs, PLAN.md §17.2). Windows' own

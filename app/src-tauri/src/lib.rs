@@ -202,6 +202,8 @@ pub fn run() {
             tray::open_main(app);
         }))
         .plugin(autostart::plugin())
+        // The one notification: "still running in the tray" (tray.rs).
+        .plugin(tauri_plugin_notification::init())
         .plugin(hotkey::plugin())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(shared.clone())
@@ -255,6 +257,8 @@ pub fn run() {
             changes::set_settings,
             autostart::autostart_enabled,
             autostart::set_autostart,
+            autostart::autostart_ask,
+            autostart::autostart_answer,
             metered::network_metered,
             hotkey::hotkey_info,
             hotkey::set_hotkey,

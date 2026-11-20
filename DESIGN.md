@@ -114,7 +114,13 @@ detailed spec.
   and limits are behind its chevron; an app's rarer actions (block it, it's
   a game, grouping) behind its `•••`; lists needed once fold.
 - **Quiet and premium** (PRODUCT.md principle 5): no nagging, no
-  dashboards nobody asked for, never a Windows notification.
+  dashboards nobody asked for. One Windows notification only, once ever:
+  the first time the window is closed, "SnailNet is still running" in the
+  tray (the user's call, 2026-11-20).
+- **Start with Windows is asked, once:** after first run on a fresh
+  install, a small dialog "Start SnailNet with Windows?" (Start with
+  Windows · Not now). Settings → Windows and the tray menu change it
+  later and always agree.
 
 ## Colors
 
@@ -267,7 +273,9 @@ detailed spec.
 - **Don't** add a strip, legend or per-row bar that repeats the drag bar.
 - **Don't** use side stripes, cards on cards, icons in tinted squares, or an
   icon before every heading.
-- **Don't** use a pop-up or Windows notification for anything.
+- **Don't** use a pop-up or Windows notification for anything, except
+  the one-time "still running in the tray" notification and the one-time
+  "Start with Windows?" question.
 - **Don't** draw look-alike logos, or put the brand's mark in black on its
   colour.
 - **Don't** put a kicker or eyebrow above a heading. Don't make a giant
