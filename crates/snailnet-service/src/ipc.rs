@@ -263,10 +263,17 @@ async fn serve(
                     Some(Err(e)) => break Err(e),
                     None => break Ok(()),
                 };
+                let stop = s.hello && matches!(msg.req, Request::Stop);
                 let reply = handle(hub, &mut s, msg.req);
-                let bye = matches!(reply, Reply::Error { code: ErrorCode::Handshake, .. });
+                let bye = stop || matches!(reply, Reply::Error { code: ErrorCode::Handshake, .. });
                 if let Err(e) = write_msg(&mut wr, &ServerMsg::Reply { id: msg.id, reply }).await {
+                    if stop {
+                        hub.signal().request();
+                    }
                     break Err(e);
+                }
+                if stop {
+                    hub.signal().request();
                 }
                 if bye {
                     break Ok(());
@@ -384,6 +391,10 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             ack(Ok(hub.rev()))
         }
         Request::AnswerPrompt { prompt_id, action } => ack(hub.answer_prompt(prompt_id, &action)),
+        Request::Stop => {
+            info!("IPC: stop requested by client");
+            Reply::Ack { rev: hub.rev() }
+        }
     }
 }
 
@@ -730,5 +741,44 @@ mod tests {
             Err(ClientError::NotRunning(_)) => {}
             r => panic!("{:?}", r.err()),
         }
+    }
+
+    #[test]
+    fn stop_request_acks_and_signals_shutdown() {
+        let (_t, hub, server, pipe) = setup("stop");
+        // Before Hello: refused and must not stop the service.
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            let mut f = std::fs::OpenOptions::new()
+                .access_mode(snailnet_ipc::CLIENT_ACCESS)
+                .open(&pipe)
+                .unwrap();
+            snailnet_ipc::write_frame(
+                &mut f,
+                &ClientMsg {
+                    id: 1,
+                    req: Request::Stop,
+                },
+            )
+            .unwrap();
+            let m: ServerMsg = snailnet_ipc::read_frame(&mut f).unwrap();
+            assert!(matches!(
+                m,
+                ServerMsg::Reply {
+                    id: 1,
+                    reply: Reply::Error {
+                        code: ErrorCode::Handshake,
+                        ..
+                    }
+                }
+            ));
+            assert!(!hub.signal().is_requested());
+        }
+
+        // After Hello: acknowledged cleanly and triggers StopSignal.
+        let mut c = Client::connect(&pipe, "t").unwrap();
+        assert_eq!(c.call(Request::Stop).unwrap(), Reply::Ack { rev: 1 });
+        assert!(hub.signal().is_requested());
+        server.stop();
     }
 }

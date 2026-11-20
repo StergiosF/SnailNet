@@ -7,8 +7,9 @@
 
 use serde::Serialize;
 use windows::Win32::System::Services::{
-    CloseServiceHandle, OpenSCManagerW, OpenServiceW, SC_MANAGER_CONNECT, SERVICE_QUERY_STATUS,
-    SERVICE_START, StartServiceW,
+    CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, SC_MANAGER_CONNECT,
+    SERVICE_CONTROL_STOP, SERVICE_QUERY_STATUS, SERVICE_START, SERVICE_STATUS, SERVICE_STOP,
+    StartServiceW,
 };
 use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
 use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
@@ -80,6 +81,33 @@ pub fn start_if_stopped() {
     std::thread::spawn(|| {
         let _ = start_plain();
     });
+}
+
+/// ERROR_SERVICE_NOT_ACTIVE.
+const NOT_ACTIVE: u32 = 1062;
+
+/// Stops the installed service through SCM without elevation. Used only as
+/// a quiet fallback if IPC couldn't stop it (e.g. an elevated dev run or a
+/// service that couldn't open its pipe).
+pub fn stop_plain() -> windows::core::Result<()> {
+    // SAFETY: plain Win32 calls; every handle opened here is closed here.
+    unsafe {
+        let scm = OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), SC_MANAGER_CONNECT)?;
+        let result = match OpenServiceW(scm, &HSTRING::from(SERVICE_NAME), SERVICE_STOP) {
+            Ok(svc) => {
+                let mut status = SERVICE_STATUS::default();
+                let r = ControlService(svc, SERVICE_CONTROL_STOP, &mut status);
+                let _ = CloseServiceHandle(svc);
+                r
+            }
+            Err(e) => Err(e),
+        };
+        let _ = CloseServiceHandle(scm);
+        match result {
+            Err(e) if e.code() == HRESULT::from_win32(NOT_ACTIVE) => Ok(()),
+            r => r,
+        }
+    }
 }
 
 /// ERROR_CANCELLED: the UAC prompt was declined.

@@ -7,7 +7,8 @@
 //! when it loses focus. The flyout loads the same page as the main window;
 //! the page picks its view from the window label ([`FLYOUT`]).
 
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::bridge::Link;
@@ -50,8 +51,16 @@ pub fn sync_pause(app: &AppHandle, paused: bool) {
 #[derive(Default)]
 struct Blurred(Mutex<Option<Instant>>);
 
+/// Guards against clicking Quit twice while the service is stopping.
+#[derive(Default)]
+struct Quitting(AtomicBool);
+
+/// Maximum time Quit waits for the service to acknowledge shutdown.
+const QUIT_STOP_TIMEOUT: Duration = Duration::from_secs(3);
+
 pub fn setup(app: &mut App) -> tauri::Result<()> {
     app.manage(Blurred::default());
+    app.manage(Quitting::default());
     app.manage(tray_icon::Shown::default());
 
     let flyout = WebviewWindowBuilder::new(app, FLYOUT, WebviewUrl::App("index.html".into()))
@@ -125,8 +134,8 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
                 let _ = crate::autostart::set(app, want);
                 let _ = startup.set_checked(crate::autostart::enabled(app));
             }
-            // The service keeps shaping; only the app goes.
-            "quit" => app.exit(0),
+            // Quit stops snailnet-service cleanly before exiting the app.
+            "quit" => quit_app(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, e| {
@@ -163,6 +172,40 @@ pub fn open_main(app: &AppHandle) {
         let _ = w.unminimize();
         let _ = w.set_focus();
     }
+}
+
+/// Hide the UI right away, ask `snailnet-service` to shut down cleanly,
+/// and exit the tray app. Bounded by [`QUIT_STOP_TIMEOUT`] so Quit can
+/// never hang even if the service is unresponsive.
+fn quit_app(app: &AppHandle) {
+    if let Some(q) = app.try_state::<Quitting>()
+        && q.0.swap(true, Ordering::Relaxed)
+    {
+        return;
+    }
+    if let Some(stop) = app.try_state::<Arc<AtomicBool>>() {
+        stop.store(true, Ordering::Relaxed);
+    }
+    hide_flyout(app, false);
+    if let Some(w) = app.get_webview_window(MAIN) {
+        let _ = w.hide();
+    }
+    if let Some(t) = app.tray_by_id(tray_icon::TRAY_ID) {
+        let _ = t.set_visible(false);
+    }
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            crate::changes::stop_service_blocking();
+            let _ = tx.send(());
+        });
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let _ = rx.recv_timeout(QUIT_STOP_TIMEOUT);
+        })
+        .await;
+        handle.exit(0);
+    });
 }
 
 fn hide_flyout(app: &AppHandle, blurred: bool) {

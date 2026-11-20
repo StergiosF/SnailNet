@@ -171,6 +171,10 @@ pub enum Request {
         families: Families,
         rev: u64,
     },
+    /// Stop the service cleanly (flushes queued packets, unloads WinDivert,
+    /// and exits with code 0 so Windows SCM doesn't restart it). Sent when
+    /// the user quits SnailNet from the tray.
+    Stop,
 }
 
 impl Request {
@@ -199,6 +203,7 @@ impl Request {
             Self::RenameProfile { .. } => "RenameProfile",
             Self::DeleteProfile { .. } => "DeleteProfile",
             Self::SetFamilies { .. } => "SetFamilies",
+            Self::Stop => "Stop",
         }
     }
 }
@@ -666,6 +671,7 @@ mod tests {
                 minutes: None,
                 rev: 3,
             },
+            Request::Stop,
         ] {
             roundtrip(ClientMsg { id: 3, req });
         }

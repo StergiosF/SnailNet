@@ -168,9 +168,10 @@ button appears in the side bar; one click installs it.
 
 ## Questions
 
-**If I close the window, does it stop?** No. A Windows service does the
-work, so your rules keep working with the app closed. Use **Pause** to
-stop shaping.
+**If I close the window, does it stop?** No. Closing the window hides
+SnailNet to the tray and your rules keep working. Right-click the tray
+icon and choose **Quit SnailNet** to stop the background service too, or
+use **Pause** to step aside temporarily.
 
 **Will it make my internet slower?** It sends slightly below your line
 speed on purpose: that keeps the queue on your PC, which is what keeps
@@ -200,8 +201,10 @@ with no account and no telemetry.
   and which website each connection belongs to, and sends them out in
   the shares you set, slightly below your line speed so the queue stays
   on your PC and not in your router.
-- The app (tray icon, flyout, main window) only talks to the service. You
-  can close it; your rules keep working.
+- The app (tray icon, flyout, main window) talks to the service over a
+  named pipe. Closing the window hides it to the tray while your rules
+  keep working; choosing **Quit SnailNet** in the tray stops the service
+  cleanly until you open SnailNet again.
 - Modes switch whole sets of rules at once: Balanced, Streaming, Gaming,
   Quiet downloads, and your own copies. Ctrl+Alt+S steps through them
   (other keys in Settings → Windows).

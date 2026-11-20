@@ -153,6 +153,25 @@ pub async fn set_families(families: Families, rev: u64) -> Result<u64, SaveError
     send(Request::SetFamilies { families, rev }).await
 }
 
+/// Ask `snailnet-service` to shut down cleanly when the user quits from
+/// the tray. Tries IPC first (works for both the Windows service and
+/// `run --console`, with no UAC prompt), then falls back to a quiet SCM
+/// stop if the pipe wasn't reachable.
+pub(crate) fn stop_service_blocking() {
+    match Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION")) {
+        Ok(mut c) => {
+            if c.call(Request::Stop).is_ok() {
+                return;
+            }
+            let _ = crate::service_start::stop_plain();
+        }
+        Err(ClientError::NotRunning(_)) => {}
+        Err(_) => {
+            let _ = crate::service_start::stop_plain();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

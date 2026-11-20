@@ -38,8 +38,10 @@ priorities and absolute limits and make the user do the arithmetic.
 ## Operating Context
 
 - A Windows service (LocalSystem) does all shaping; the app is a client
-  over a named pipe (`\\.\pipe\snailnet.v1`, protocol v1). If the app is
-  closed, shaping continues.
+  over a named pipe (`\\.\pipe\snailnet.v1`, protocol v1). Closing the
+  main window hides it to the tray and shaping continues; quitting from
+  the tray stops the service cleanly too (opening the app starts it again
+  automatically).
 - The app lives in the tray (flyout for quick changes) with a main window
   for rules; autostarts at login, minimised.
 - Used mid-activity: while a game launches, a download runs, a video
