@@ -25,8 +25,8 @@ restyled:
   each mode's line and its real split (modes.rs) under it, no script.
 - **Words** follow PRODUCT.md: "share", "your internet", "speed" instead
   of "slice" and "the line"; the demo's statuses are the app's own.
-- **Not done:** `og.png` and the README pictures (`docs/images/*.svg`,
-  made by `scripts/readme-images.cjs`) still show the Garden look.
+- **Since done:** `og.png` (`scripts/og-image.cjs`) and the README pictures (`docs/images/*.svg`,
+  made by `scripts/readme-images.cjs`) now show the Blend look too.
 - **Checked:** in code only (no browser, by the user's standing rule):
   tag balance, every `var()` defined, every `<use>` symbol present,
   `node --check site/main.js`, impeccable's detector (one "tight line

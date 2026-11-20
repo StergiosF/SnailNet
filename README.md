@@ -25,7 +25,7 @@
   <img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-8fd3bf">
 </p>
 
-![SnailNet's main window: Balanced mode is on; YouTube, a Steam download and Discord are using the internet; the split gives YouTube 55%, Steam 40% and everything else 5%](docs/images/now-page.svg)
+![SnailNet's main window, the Now page: Streaming mode is on; a Steam download uses only spare speed while YouTube, Twitch and a Discord call get all they need; a chart shows the last 10 minutes, and beside it how Streaming shares your internet](docs/images/now-page.svg)
 
 ## Why SnailNet
 
@@ -68,7 +68,7 @@ nothing sent anywhere.
   wrong, your traffic flows straight through. Pause stops everything in
   one click.
 
-![On a 20 Mbps line, Steam keeps 40% and YouTube 60% while both are busy. When the video pauses, Steam gets the whole line, and YouTube lends the 12 Mbps it isn't using](docs/images/split-guarantee.svg)
+![With 20 Mbps of internet, Steam keeps 40% and YouTube 60% while both are busy. When the video pauses, Steam gets all of it, also using the 12 Mbps of YouTube's share that YouTube isn't using](docs/images/split-guarantee.svg)
 
 ## Download and install
 
