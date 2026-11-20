@@ -11,6 +11,7 @@
   import { canMeasure, measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
   import { groupings } from "../families";
   import { shortDate, stateKind } from "../format";
+  import { fixer } from "../fixer.svelte";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
   import { modeName } from "../modes";
@@ -309,6 +310,19 @@
         checked={gamingWhilePlaying}
         disabled={!canEdit || focusing}
         onchange={(e) => void setSetting({ gaming_while_playing: e.currentTarget.checked })}
+      />
+    </label>
+    <label class="item">
+      <div class="words">
+        <b>{t("fix.setting.title")}</b>
+        <span>{t("fix.setting.body")}</span>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        class="switch"
+        checked={fixer.prefs.on}
+        onchange={(e) => fixer.setOn(e.currentTarget.checked)}
       />
     </label>
     {#if choices.length > 0}

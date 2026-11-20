@@ -17,6 +17,7 @@
   import type { Proof } from "../proof";
   import ModeTiles from "./ModeTiles.svelte";
   import SplitCard from "./SplitCard.svelte";
+  import FixOffer from "./FixOffer.svelte";
   import ProofRow from "./ProofRow.svelte";
   import WhoCard from "./WhoCard.svelte";
 
@@ -42,6 +43,7 @@
     {#if glance?.detail}
       <p class="glance" aria-live="off">{glance.detail}</p>
     {/if}
+    <FixOffer {canEdit} />
     {#if proof}
       <ProofRow {proof} />
     {/if}

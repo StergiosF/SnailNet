@@ -8,6 +8,7 @@
 // saves after a short pause, so a few quick clicks become one save; a save
 // waits for the previous one to come back, so they never race.
 
+import { forgetFix } from "./fix";
 import { edit, isDirty, isSavable, isStale, startDraft, type Draft } from "./draft";
 import { t } from "./i18n";
 import { modeName } from "./modes";
@@ -251,6 +252,7 @@ class Ui {
     this.discard();
     forgetFirstRun();
     forgetCoach();
+    forgetFix();
     this.coach = true;
     this.firstRunDone = false;
     this.page = "now";

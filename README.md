@@ -108,6 +108,14 @@ Hover it for the same in words, with the ping.
   fast, and how it's doing ("gets all it asks for", "using its whole
   slice, wants more"). **Boost** lets one of them go first for a while:
   it gets at least half your line, then everything goes back by itself.
+- When one app fills the line and leaves another **waiting** (Steam's
+  download and the YouTube video that keeps buffering), the sentence at
+  the top says so and offers the fix: **Give Brave 60%**. One click
+  saves it in the current mode, **Undo** puts it back, **Not now** keeps
+  quiet about those two until tomorrow. It's a button where you're
+  already looking, never a pop-up; turn it off in Settings. Without a
+  website slice SnailNet sees the browser, not the site, so it says
+  "Brave" rather than "YouTube".
 - While the line is full, a row under the sentence at the top shows your
   **ping with SnailNet** and, as a second bar, the ping your last speed
   test found **without** it. With no speed test on this network yet,
@@ -117,7 +125,9 @@ Hover it for the same in words, with the ping.
 
 **Split** is where you shape it:
 
-- **−** and **+** make a slice smaller or bigger, 5% at a time.
+- **Drag** a cream handle on the bar at the top to trade between the two
+  slices beside it (it settles on 5% steps), or use **−** and **+** on
+  each row, 5% at a time. Nothing changes on your line until **Save**.
 - **Add a slice** for an app or a website (search by name).
 - Open a slice for more: **Goes first** (High, Normal, Low priority),
   **Only when the line is free** (it waits until nobody else needs the

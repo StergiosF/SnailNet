@@ -22,6 +22,7 @@
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
+  import FixOffer from "./FixOffer.svelte";
   import AppIcon from "./AppIcon.svelte";
   import Snail from "./Snail.svelte";
   import Stepper from "./Stepper.svelte";
@@ -118,6 +119,7 @@
   {:else if sentence}
     <h1>{sentence.title}</h1>
     <p class="detail">{sentence.detail}</p>
+    <FixOffer canEdit={connected} compact />
     {#if proofLine}
       <p class="proof num" aria-live="off">{proofLine}</p>
     {/if}

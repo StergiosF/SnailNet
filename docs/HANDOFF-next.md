@@ -15,7 +15,7 @@ nothing released since.
 |---|---|---|
 | **1 The proof**: ping with / without SnailNet, A–F grades | Built, service + app (`192b844`, `75340bc`) | **Live check** (below), the user's look |
 | **3 The living snail**: calm / working / struggling tray icon | Built (`943f11f`) | The user's look at the real tray |
-| **2 The one-tap fix** | 2.0 sim, 2.1 scheduler pressure, 2.2 to IPC (`9858dcd`, `751c480`) | 2.3–2.6 (app), live check |
+| **2 The one-tap fix** | 2.0–2.2 service (`9858dcd`, `751c480`); 2.3–2.6 app (`waiting.ts`, `fix.ts`, `fixer.svelte.ts`, `FixOffer.svelte`) | **Live check**, the user's look |
 | **The drag slider** on the Split page | Built (`splitDrag.ts`, `SplitBar.svelte`, PLAN.md §14.3) | the user's look: drag feel, label fitting, the readout |
 | No Windows notifications | Built: toasts gone, app doesn't ask for new-app events, Settings switches gone | — |
 | Measure again in the Connection speed box | Built | user's look |
@@ -73,7 +73,7 @@ problems stay solved, and record the reversal in §14.3:
   label fitting (full / pct / none by width). Build with `impeccable`
   (no browser; say what wasn't seen).
 
-### 2. Finish feature 2 (the one-tap fix), app half
+### 2. ~~Finish feature 2 (the one-tap fix), app half~~ (built 2026-11-20; live check below still to do)
 
 `docs/HANDOFF-wow.md` 2.3–2.6, with the rule the sim settled on (PLAN.md
 §11.11), **not** the brief's first guess:
