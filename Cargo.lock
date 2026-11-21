@@ -4048,7 +4048,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-app"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "base64 0.22.1",
  "png",
@@ -4068,7 +4068,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-cli"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "clap",
@@ -4082,7 +4082,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-core"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4098,7 +4098,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-engine"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "crossbeam-channel",
  "libloading 0.9.1",
@@ -4108,7 +4108,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-ipc"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "rmp-serde",
  "serde",
@@ -4119,7 +4119,7 @@ dependencies = [
 
 [[package]]
 name = "snailnet-service"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "clap",
@@ -4138,14 +4138,14 @@ dependencies = [
 
 [[package]]
 name = "snailnet-sim"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "snailnet-core",
 ]
 
 [[package]]
 name = "snailnet-win"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "snailnet-core",
  "windows-sys 0.61.2",
