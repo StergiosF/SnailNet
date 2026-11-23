@@ -85,16 +85,15 @@ and on wake:
 
 ### Game detection
 
-- **Pack:** `assets/games.toml` gains an optional `exes` list (lowercase
-  exe file names, about 50 popular games including `cs2.exe`). It also
-  adds the libraries `\rockstar games\`, `\amazon games\library\`,
-  `\itch\apps\`, `\wargaming.net\games\` and `\games\`, plus the Rockstar
-  launcher and Social Club folders as launchers.
-  `crates/snailnet-core/src/games.rs`: `GamePack` has
-  `#[serde(default)] exes`, validated as plain `.exe` names.
-  `is_game_path` matches the exe name first, then the libraries. Older
-  builds reject a signed pack that contains `exes`, because of
-  `deny_unknown_fields`, and keep the packs they have.
+- **Pack:** `assets/game-exes.toml` lists known game exes (lowercase
+  file names, about 50 popular games including `cs2.exe`).
+  `assets/games.toml` adds the libraries `\rockstar games\`,
+  `\amazon games\library\`, `\itch\apps\`, `\wargaming.net\games\` and
+  `\games\`, plus the Rockstar launcher and Social Club folders as
+  launchers. `crates/snailnet-core/src/games.rs`: `GamePack::from_parts`
+  joins the two; `is_game_path` matches the exe name first, then the
+  libraries. The signed bundle carries the exes as their own `game_exes`
+  key (see the review below for why they are not in `games`).
 - **Service:** `hub.rs` `focus_changed` (line 742). If the app didn't flag
   the window in front as a game, the service checks the exe itself
   (`image_path` plus `in_game_library`) and treats it as
@@ -165,3 +164,77 @@ Not checked yet (needs a real PC, admin rights and a release):
   game going first.
 - No version bump or release was made. Users only get this from a new
   release (0.0.10).
+
+## Review (2026-11-23, second agent)
+
+Checked `0fed51e` against the code, the tests (fmt, clippy, all tests
+pass) and this PC's logs (`C:\ProgramData\SnailNet\logs`) and event log.
+
+### What holds
+
+- A–E do what they say. `install` uses `change_config` on an existing
+  service, so the new dependencies do reach updated installs.
+- Question 1 (a reload counted as a strike): it can't happen through the
+  flush. `shutdown()` is `WINDIVERT_SHUTDOWN_RECV` only, so sends keep
+  working while stopping.
+
+### What the logs say about the cause
+
+- **C never happened on this PC.** All 794 one-minute reports from
+  2026-11-17 to 11-21 say `send errors 0`. C is a sound safety net, but
+  it isn't shown to be the cause.
+- **On 2026-11-22 the service was paused 7 s after starting, and stayed
+  paused 23 s before the quit.** A pause closes every WinDivert handle. If
+  the internet was still down while paused, diverting wasn't the cause.
+  Ask the user whether it came back on Pause or only on Quit.
+- **The 0.0.5 service died 4 times on 2026-11-20** (System log 7031/7034
+  at 00:37:56, 01:03:33, 01:21:06 and 02:55:10 UTC; SCM restarted it
+  after 5 s and 30 s, then gave up). There is no `panic:` line, no WER
+  report and no Application error, so it was probably killed during dev
+  work, not a crash. Not explained; watch for it.
+- In 0.0.5 autorate shaped a ~26 Mbps line down to 4.7–6 Mbps (11-19,
+  11-20). That is already fixed by the floor in `f374868` (0.0.6).
+
+### Fixed in this review
+
+1. **Blocking "Windows services" or "System" cut Windows off.** Any
+   family could be blocked from the ••• menu. "Windows services" holds
+   the DHCP client, the DNS client and NlaSvc (Windows' connectivity
+   check), so the refuser refused their internet connects and Windows
+   said "No internet" until SnailNet stopped. Pause or Quit fixed it. That
+   is the reported symptom; this PC's config blocks nothing, so it wasn't
+   the cause here, but it could be for others. Now `rules::can_block`
+   drops those two from the plan (a config that lists them stays valid),
+   and the menu no longer offers Block for them.
+2. **The next pack publish would have frozen pack updates for every
+   install up to 0.0.9.** One signed bundle carries all packs, and a
+   bundle is used only if every pack in it parses. `GamePack` is
+   `deny_unknown_fields`, so a `games` text with `exes` fails on 0.0.9
+   and the whole bundle (sites, app families too) is dropped. The exes
+   now live in `assets/game-exes.toml`, the bundle carries them as
+   `game_exes` (older builds ignore unknown bundle keys), and
+   `publish-packs.ps1` writes that key. A test parses `games.toml` the
+   way 0.0.9 does.
+3. **A stale plan after the route wait.** The plan was made before the
+   wait of up to 65 s, so a pause or new settings from meanwhile were
+   applied only after shaping had started. Now the runner plans again
+   after waiting.
+4. `NOT_GAMES` gains terminals, editors, call, photo and PDF apps.
+   Borderless fullscreen false positives matter more than the doc said:
+   a detected game stays first **for as long as the process runs**, in
+   the background too, not only while in front.
+
+### Still open
+
+- **Wake detection may not fire on Modern Standby.** Services keep
+  running through it, so the netwatch thread may never see a wall-clock
+  jump. A reliable signal is `SERVICE_ACCEPT_POWEREVENT`
+  (`PBT_APMRESUMEAUTOMATIC`) or `RegisterSuspendResumeNotification`. The
+  route-change path still covers a wake that drops Wi-Fi.
+- **`route()` is `None` for an on-link default route** (full-tunnel
+  WireGuard/wintun VPNs, PPPoE on the PC), not only IPv6-only. Each
+  service start then waits the full 60 s, and netwatch sees "offline".
+- After a route-change restart, `wait_for_route` returns at once (the
+  route is already there), so the 5 s settle applies only at boot.
+- `cod.exe` and `aces.exe` are generic names; any program called that
+  counts as a game.

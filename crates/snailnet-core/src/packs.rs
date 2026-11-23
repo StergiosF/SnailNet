@@ -10,7 +10,13 @@
 //! sites = '''…the text of assets/sites.toml…'''
 //! families = '''…assets/families.toml…'''
 //! games = '''…assets/games.toml…'''
+//! game_exes = '''…assets/game-exes.toml…'''   # since 0.0.10
 //! ```
+//!
+//! A pack must never gain a key older builds don't know: they refuse that
+//! pack, and with it the whole bundle. New lists get a bundle key of their
+//! own instead (older builds ignore unknown bundle keys), as `game_exes`
+//! did.
 //!
 //! A pack missing from the bundle stays the compiled-in one. A bundle is
 //! used only when its signature checks out, every pack in it parses, and
@@ -104,6 +110,7 @@ struct Bundle {
     sites: Option<String>,
     families: Option<String>,
     games: Option<String>,
+    game_exes: Option<String>,
 }
 
 /// The serial of the compiled-in packs.
@@ -160,10 +167,7 @@ impl Packs {
                 Some(t) => Pack::parse(&t)?,
                 None => Pack::builtin(),
             },
-            games: match b.games {
-                Some(t) => GamePack::parse(&t)?,
-                None => GamePack::builtin(),
-            },
+            games: GamePack::from_parts(b.games.as_deref(), b.game_exes.as_deref())?,
         })
     }
 
@@ -254,6 +258,17 @@ mod tests {
         let p = Packs::parse("format = 1\nserial = 5\nlater = 'ignored'").unwrap();
         assert_eq!(p.serial, 5);
         assert!(Packs::parse("format = 1\nserial = 5\ngames = 'libraries = []'").is_err());
+        assert!(Packs::parse("format = 1\nserial = 5\ngame_exes = 'exes = [1]'").is_err());
+        // Game exes come in their own key, beside the folders.
+        let p = Packs::parse(
+            "format = 1\nserial = 5\ngames = \"libraries = ['/lib/']\"\ngame_exes = \"exes = ['g.exe']\"",
+        )
+        .unwrap();
+        assert!(p.games.is_game_path(r"C:\x\g.exe") && p.games.is_game_path(r"C:\lib\a.exe"));
+        assert!(
+            !p.games.is_game_path(r"D:\CS2\cs2.exe"),
+            "the bundle's list, not the built-in"
+        );
         assert!(Packs::parse("format = 1\nserial = 5\nsites = 'x'").is_err());
         assert!(Packs::parse("format = 1").is_err());
     }

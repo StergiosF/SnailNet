@@ -418,9 +418,20 @@ fn supervise<E: Engine>(
         // route to the internet (adapter, Wi-Fi, DHCP still coming up).
         // Diverting then gains nothing and gets in the way of the PC
         // getting online, so wait for the route first.
-        if timing.watch_network && wait_for_route(hub, stop) == Wake::Stop {
-            break Ended::Stopped;
-        }
+        let (plan, profile) = match timing.watch_network.then(|| wait_for_route(hub, stop)) {
+            Some(Wake::Stop) => break Ended::Stopped,
+            // It waited (up to a minute): plan again, so a pause or new
+            // settings from meanwhile apply before anything is diverted.
+            Some(Wake::Reload) => {
+                hub.end_expired(now());
+                let (plan, profile) = hub.plan(now());
+                if !plan.needs_engine() {
+                    continue;
+                }
+                (plan, profile)
+            }
+            _ => (plan, profile),
+        };
         // A route change seen before this start is already covered by it.
         hub.take_route_change();
         let reason = match engine.start(&plan) {
@@ -631,7 +642,8 @@ const ROUTE_WAIT: Duration = Duration::from_secs(60);
 const ROUTE_SETTLE: Duration = Duration::from_secs(5);
 
 /// Wait (up to [`ROUTE_WAIT`]) until Windows has a route to the internet.
-/// Returns at once when it already has one; `Wake::Stop` on a stop.
+/// `Wake::Timeout` at once when it already has one, `Wake::Reload` after
+/// waiting (the caller plans again), `Wake::Stop` on a stop.
 fn wait_for_route(hub: &Hub, stop: &StopSignal) -> Wake {
     if snailnet_win::network::route().is_some() {
         return Wake::Timeout;
@@ -648,12 +660,12 @@ fn wait_for_route(hub: &Hub, stop: &StopSignal) -> Wake {
             return if stop.wait(ROUTE_SETTLE) {
                 Wake::Stop
             } else {
-                Wake::Timeout
+                Wake::Reload
             };
         }
     }
     info!("still no route to the internet; shaping anyway");
-    Wake::Timeout
+    Wake::Reload
 }
 
 /// Wait for a stop or a config change.

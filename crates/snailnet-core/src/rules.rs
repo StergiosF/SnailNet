@@ -31,6 +31,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::classify::App;
+use crate::classify::family::{SYSTEM_ID, WINDOWS_SERVICES_ID};
 use crate::families::{Families, is_family_id};
 use crate::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};
 use crate::sites::SiteDef;
@@ -755,7 +756,12 @@ impl Config {
             up: direction(self.line.up_mbps, factor(LOW_LATENCY_FACTOR_UP), false),
             targets: rules.iter().map(|r| r.target.clone()).collect(),
             prios: rules.iter().map(|r| r.priority).collect(),
-            blocked: self.blocked.iter().map(|id| id.to_lowercase()).collect(),
+            blocked: self
+                .blocked
+                .iter()
+                .map(|id| id.to_lowercase())
+                .filter(|id| can_block(id))
+                .collect(),
             strict: self.settings.new_apps == NewApps::Strict,
             families: self.families.clone(),
             shape_lan: !self.settings.lan_exempt,
@@ -800,6 +806,15 @@ impl Profile {
         }
         Ok(())
     }
+}
+
+/// Whether app family `id` may be blocked. Not Windows' own networking:
+/// "Windows services" holds the DHCP client, the DNS client and the
+/// connectivity check (NlaSvc), and "System" the kernel. Blocking them
+/// leaves Windows saying "No internet" while SnailNet runs. A config that
+/// lists them stays valid; the block does nothing.
+pub fn can_block(id: &str) -> bool {
+    !id.eq_ignore_ascii_case(WINDOWS_SERVICES_ID) && !id.eq_ignore_ascii_case(SYSTEM_ID)
 }
 
 /// The active profile, ready for the fast path. Class `i < targets.len()`
@@ -849,7 +864,7 @@ impl Plan {
         !self.blocked.is_empty() || self.strict
     }
 
-    /// Is `app` blocked?
+    /// Is `app` blocked? Never Windows' own networking ([`can_block`]).
     pub fn blocks(&self, app: &App) -> bool {
         self.blocked.contains(&app.family)
     }
@@ -1220,6 +1235,15 @@ ceiling = { down = \"10%\" }
         assert!(c.validate().unwrap_err().to_string().contains("twice"));
         c.blocked = vec!["site:youtube".into()];
         assert!(c.validate().unwrap_err().to_string().contains("family id"));
+        // Windows' own networking is never blocked, even if a config says
+        // so: the config stays valid, the block just does nothing.
+        c.blocked = vec!["Windows-Services".into(), "system".into(), "steam".into()];
+        assert!(c.validate().is_ok());
+        let p = c.plan(100);
+        assert!(!p.blocks(&app("windows-services", "svchost.exe")));
+        assert!(!p.blocks(&app("system", "")));
+        assert!(p.blocks(&app("steam", "steam.exe")));
+        assert!(!can_block("windows-services") && can_block("windows-update"));
         // Apps known by their path or Store package can be blocked too.
         c.blocked = vec![
             r"c:\games\celeste.exe".into(),

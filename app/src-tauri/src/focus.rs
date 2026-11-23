@@ -194,6 +194,19 @@ const NOT_GAMES: &[&str] = &[
     "spotify.exe",
     "netflix.exe",
     "snailnet.exe",
+    // Full-screen work apps that draw with Direct3D (terminals, editors,
+    // calls, photos, PDFs). A false game stays first while it runs.
+    "windowsterminal.exe",
+    "code.exe",
+    "cursor.exe",
+    "slack.exe",
+    "ms-teams.exe",
+    "teams.exe",
+    "zoom.exe",
+    "photos.exe",
+    "microsoft.photos.exe",
+    "acrobat.exe",
+    "acrord32.exe",
 ];
 
 /// The window in front fills its whole monitor with no title bar

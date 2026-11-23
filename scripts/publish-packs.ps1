@@ -36,10 +36,15 @@ New-Item -ItemType Directory -Force $out | Out-Null
 
 $serial = [DateTime]::UtcNow.ToString('yyyyMMddHHmm')
 $parts = @("# SnailNet packs (PLAN.md section 17.2), made by scripts\publish-packs.ps1.", 'format = 1', "serial = $serial")
-foreach ($name in 'sites', 'families', 'games') {
+# Bundle key = assets file. game_exes has a key of its own: builds up to
+# 0.0.9 refuse unknown keys inside a pack (and drop the whole bundle), but
+# ignore unknown bundle keys.
+$packs = [ordered]@{ sites = 'sites'; families = 'families'; games = 'games'; game_exes = 'game-exes' }
+foreach ($key in $packs.Keys) {
+    $name = $packs[$key]
     $text = [IO.File]::ReadAllText((Join-Path $root "assets\$name.toml")) -replace "`r`n", "`n"
     if ($text.Contains("'''")) { throw "assets\$name.toml contains ''' and can't go in a literal string" }
-    $parts += "$name = '''`n$text'''"
+    $parts += "$key = '''`n$text'''"
 }
 $body = ($parts -join "`n") + "`n"
 $file = Join-Path $out 'packs.toml'

@@ -1,0 +1,65 @@
+# Known games by exe file name, wherever they're installed (PLAN.md §11.5):
+# Battle.net, standalone and other installs outside a launcher library.
+# Lowercase file names only.
+#
+# Kept apart from games.toml on purpose: builds up to 0.0.9 refuse any key
+# they don't know in the game pack, and with it the whole signed bundle
+# (sites and app families too). The bundle carries this file as its own
+# `game_exes` key, which those builds ignore.
+
+exes = [
+  # Valve
+  'cs2.exe',
+  'csgo.exe',
+  'dota2.exe',
+  'hl2.exe',
+  'deadlock.exe',
+  # Riot
+  'valorant-win64-shipping.exe',
+  'league of legends.exe',
+  # Battle.net
+  'overwatch.exe',
+  'wow.exe',
+  'wowclassic.exe',
+  'diablo iv.exe',
+  'hearthstone.exe',
+  'sc2_x64.exe',
+  'cod.exe',
+  # Others
+  'fortniteclient-win64-shipping.exe',
+  'rocketleague.exe',
+  'r5apex.exe',
+  'r5apex_dx12.exe',
+  'gta5.exe',
+  'gta5_enhanced.exe',
+  'rdr2.exe',
+  'eldenring.exe',
+  'cyberpunk2077.exe',
+  'rainbowsix.exe',
+  'rainbowsix_vulkan.exe',
+  'tslgame.exe',
+  'escapefromtarkov.exe',
+  'destiny2.exe',
+  'helldivers2.exe',
+  'warthunder.exe',
+  'aces.exe',
+  'worldoftanks.exe',
+  'rustclient.exe',
+  'dayz_x64.exe',
+  'arma3_x64.exe',
+  'pathofexile.exe',
+  'pathofexile_x64.exe',
+  'genshinimpact.exe',
+  'starrail.exe',
+  'zenlesszonezero.exe',
+  'robloxplayerbeta.exe',
+  'minecraft.windows.exe',
+  'osu!.exe',
+  'brawlhalla.exe',
+  'warframe.x64.exe',
+  'lostark.exe',
+  'ffxiv_dx11.exe',
+  'bf2042.exe',
+  'bfv.exe',
+  'bf1.exe',
+]

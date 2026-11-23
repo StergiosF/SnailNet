@@ -20,6 +20,8 @@
 
   let { target, name, disabled }: { target: Target; name: string; disabled: boolean } = $props();
 
+  const NEVER_BLOCKED = new Set(["system", "windows-services"]);
+
   const uid = $props.id();
   let btn = $state<HTMLButtonElement | null>(null);
   let menu = $state<HTMLDivElement | null>(null);
@@ -132,10 +134,14 @@
         </div>
       {/if}
     {/if}
-    <hr />
-    <button type="button" role="menuitem" class="danger" onclick={() => (close(), void block(target.id, name))}
-      ><Glyph name="ban" size={18} />{t("block")}</button
-    >
+    <!-- Windows' own networking (DHCP, DNS, the connectivity check) is
+         never blocked: the service ignores it (rules.rs can_block). -->
+    {#if !NEVER_BLOCKED.has(target.id.toLowerCase())}
+      <hr />
+      <button type="button" role="menuitem" class="danger" onclick={() => (close(), void block(target.id, name))}
+        ><Glyph name="ban" size={18} />{t("block")}</button
+      >
+    {/if}
   {/if}
 </div>
 

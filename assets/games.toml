@@ -1,10 +1,12 @@
 # Game detection (PLAN.md §11.5): an exe is a game when its path contains
 # one of `libraries` (unless it also contains one of `launchers`: the
-# launchers live beside their games), or when its file name is in `exes`.
+# launchers live beside their games), or when its file name is in
+# game-exes.toml.
 #
 # Matching is case-insensitive on the full path with `\` separators. Each
 # library entry starts and ends with `\`, so it matches whole folder names
-# only. `exes` are file names only, for games that install anywhere.
+# only. Only `libraries` and `launchers` go here: builds up to 0.0.9 refuse
+# any other key, and with it the whole signed pack bundle.
 
 libraries = [
   '\steamapps\common\',
@@ -29,63 +31,4 @@ launchers = [
   '\riot games\riot client\',
   '\rockstar games\launcher\',
   '\rockstar games\social club\',
-]
-
-# Popular games by exe, wherever they're installed (Battle.net, standalone
-# and other installs outside a launcher library).
-exes = [
-  # Valve
-  'cs2.exe',
-  'csgo.exe',
-  'dota2.exe',
-  'hl2.exe',
-  'deadlock.exe',
-  # Riot
-  'valorant-win64-shipping.exe',
-  'league of legends.exe',
-  # Battle.net
-  'overwatch.exe',
-  'wow.exe',
-  'wowclassic.exe',
-  'diablo iv.exe',
-  'hearthstone.exe',
-  'sc2_x64.exe',
-  'cod.exe',
-  # Others
-  'fortniteclient-win64-shipping.exe',
-  'rocketleague.exe',
-  'r5apex.exe',
-  'r5apex_dx12.exe',
-  'gta5.exe',
-  'gta5_enhanced.exe',
-  'rdr2.exe',
-  'eldenring.exe',
-  'cyberpunk2077.exe',
-  'rainbowsix.exe',
-  'rainbowsix_vulkan.exe',
-  'tslgame.exe',
-  'escapefromtarkov.exe',
-  'destiny2.exe',
-  'helldivers2.exe',
-  'warthunder.exe',
-  'aces.exe',
-  'worldoftanks.exe',
-  'rustclient.exe',
-  'dayz_x64.exe',
-  'arma3_x64.exe',
-  'pathofexile.exe',
-  'pathofexile_x64.exe',
-  'genshinimpact.exe',
-  'starrail.exe',
-  'zenlesszonezero.exe',
-  'robloxplayerbeta.exe',
-  'minecraft.windows.exe',
-  'osu!.exe',
-  'brawlhalla.exe',
-  'warframe.x64.exe',
-  'lostark.exe',
-  'ffxiv_dx11.exe',
-  'bf2042.exe',
-  'bfv.exe',
-  'bf1.exe',
 ]

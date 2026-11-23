@@ -23,32 +23,60 @@ pub struct GamePack {
     #[serde(default)]
     launchers: Vec<String>,
     /// Exe file names that are games wherever they're installed
-    /// (Battle.net games, Roblox, standalone installs); lowercase.
-    #[serde(default)]
+    /// (Battle.net games, Roblox, standalone installs); lowercase. Not a
+    /// key of the folder pack: they come from `assets/game-exes.toml`
+    /// ([`GamePack::with_exes`]), because builds up to 0.0.9 refuse any
+    /// key they don't know here, and with it the whole signed bundle.
+    #[serde(skip)]
     exes: Vec<String>,
 }
 
 const BUILTIN_PACK: &str = include_str!("../../../assets/games.toml");
+const BUILTIN_EXES: &str = include_str!("../../../assets/game-exes.toml");
+
+/// `assets/game-exes.toml`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExeList {
+    exes: Vec<String>,
+}
 
 impl GamePack {
     pub fn builtin() -> Self {
-        Self::parse(BUILTIN_PACK).expect("assets/games.toml is checked by the tests")
+        Self::from_parts(None, None).expect("assets/game*.toml are checked by the tests")
     }
 
-    /// Entries are lowercased and `/` becomes `\`; each must start and
-    /// end with `\` (whole folder names) and have a name between.
-    pub fn parse(text: &str) -> Result<Self, GameError> {
-        let mut pack: GamePack = toml::from_str(text)?;
-        if pack.libraries.is_empty() {
-            return Err(GameError::Invalid("no libraries".into()));
-        }
-        for e in pack.exes.iter_mut() {
-            *e = e.trim().to_lowercase();
+    /// The folder pack `folders` and the exe list `exes`; either one
+    /// missing is the compiled-in one.
+    pub fn from_parts(folders: Option<&str>, exes: Option<&str>) -> Result<Self, GameError> {
+        Self::parse(folders.unwrap_or(BUILTIN_PACK))?.with_exes(exes.unwrap_or(BUILTIN_EXES))
+    }
+
+    /// Add the known game exes listed in `text` (`exes = [...]`, file
+    /// names only).
+    pub fn with_exes(mut self, text: &str) -> Result<Self, GameError> {
+        let list: ExeList = toml::from_str(text)?;
+        for e in list.exes {
+            let e = e.trim().to_lowercase();
             if e.contains(['\\', '/']) || !e.ends_with(".exe") || e.len() < 5 {
                 return Err(GameError::Invalid(format!(
                     "{e:?} must be an exe file name"
                 )));
             }
+            if !self.exes.contains(&e) {
+                self.exes.push(e);
+            }
+        }
+        Ok(self)
+    }
+
+    /// The folder pack alone (no exes). Entries are lowercased and `/`
+    /// becomes `\`; each must start and end with `\` (whole folder names)
+    /// and have a name between.
+    pub fn parse(text: &str) -> Result<Self, GameError> {
+        let mut pack: GamePack = toml::from_str(text)?;
+        if pack.libraries.is_empty() {
+            return Err(GameError::Invalid("no libraries".into()));
         }
         for e in pack.libraries.iter_mut().chain(pack.launchers.iter_mut()) {
             *e = e.replace('/', "\\").to_lowercase();
@@ -114,12 +142,41 @@ mod tests {
         assert!(GamePack::parse("libraries = ['steamapps']").is_err());
         assert!(GamePack::parse(r"libraries = ['\\']").is_err());
         assert!(GamePack::parse("libraries = ['/a/']\nother = 1").is_err());
-        assert!(GamePack::parse("libraries = ['/a/']\nexes = ['x']").is_err());
-        assert!(GamePack::parse("libraries = ['/a/']\nexes = ['a/x.exe']").is_err());
-        let p = GamePack::parse("libraries = ['/a/']\nexes = ['Game.EXE']").unwrap();
+        // Exes have their own list: the folder pack refuses the key, as
+        // builds up to 0.0.9 do (they'd drop the whole bundle over it).
+        assert!(GamePack::parse("libraries = ['/a/']\nexes = ['x.exe']").is_err());
+        let folders = GamePack::parse("libraries = ['/a/']").unwrap();
+        assert!(folders.clone().with_exes("exes = ['x']").is_err());
+        assert!(folders.clone().with_exes("exes = ['a/x.exe']").is_err());
+        assert!(folders.clone().with_exes("exes = []\nother = 1").is_err());
+        let p = folders.with_exes("exes = ['Game.EXE']").unwrap();
         assert!(p.is_game_path(r"E:\Anywhere\game.exe"));
         assert!(!p.is_game_path(r"E:\Anywhere\game2.exe"));
-        assert!(GamePack::builtin().libraries.len() >= 10);
+        let b = GamePack::builtin();
+        assert!(b.libraries.len() >= 10 && b.exes.len() >= 40);
+        assert!(b.exes.contains(&"cs2.exe".to_string()));
+        // Either half of a bundle falls back to the compiled-in one.
+        let only_folders = GamePack::from_parts(Some("libraries = ['/a/']"), None).unwrap();
+        assert!(only_folders.is_game_path(r"D:\CS2\game\bin\win64\cs2.exe"));
+        let only_exes = GamePack::from_parts(None, Some("exes = ['z.exe']")).unwrap();
+        assert!(only_exes.is_game_path(r"C:\z.exe"));
+        assert!(!only_exes.is_game_path(r"D:\CS2\cs2.exe"));
+        assert!(only_exes.is_game_path(r"D:\Games\Some Indie Game\game.exe"));
+    }
+
+    /// What builds up to 0.0.9 parse from a bundle: the folder pack with
+    /// `deny_unknown_fields` and no `exes`. The shipped one must pass.
+    #[test]
+    fn the_folder_pack_still_parses_on_older_builds() {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
+        struct Old {
+            libraries: Vec<String>,
+            #[serde(default)]
+            launchers: Vec<String>,
+        }
+        toml::from_str::<Old>(BUILTIN_PACK).expect("assets/games.toml as 0.0.9 reads it");
     }
 
     #[test]
