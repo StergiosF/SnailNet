@@ -9,9 +9,10 @@ use std::ffi::OsString;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use tracing::error;
+use tracing::{error, info};
 use windows_service::service::{
-    ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType,
+    PowerEventParam, ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState,
+    ServiceStatus, ServiceType,
 };
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
@@ -68,12 +69,21 @@ fn status(
 fn run_service() -> Result<()> {
     let dir = DataDir::system();
     let hub = Hub::new(dir.clone(), StopSignal::new());
-    let handler_stop = hub.signal().clone();
+    let handler_hub = hub.clone();
     let handle = service_control_handler::register(SERVICE_NAME, move |control| match control {
         ServiceControl::Stop | ServiceControl::Shutdown => {
-            handler_stop.request();
+            handler_hub.signal().request();
             ServiceControlHandlerResult::NoError
         }
+        // Sent on every resume from sleep. Under Modern Standby this
+        // service keeps running, so netwatch may see no clock jump; this
+        // is the signal that doesn't depend on one.
+        ServiceControl::PowerEvent(PowerEventParam::ResumeAutomatic) => {
+            info!("power: the PC woke up; restarting shaping");
+            handler_hub.route_changed();
+            ServiceControlHandlerResult::NoError
+        }
+        ServiceControl::PowerEvent(_) => ServiceControlHandlerResult::NoError,
         ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
         _ => ServiceControlHandlerResult::NotImplemented,
     })?;
@@ -92,7 +102,9 @@ fn run_service() -> Result<()> {
             logging::abort_on_panic();
             handle.set_service_status(status(
                 ServiceState::Running,
-                ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN,
+                ServiceControlAccept::STOP
+                    | ServiceControlAccept::SHUTDOWN
+                    | ServiceControlAccept::POWER_EVENT,
                 0,
                 0,
             ))?;

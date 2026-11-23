@@ -23,6 +23,9 @@ libraries = [
   '\amazon games\library\',
   '\itch\apps\',
   '\wargaming.net\games\',
+  # Games whose exe names are too generic for game-exes.toml.
+  '\call of duty\',
+  '\warthunder\win64\',
   '\games\',
 ]
 

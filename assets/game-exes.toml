@@ -1,6 +1,7 @@
 # Known games by exe file name, wherever they're installed (PLAN.md §11.5):
 # Battle.net, standalone and other installs outside a launcher library.
-# Lowercase file names only.
+# Lowercase file names only, and only names no other program would use:
+# a generic one (cod.exe, aces.exe) goes in games.toml as its folder.
 #
 # Kept apart from games.toml on purpose: builds up to 0.0.9 refuse any key
 # they don't know in the game pack, and with it the whole signed bundle
@@ -24,7 +25,6 @@ exes = [
   'diablo iv.exe',
   'hearthstone.exe',
   'sc2_x64.exe',
-  'cod.exe',
   # Others
   'fortniteclient-win64-shipping.exe',
   'rocketleague.exe',
@@ -42,7 +42,6 @@ exes = [
   'destiny2.exe',
   'helldivers2.exe',
   'warthunder.exe',
-  'aces.exe',
   'worldoftanks.exe',
   'rustclient.exe',
   'dayz_x64.exe',

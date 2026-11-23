@@ -238,3 +238,39 @@ pass) and this PC's logs (`C:\ProgramData\SnailNet\logs`) and event log.
   route is already there), so the 5 s settle applies only at boot.
 - `cod.exe` and `aces.exe` are generic names; any program called that
   counts as a game.
+
+## Follow-up on "Still open" (2026-11-23, third pass)
+
+Each item above, in order. fmt, clippy and all tests pass.
+
+- **Wake signal.** The service now accepts power events
+  (`ServiceControlAccept::POWER_EVENT`, `svc.rs`). On
+  `PBT_APMRESUMEAUTOMATIC` it logs `power: the PC woke up; restarting
+  shaping` and calls `hub.route_changed()`, the same path netwatch uses.
+  The clock-jump check in netwatch stays as a fallback. If both fire for
+  one wake, the second is usually absorbed: the flag is cleared just
+  before each start, and the restart now waits 5 s first (below). Whether
+  Windows sends the resume event on *this* PC's Modern Standby wakes is
+  not confirmed. Look for the log line after a wake.
+- **On-link routes.** `network::route()` now reports a route with no next
+  hop (or the probe itself as next hop) as online:
+  `Route.gateway` is `Option<Ipv4Addr>`, `None` for on-link. So a
+  full-tunnel VPN or PPPoE on the PC no longer makes every start wait
+  60 s, and netwatch sees it as online. `identify` returns `None` for such
+  a route, so netwatch doesn't switch networks: the line stays the last
+  network's, as it did before when these looked offline. Turning such a
+  VPN on or off is a route change and restarts shaping.
+- **Settle after a route-change restart.** When a session ends on a route
+  change or a wake, the next start waits `ROUTE_SETTLE` (5 s) even though
+  the route is already there (`network changed; shaping again in 5 s`),
+  then plans again. Going through the paused/unshaped branch drops the
+  pending settle.
+- **Generic exe names.** `cod.exe` and `aces.exe` are out of
+  `game-exes.toml`. Their folders are libraries in `games.toml` instead:
+  `\call of duty\` (Battle.net installs) and `\warthunder\win64\` (the
+  Gaijin launcher's install; Steam installs were already covered). Tests
+  cover both, and that a `cod.exe` or `aces.exe` elsewhere is not a game.
+
+Still not checked on a real machine: everything in "Not checked yet"
+above, plus the power-event line after a Modern Standby wake and a start
+with a full-tunnel VPN up (it should not wait 60 s).

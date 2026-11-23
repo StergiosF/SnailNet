@@ -26,37 +26,42 @@ const IF_WIFI: u32 = 71;
 /// Cheap (no packets sent): ask it often, and look closer when it changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Route {
-    pub gateway: Ipv4Addr,
+    /// The router, or `None` for an on-link route: a full-tunnel VPN
+    /// (WireGuard, wintun) or PPPoE dialled on the PC itself. Online all
+    /// the same, but there is no router to tell the line by.
+    pub gateway: Option<Ipv4Addr>,
     pub if_index: u32,
 }
 
-/// The current route to the internet, or `None` when offline (or the
-/// route has no router, which no home or office line lacks).
+/// The current route to the internet, or `None` when offline.
 pub fn route() -> Option<Route> {
     // SAFETY: MIB_IPFORWARDROW is plain data; all-zero is a valid value.
     let mut row: MIB_IPFORWARDROW = unsafe { std::mem::zeroed() };
     // SAFETY: `row` is a valid out pointer for the call.
     let rc = unsafe { GetBestRoute(u32::from_ne_bytes(PROBE.octets()), 0, &mut row) };
-    if rc != NO_ERROR {
+    if rc != NO_ERROR || row.dwForwardIfIndex == 0 {
         return None;
     }
-    let gateway = Ipv4Addr::from(row.dwForwardNextHop.to_ne_bytes());
-    (!gateway.is_unspecified() && gateway != PROBE).then_some(Route {
-        gateway,
+    // An on-link route names no next hop, or the probe itself.
+    let hop = Ipv4Addr::from(row.dwForwardNextHop.to_ne_bytes());
+    Some(Route {
+        gateway: (!hop.is_unspecified() && hop != PROBE).then_some(hop),
         if_index: row.dwForwardIfIndex,
     })
 }
 
-/// The network `route` belongs to. Asks the router for its hardware
-/// address (usually already known, else one ARP round trip), so call it
-/// off any hot path.
-pub fn identify(route: Route) -> Network {
+/// The network `route` belongs to, or `None` for an on-link route (no
+/// router to tell it by; the line stays the last network's). Asks the
+/// router for its hardware address (usually already known, else one ARP
+/// round trip), so call it off any hot path.
+pub fn identify(route: Route) -> Option<Network> {
+    let gateway = route.gateway?;
     let adapter = adapter(route.if_index);
     let ssid = adapter
         .as_ref()
         .filter(|a| a.wifi)
         .and_then(|a| wifi_name(&a.guid));
-    let id = match router_mac(route.gateway) {
+    let id = match router_mac(gateway) {
         Some(mac) => format!("gw-{}", hex(&mac, ":")),
         // No answer from the router: the adapter and router address still
         // tell lines apart, if less surely.
@@ -65,19 +70,20 @@ pub fn identify(route: Route) -> Network {
             adapter
                 .as_ref()
                 .map_or(route.if_index.to_string(), |a| guid_text(&a.guid)),
-            route.gateway
+            gateway
         ),
     };
     let name = ssid
         .or_else(|| adapter.map(|a| a.alias))
         .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| format!("Network at {}", route.gateway));
-    Network { id, name }
+        .unwrap_or_else(|| format!("Network at {gateway}"));
+    Some(Network { id, name })
 }
 
-/// The network the internet route goes through now, if online.
+/// The network the internet route goes through now, if online through a
+/// router.
 pub fn current() -> Option<Network> {
-    route().map(identify)
+    route().and_then(identify)
 }
 
 struct Adapter {
@@ -215,8 +221,7 @@ mod tests {
     /// On a PC with a router, the network has an id and a name.
     #[test]
     fn this_pc_has_a_network_when_online() {
-        if let Some(r) = route() {
-            let n = identify(r);
+        if let Some(n) = route().and_then(identify) {
             assert!(n.id.starts_with("gw-") || n.id.starts_with("if-"), "{n:?}");
             assert!(!n.name.is_empty());
             println!("{n:?}");

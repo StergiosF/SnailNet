@@ -5,7 +5,8 @@
 //! runner, which follows it like any other.
 //!
 //! Offline (no route) changes nothing: the line stays the last network's
-//! until another one appears.
+//! until another one appears. A route change or a wake also restarts
+//! shaping (the service's power events report a wake too: svc.rs).
 
 use std::time::{Duration, SystemTime};
 
@@ -58,10 +59,13 @@ pub fn watch(hub: &Hub) {
             hub.route_changed();
         }
         last = Some(now);
+        // An on-link route (a full-tunnel VPN, PPPoE on the PC) has no
+        // router to tell the line by: online, but the line stays the last
+        // network's, as when offline.
         if let Some(route) = now
             && told != Some(route)
+            && let Some(net) = network::identify(route)
         {
-            let net = network::identify(route);
             let name = net.name.clone();
             match hub.network_seen(net, unix_now()) {
                 Ok(switch) => {

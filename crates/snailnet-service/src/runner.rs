@@ -365,6 +365,9 @@ fn supervise<E: Engine>(
     // A cancelled check still finishing: the next waits for it, so two
     // downloads never overlap.
     let mut draining: Option<JoinHandle<Result<Option<f64>>>> = None;
+    // The last session ended on a route change or a wake: let the new
+    // route settle before diverting again.
+    let mut settle = false;
     let ended = loop {
         if stop.is_requested() {
             break Ended::Stopped;
@@ -394,6 +397,7 @@ fn supervise<E: Engine>(
         hub.end_expired(now());
         let (plan, profile) = hub.plan(now());
         if !plan.needs_engine() {
+            settle = false;
             let wake = if let Some(pause) = hub.pause_at(now()) {
                 hub.set_state(ServiceState::Paused { until: pause.until });
                 info!("paused: not shaping or blocking");
@@ -418,7 +422,11 @@ fn supervise<E: Engine>(
         // route to the internet (adapter, Wi-Fi, DHCP still coming up).
         // Diverting then gains nothing and gets in the way of the PC
         // getting online, so wait for the route first.
-        let (plan, profile) = match timing.watch_network.then(|| wait_for_route(hub, stop)) {
+        let settle_now = std::mem::take(&mut settle);
+        let (plan, profile) = match timing
+            .watch_network
+            .then(|| wait_for_route(hub, stop, settle_now))
+        {
             Some(Wake::Stop) => break Ended::Stopped,
             // It waited (up to a minute): plan again, so a pause or new
             // settings from meanwhile apply before anything is diverted.
@@ -459,7 +467,10 @@ fn supervise<E: Engine>(
                         // A speed test runs with shaping stopped.
                         Wake::Reload if hub.speedtest_pending() => break Outcome::Reload,
                         // Woke from sleep or on another route: start over.
-                        Wake::Reload if hub.take_route_change() => break Outcome::Reload,
+                        Wake::Reload if hub.take_route_change() => {
+                            settle = true;
+                            break Outcome::Reload;
+                        }
                         // New packs: rebuild the classifier and site matcher.
                         Wake::Reload if crate::packs::take_restart() => {
                             info!("new site, app and game lists; restarting shaping");
@@ -642,11 +653,25 @@ const ROUTE_WAIT: Duration = Duration::from_secs(60);
 const ROUTE_SETTLE: Duration = Duration::from_secs(5);
 
 /// Wait (up to [`ROUTE_WAIT`]) until Windows has a route to the internet.
-/// `Wake::Timeout` at once when it already has one, `Wake::Reload` after
-/// waiting (the caller plans again), `Wake::Stop` on a stop.
-fn wait_for_route(hub: &Hub, stop: &StopSignal) -> Wake {
+/// `Wake::Timeout` at once when it already has one (unless `settle`: the
+/// route just changed, so wait [`ROUTE_SETTLE`] all the same),
+/// `Wake::Reload` after waiting (the caller plans again), `Wake::Stop` on
+/// a stop.
+fn wait_for_route(hub: &Hub, stop: &StopSignal, settle: bool) -> Wake {
     if snailnet_win::network::route().is_some() {
-        return Wake::Timeout;
+        if !settle {
+            return Wake::Timeout;
+        }
+        hub.set_state(ServiceState::Starting);
+        info!(
+            "network changed; shaping again in {} s",
+            ROUTE_SETTLE.as_secs()
+        );
+        return if stop.wait(ROUTE_SETTLE) {
+            Wake::Stop
+        } else {
+            Wake::Reload
+        };
     }
     hub.set_state(ServiceState::Starting);
     info!("no route to the internet yet; waiting for the network before shaping");

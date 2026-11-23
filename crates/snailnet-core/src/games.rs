@@ -128,6 +128,8 @@ mod tests {
             r"C:\Program Files (x86)\Overwatch\_retail_\Overwatch.exe",
             r"C:\Users\a\AppData\Local\Roblox\Versions\version-1\RobloxPlayerBeta.exe",
             r"C:\Program Files\Rockstar Games\Grand Theft Auto V\GTA5.exe",
+            r"C:\Program Files (x86)\Call of Duty\_retail_\cod.exe",
+            r"C:\Users\a\AppData\Local\WarThunder\win64\aces.exe",
             r"D:\Games\Some Indie Game\game.exe",
         ] {
             assert!(in_game_library(p), "{p}");
@@ -188,6 +190,9 @@ mod tests {
             r"C:\Program Files\Rockstar Games\Launcher\Launcher.exe",
             r"C:\Program Files (x86)\Battle.net\Battle.net.exe",
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            // Generic names count only in their game's own folder.
+            r"C:\Tools\cod.exe",
+            r"C:\Program Files\Aces\aces.exe",
         ] {
             assert!(!in_game_library(p), "{p}");
         }
