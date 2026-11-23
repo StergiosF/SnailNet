@@ -237,6 +237,25 @@ fn stop_flushes_everything_still_queued() {
 }
 
 #[test]
+fn sends_that_keep_failing_fail_open() {
+    let engine = Arc::new(MockEngine::new());
+    let fp = start(&engine, 1_000_000, |_| {});
+    engine.fail_sends(true);
+    let started = Instant::now();
+    let mut i = 0;
+    while fp.failure().is_none() && started.elapsed() < Duration::from_secs(2) {
+        engine.inject(&inbound(REMOTE, PORT_B, 100, i), false);
+        i += 1;
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let why = fp.failure().expect("failed open");
+    assert!(why.contains("sends in a row failed"), "{why}");
+    assert!(engine.is_shut_down(), "the engine stops diverting");
+    engine.fail_sends(false);
+    fp.stop();
+}
+
+#[test]
 fn a_stalled_scheduler_fails_open_and_loses_nothing() {
     let engine = Arc::new(MockEngine::new());
     let fp = start(&engine, 1_000_000, |c| {

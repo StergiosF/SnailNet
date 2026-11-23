@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use windows_service::service::{
-    ServiceAccess, ServiceAction, ServiceActionType, ServiceErrorControl, ServiceFailureActions,
-    ServiceFailureResetPeriod, ServiceInfo, ServiceSidType, ServiceStartType, ServiceState,
-    ServiceType,
+    ServiceAccess, ServiceAction, ServiceActionType, ServiceDependency, ServiceErrorControl,
+    ServiceFailureActions, ServiceFailureResetPeriod, ServiceInfo, ServiceSidType,
+    ServiceStartType, ServiceState, ServiceType,
 };
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
@@ -43,7 +43,12 @@ pub fn install() -> Result<()> {
         error_control: ServiceErrorControl::Normal,
         executable_path: exe.clone(),
         launch_arguments: vec![OsString::from("service")],
-        dependencies: vec![],
+        // WinDivert sits on the Base Filtering Engine and the TCP/IP stack:
+        // start after them, never racing them at boot.
+        dependencies: ["BFE", "Tcpip", "nsi"]
+            .into_iter()
+            .map(|s| ServiceDependency::Service(OsString::from(s)))
+            .collect(),
         account_name: None, // LocalSystem
         account_password: None,
     };

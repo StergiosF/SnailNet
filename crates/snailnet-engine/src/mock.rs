@@ -32,6 +32,7 @@ pub struct MockEngine {
     sent: Mutex<Vec<Sent>>,
     shut: AtomicBool,
     stall_sends: AtomicBool,
+    fail_sends: AtomicBool,
 }
 
 impl Default for MockEngine {
@@ -50,6 +51,7 @@ impl MockEngine {
             sent: Mutex::new(Vec::new()),
             shut: AtomicBool::new(false),
             stall_sends: AtomicBool::new(false),
+            fail_sends: AtomicBool::new(false),
         }
     }
 
@@ -77,6 +79,12 @@ impl MockEngine {
     /// wedged scheduler thread.
     pub fn stall_sends(&self, on: bool) {
         self.stall_sends.store(on, Relaxed);
+    }
+
+    /// Make `send_batch` fail (and drop the batch) until turned off:
+    /// simulates Windows refusing our reinjected packets.
+    pub fn fail_sends(&self, on: bool) {
+        self.fail_sends.store(on, Relaxed);
     }
 
     pub fn is_shut_down(&self) -> bool {
@@ -135,6 +143,9 @@ impl PacketEngine for MockEngine {
     fn send_batch(&self, batch: &mut SendBatch) -> Result<(), EngineError> {
         while self.stall_sends.load(Relaxed) {
             std::thread::sleep(Duration::from_millis(2));
+        }
+        if self.fail_sends.load(Relaxed) {
+            return Err(std::io::Error::from_raw_os_error(87).into());
         }
         let at = Instant::now();
         let (buf, addrs) = batch.raw();

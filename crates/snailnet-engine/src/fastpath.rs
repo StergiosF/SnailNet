@@ -258,10 +258,18 @@ struct Shared {
     failure: Mutex<Option<String>>,
     heartbeat: AtomicU64,
     counters: AtomicCounters,
+    /// Send calls in a row that failed. Packets in a failed send are lost,
+    /// so a run of them means the network is dead while we're in the way.
+    send_fail_streak: AtomicU64,
     snapshot: Mutex<Snapshot>,
     /// The scheduler thread picks up a new config on its next pass.
     live: [Option<LiveConfig>; 2],
 }
+
+/// Failed sends in a row after which the fast path fails open: Windows
+/// stopped taking our packets back (an adapter reset, a driver problem),
+/// and every packet we hold from now on would be lost.
+const SEND_FAIL_LIMIT: u64 = 64;
 
 impl Shared {
     /// Stop diverting: new traffic bypasses us; queued traffic is flushed.
@@ -279,8 +287,20 @@ impl Shared {
         let n = batch.len() as u64;
         self.counters.send_calls.fetch_add(1, Relaxed);
         self.counters.sent.fetch_add(n, Relaxed);
-        if engine.send_batch(batch).is_err() {
-            self.counters.send_errors.fetch_add(n, Relaxed);
+        match engine.send_batch(batch) {
+            Ok(()) => self.send_fail_streak.store(0, Relaxed),
+            Err(e) => {
+                self.counters.send_errors.fetch_add(n, Relaxed);
+                let streak = self.send_fail_streak.fetch_add(1, Relaxed) + 1;
+                if streak >= SEND_FAIL_LIMIT {
+                    self.fail_open(
+                        engine,
+                        format!(
+                            "{streak} sends in a row failed ({e}); traffic now bypasses SnailNet"
+                        ),
+                    );
+                }
+            }
         }
         batch.clear();
     }
@@ -322,6 +342,7 @@ impl<E: PacketEngine + 'static> FastPath<E> {
             failure: Mutex::new(None),
             heartbeat: AtomicU64::new(now),
             counters: AtomicCounters::default(),
+            send_fail_streak: AtomicU64::new(0),
             snapshot: Mutex::new(Snapshot::default()),
             live,
         });

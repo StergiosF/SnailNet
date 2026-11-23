@@ -414,6 +414,15 @@ fn supervise<E: Engine>(
                 _ => continue,
             }
         }
+        // At boot and on waking, the service runs before Windows has a
+        // route to the internet (adapter, Wi-Fi, DHCP still coming up).
+        // Diverting then gains nothing and gets in the way of the PC
+        // getting online, so wait for the route first.
+        if timing.watch_network && wait_for_route(hub, stop) == Wake::Stop {
+            break Ended::Stopped;
+        }
+        // A route change seen before this start is already covered by it.
+        hub.take_route_change();
         let reason = match engine.start(&plan) {
             Ok(mut running) => {
                 // Blocking alone, without a line speed, still says so.
@@ -438,6 +447,8 @@ fn supervise<E: Engine>(
                         Wake::Stop => break Outcome::Stop,
                         // A speed test runs with shaping stopped.
                         Wake::Reload if hub.speedtest_pending() => break Outcome::Reload,
+                        // Woke from sleep or on another route: start over.
+                        Wake::Reload if hub.take_route_change() => break Outcome::Reload,
                         // New packs: rebuild the classifier and site matcher.
                         Wake::Reload if crate::packs::take_restart() => {
                             info!("new site, app and game lists; restarting shaping");
@@ -611,6 +622,38 @@ fn measure(hub: &Hub, stop: &StopSignal, now: &dyn Fn() -> u64) -> Wake {
 
 fn ms(v: Option<f64>) -> String {
     v.map_or("?".into(), |v| v.to_string())
+}
+
+/// Longest wait for a route to the internet before shaping starts anyway.
+const ROUTE_WAIT: Duration = Duration::from_secs(60);
+/// Once a missing route appears, let DHCP, DNS and Windows' own
+/// connectivity check finish before diverting.
+const ROUTE_SETTLE: Duration = Duration::from_secs(5);
+
+/// Wait (up to [`ROUTE_WAIT`]) until Windows has a route to the internet.
+/// Returns at once when it already has one; `Wake::Stop` on a stop.
+fn wait_for_route(hub: &Hub, stop: &StopSignal) -> Wake {
+    if snailnet_win::network::route().is_some() {
+        return Wake::Timeout;
+    }
+    hub.set_state(ServiceState::Starting);
+    info!("no route to the internet yet; waiting for the network before shaping");
+    let deadline = Instant::now() + ROUTE_WAIT;
+    while Instant::now() < deadline {
+        if stop.wait(Duration::from_secs(1)) {
+            return Wake::Stop;
+        }
+        if snailnet_win::network::route().is_some() {
+            info!("network is up; shaping in {} s", ROUTE_SETTLE.as_secs());
+            return if stop.wait(ROUTE_SETTLE) {
+                Wake::Stop
+            } else {
+                Wake::Timeout
+            };
+        }
+    }
+    info!("still no route to the internet; shaping anyway");
+    Wake::Timeout
 }
 
 /// Wait for a stop or a config change.

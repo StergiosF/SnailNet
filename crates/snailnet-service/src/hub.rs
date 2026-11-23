@@ -6,6 +6,7 @@
 //! `rev`, then ask the runner to reload and tell every client.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -63,6 +64,9 @@ pub struct Hub {
     inner: Mutex<Inner>,
     /// Only asked when the window in front changes (debounced, rare).
     family_of: Mutex<FamilyOf>,
+    /// The route to the internet changed (woke from sleep, Wi-Fi came
+    /// back, another adapter): the runner restarts shaping from scratch.
+    route_changed: AtomicBool,
 }
 
 /// Families as the shaper resolves them (same pack, same rules), with a
@@ -186,7 +190,20 @@ impl Hub {
                 }),
             }),
             family_of: Mutex::new(family_of_process()),
+            route_changed: AtomicBool::new(false),
         })
+    }
+
+    /// The internet route changed: restart shaping, so nothing diverted
+    /// on the old one (or across sleep) is kept.
+    pub fn route_changed(&self) {
+        self.route_changed.store(true, Ordering::SeqCst);
+        self.signal.request_reload();
+    }
+
+    /// True (once) if the route changed since the last call.
+    pub fn take_route_change(&self) -> bool {
+        self.route_changed.swap(false, Ordering::SeqCst)
     }
 
     /// Resolve families with `f` instead (tests).
@@ -723,6 +740,13 @@ impl Hub {
     /// The window in front is `pid`'s (§11.5); a game stays first while it
     /// runs. Wakes the runner when what goes first changed.
     pub fn focus_changed(&self, pid: u32, detected: Option<GameWhy>) {
+        // The app's say-so first; else the service's own look at the exe
+        // (same packs), so a game is never missed for an older app.
+        let detected = detected.or_else(|| {
+            snailnet_win::process::image_path(pid)
+                .is_some_and(|p| snailnet_core::games::in_game_library(&p.to_string_lossy()))
+                .then_some(GameWhy::Library)
+        });
         let created = snailnet_win::process::created(pid);
         let families = self.lock().config.families.clone();
         let family = (self.family_of.lock().unwrap_or_else(|e| e.into_inner()))(pid, &families);

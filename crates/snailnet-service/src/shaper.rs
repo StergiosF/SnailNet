@@ -782,6 +782,26 @@ pub struct Spec {
     pub families: Families,
 }
 
+/// The NETWORK layer filter: what SnailNet takes into its queues.
+///
+/// Never diverted, whatever the plan: loopback, DNS, and what keeps the PC
+/// on the network at all (DHCP and DHCPv6 handing out the address, NTP
+/// keeping the clock right for TLS). Holding those up, even briefly, can
+/// leave Windows without an address or a connection at boot and on wake.
+fn network_filter(down: bool, up: bool, blocking: bool) -> String {
+    let mut filter = String::from(
+        "!loopback and !impostor and (tcp or udp) and remotePort != 53 and localPort != 53 \
+         and (tcp or (localPort != 67 and localPort != 68 and localPort != 546 \
+         and localPort != 547 and remotePort != 123))",
+    );
+    match (down, up, blocking) {
+        (true, false, false) => filter.push_str(" and inbound"),
+        (false, true, false) => filter.push_str(" and outbound"),
+        _ => {}
+    }
+    filter
+}
+
 /// Running shaping. Dropping it (or [`Shaper::stop`]) closes every handle,
 /// after flushing what it holds, and traffic flows normally again.
 pub struct Shaper {
@@ -802,14 +822,7 @@ pub struct Shaper {
 impl Shaper {
     pub fn start(spec: Spec) -> Result<Self> {
         let lib = WinDivertLib::load()?;
-        let mut filter = String::from(
-            "!loopback and !impostor and (tcp or udp) and remotePort != 53 and localPort != 53",
-        );
-        match (spec.down.is_some(), spec.up.is_some(), spec.blocking) {
-            (true, false, false) => filter.push_str(" and inbound"),
-            (false, true, false) => filter.push_str(" and outbound"),
-            _ => {}
-        }
+        let filter = network_filter(spec.down.is_some(), spec.up.is_some(), spec.blocking);
         let timer = HighResTimer::new().context("creating a high-resolution timer")?;
 
         // Sniffers first, so no new flow is missed. If anything below fails,
@@ -1191,6 +1204,24 @@ mod tests {
         ))
         .unwrap()
         .plan(0)
+    }
+
+    #[test]
+    fn the_network_filter_compiles_and_leaves_dhcp_and_ntp_alone() {
+        let lib = WinDivertLib::load().unwrap();
+        for (down, up, blocking) in [
+            (true, false, false),
+            (false, true, false),
+            (true, true, false),
+            (true, false, true),
+        ] {
+            let f = network_filter(down, up, blocking);
+            assert_eq!(lib.check_filter(&f, Layer::Network), Ok(()), "{f}");
+            for port in ["67", "68", "546", "547"] {
+                assert!(f.contains(&format!("localPort != {port}")), "{f}");
+            }
+            assert!(f.contains("remotePort != 123"), "{f}");
+        }
     }
 
     #[test]

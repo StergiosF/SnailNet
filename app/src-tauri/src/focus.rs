@@ -137,16 +137,168 @@ fn foreground_pid() -> Option<u32> {
 }
 
 /// Why `pid` (the window in front) is a game, if it is: an exe in a game
-/// launcher's library (what the program is, so it comes first), or
-/// exclusive fullscreen Direct3D.
+/// launcher's library or a known game exe (what the program is, so it
+/// comes first), exclusive fullscreen Direct3D, or a borderless window
+/// covering its whole screen that draws with a 3D API (how most games run
+/// "fullscreen" today; Windows' own flag only sees the exclusive kind).
 fn game_why(pid: u32) -> Option<GameWhy> {
-    if exe_path(pid).is_some_and(|p| snailnet_core::games::in_game_library(&p)) {
+    let path = exe_path(pid);
+    if path
+        .as_deref()
+        .is_some_and(snailnet_core::games::in_game_library)
+    {
         return Some(GameWhy::Library);
     }
     // SAFETY: no arguments; the result is checked.
-    let fullscreen =
+    let exclusive =
         unsafe { SHQueryUserNotificationState() }.is_ok_and(|s| s == QUNS_RUNNING_D3D_FULL_SCREEN);
-    fullscreen.then_some(GameWhy::Fullscreen)
+    if exclusive {
+        return Some(GameWhy::Fullscreen);
+    }
+    let exe = path
+        .as_deref()
+        .and_then(|p| p.rsplit(['\\', '/']).next())
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    let borderless = !exe.is_empty()
+        && !NOT_GAMES.contains(&exe.as_str())
+        && foreground_covers_screen()
+        && draws_3d(pid) != Some(false);
+    borderless.then_some(GameWhy::Fullscreen)
+}
+
+/// Programs that often fill the screen without being games (video,
+/// browsers in full screen, slideshows, the desktop itself).
+const NOT_GAMES: &[&str] = &[
+    "explorer.exe",
+    "applicationframehost.exe",
+    "chrome.exe",
+    "msedge.exe",
+    "firefox.exe",
+    "brave.exe",
+    "opera.exe",
+    "opera_gx.exe",
+    "vivaldi.exe",
+    "vlc.exe",
+    "mpc-hc64.exe",
+    "mpc-hc.exe",
+    "mpc-be64.exe",
+    "mpv.exe",
+    "potplayermini64.exe",
+    "wmplayer.exe",
+    "video.ui.exe",
+    "microsoft.media.player.exe",
+    "powerpnt.exe",
+    "obs64.exe",
+    "discord.exe",
+    "spotify.exe",
+    "netflix.exe",
+    "snailnet.exe",
+];
+
+/// The window in front fills its whole monitor with no title bar
+/// (borderless fullscreen), and isn't the desktop.
+fn foreground_covers_screen() -> bool {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_STYLE, GetClassNameW, GetWindowLongW, GetWindowRect, WS_CAPTION,
+    };
+    // SAFETY: plain Win32 queries on the foreground window; every out
+    // buffer is valid for the size passed.
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_invalid() {
+            return false;
+        }
+        let mut class = [0u16; 64];
+        let n = GetClassNameW(hwnd, &mut class).max(0) as usize;
+        let class = String::from_utf16_lossy(&class[..n]);
+        if matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd") {
+            return false;
+        }
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_CAPTION.0 == WS_CAPTION.0 {
+            return false;
+        }
+        let mut win = RECT::default();
+        if GetWindowRect(hwnd, &mut win).is_err() {
+            return false;
+        }
+        let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !GetMonitorInfoW(mon, &mut info).as_bool() {
+            return false;
+        }
+        covers(
+            (win.left, win.top, win.right, win.bottom),
+            (
+                info.rcMonitor.left,
+                info.rcMonitor.top,
+                info.rcMonitor.right,
+                info.rcMonitor.bottom,
+            ),
+        )
+    }
+}
+
+/// Whether window rect `w` covers monitor rect `m` (left, top, right,
+/// bottom), allowing the few pixels some games hang over the edge.
+fn covers(w: (i32, i32, i32, i32), m: (i32, i32, i32, i32)) -> bool {
+    const SLACK: i32 = 8;
+    m.2 > m.0
+        && m.3 > m.1
+        && w.0 <= m.0 + SLACK
+        && w.1 <= m.1 + SLACK
+        && w.2 >= m.2 - SLACK
+        && w.3 >= m.3 - SLACK
+}
+
+/// Whether `pid` has a 3D graphics runtime loaded. `None` when Windows
+/// won't let us look (anti-cheat protected games): treated as yes.
+fn draws_3d(pid: u32) -> Option<bool> {
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW, TH32CS_SNAPMODULE,
+        TH32CS_SNAPMODULE32,
+    };
+    const RUNTIMES: &[&str] = &[
+        "d3d9.dll",
+        "d3d11.dll",
+        "d3d12.dll",
+        "vulkan-1.dll",
+        "opengl32.dll",
+    ];
+    // SAFETY: the snapshot handle is checked and closed once; the entry
+    // is sized as the API requires.
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid).ok()?;
+        let mut entry = MODULEENTRY32W {
+            dwSize: size_of::<MODULEENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut found = false;
+        let mut more = Module32FirstW(snap, &mut entry).is_ok();
+        while more {
+            let len = entry
+                .szModule
+                .iter()
+                .position(|&c| c == 0)
+                .unwrap_or(entry.szModule.len());
+            let name = String::from_utf16_lossy(&entry.szModule[..len]).to_lowercase();
+            if RUNTIMES.contains(&name.as_str()) {
+                found = true;
+                break;
+            }
+            more = Module32NextW(snap, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snap);
+        Some(found)
+    }
 }
 
 fn exe_path(pid: u32) -> Option<String> {
@@ -194,6 +346,31 @@ mod tests {
         );
         assert_eq!(d.step(Some(4), t0 + POLL * 7), None);
         assert_eq!(d.step(Some(4), t0 + POLL * 8), Some(4));
+    }
+
+    #[test]
+    fn a_window_covering_its_monitor_counts_as_fullscreen() {
+        let screen = (0, 0, 1920, 1080);
+        assert!(covers((0, 0, 1920, 1080), screen));
+        assert!(covers((-8, -8, 1928, 1088), screen), "hangs over the edge");
+        assert!(!covers((0, 0, 1920, 1040), screen), "taskbar showing");
+        assert!(!covers((100, 100, 900, 700), screen), "a window");
+        let second = (1920, 0, 4480, 1440);
+        assert!(covers((1920, 0, 4480, 1440), second));
+        assert!(!covers((0, 0, 1920, 1080), second));
+    }
+
+    #[test]
+    fn video_players_and_browsers_are_never_fullscreen_games() {
+        for exe in ["chrome.exe", "vlc.exe", "explorer.exe", "powerpnt.exe"] {
+            assert!(NOT_GAMES.contains(&exe));
+        }
+        assert!(!NOT_GAMES.contains(&"cs2.exe"));
+    }
+
+    #[test]
+    fn this_test_process_draws_no_3d() {
+        assert_eq!(draws_3d(std::process::id()), Some(false));
     }
 
     #[test]

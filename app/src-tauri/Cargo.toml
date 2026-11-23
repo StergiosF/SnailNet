@@ -37,7 +37,7 @@ tauri-plugin-updater = { version = "=2.14.1", default-features = false, features
 base64 = "0.22.1"
 png = "0.18.1"
 # Networking_Connectivity: the metered flag (metered.rs).
-windows = { version = "0.62.2", features = ["Foundation", "Networking_Connectivity", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Services", "Win32_System_Threading"] }
+windows = { version = "0.62.2", features = ["Foundation", "Networking_Connectivity", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Services", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp"] }
 
 [lints]
 workspace = true
