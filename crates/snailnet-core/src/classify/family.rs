@@ -581,6 +581,8 @@ mod tests {
             "edge",
             "brave",
             "discord",
+            "docker",
+            "opencode",
             "windows-update",
         ] {
             assert!(ids.contains(&want), "{want} missing from {ids:?}");
@@ -794,6 +796,31 @@ mod tests {
             app(&mut r, &mut t, 120).family,
             r"d:\games\mygame\mygame.exe"
         );
+    }
+
+    #[test]
+    fn docker_helpers_and_opencode_are_named_apps() {
+        let (mut r, mut t) = (resolver(), Table::default());
+        t.add(
+            130,
+            1,
+            r"C:\Program Files\Docker\Docker\resources\com.docker.build.exe",
+            1,
+        );
+        t.add(
+            131,
+            2,
+            r"C:\Program Files\Docker\Docker\resources\com.docker.backend.exe",
+            130,
+        );
+        t.add(132, 1, r"C:\Users\me\.opencode\bin\opencode.exe", 1);
+        let build = app(&mut r, &mut t, 130);
+        assert_eq!(
+            (build.family.as_str(), build.name.as_str()),
+            ("docker", "Docker")
+        );
+        assert_eq!(app(&mut r, &mut t, 131).family, "docker");
+        assert_eq!(app(&mut r, &mut t, 132).name, "OpenCode");
     }
 
     #[test]

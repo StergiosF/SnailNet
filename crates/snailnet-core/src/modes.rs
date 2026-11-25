@@ -6,6 +6,8 @@
 //! The templates name only shipped families and sites, so they work on any
 //! PC: a rule for an app that isn't installed just stays quiet.
 
+use serde::{Deserialize, Serialize};
+
 use crate::rules::{Config, Profile, Rule, Target};
 use crate::scheduler::Priority;
 
@@ -13,12 +15,54 @@ use crate::scheduler::Priority;
 pub const GAMING: &str = "gaming";
 
 /// (id, name) of each mode, in the order the app shows them.
-pub const MODES: [(&str, &str); 4] = [
+pub const MODES: [(&str, &str); 6] = [
     ("balanced", "Balanced"),
+    ("calls", "Calls"),
+    ("focus", "Focus"),
     ("streaming", "Streaming"),
     ("gaming", "Gaming"),
     ("quiet-downloads", "Quiet downloads"),
 ];
+
+/// What a mode puts first (2026-11-25: the old "What goes first" switches
+/// became modes, one active at a time; Balanced puts nothing first).
+/// `calls`: live calls go first in any app; `focus`: the app in front and
+/// running games go first; `gaming`: use the Gaming mode while a game runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct First {
+    pub calls: bool,
+    pub focus: bool,
+    pub gaming: bool,
+}
+
+/// The behavior a built-in mode carries. A user's own mode keeps the
+/// behavior of the mode it was copied from (`Profile::first`).
+pub fn first_for(id: &str) -> First {
+    match id {
+        "calls" => First {
+            calls: true,
+            ..First::default()
+        },
+        "focus" => First {
+            focus: true,
+            ..First::default()
+        },
+        // Video and calls stay smooth.
+        "streaming" => First {
+            calls: true,
+            ..First::default()
+        },
+        // The game and voice chat come first, and Gaming takes over while
+        // a game runs.
+        "gaming" => First {
+            calls: true,
+            focus: true,
+            gaming: true,
+        },
+        _ => First::default(),
+    }
+}
 
 /// Launchers, stores, updaters and sync clients: big transfers nobody is
 /// watching.
@@ -55,8 +99,9 @@ fn downloads_when_free() -> impl Iterator<Item = Rule> {
 /// The starting rules of mode `id`, or `None` if `id` isn't a mode.
 pub fn template(id: &str) -> Option<Vec<Rule>> {
     let rules = match id {
-        // Everything shares the line fairly.
-        "balanced" => Vec::new(),
+        // Everything shares the line fairly; what goes first is the mode's
+        // own behavior (first_for), not a rule.
+        "balanced" | "calls" | "focus" => Vec::new(),
         // Video and calls first; downloads in the spare room.
         "streaming" => [
             rule(Target::family("discord"), 1000, Priority::High),
@@ -96,6 +141,7 @@ pub fn all() -> Vec<Profile> {
             id: (*id).into(),
             name: (*name).into(),
             rules: template(id).unwrap_or_default(),
+            first: None,
         })
         .collect()
 }
@@ -119,13 +165,18 @@ impl Config {
     /// named `name`, with `from`'s rules, listed after the others. Returns
     /// its id (made from the name, never a built-in mode's).
     pub fn copy_profile(&mut self, from: &str, name: &str) -> Result<String, String> {
-        let rules = self
+        let source = self
             .profiles
             .iter()
             .find(|p| p.id == from)
-            .ok_or_else(|| format!("there is no profile {from:?}"))?
-            .rules
-            .clone();
+            .ok_or_else(|| format!("there is no profile {from:?}"))?;
+        let rules = source.rules.clone();
+        // A copy keeps what its source puts first.
+        let first = if is_mode(from) {
+            first_for(from)
+        } else {
+            source.first.unwrap_or_default()
+        };
         if self.profiles.len() >= MAX_PROFILES {
             return Err(format!("at most {MAX_PROFILES} modes"));
         }
@@ -145,6 +196,7 @@ impl Config {
             id: id.clone(),
             name,
             rules,
+            first: Some(first),
         });
         Ok(id)
     }
@@ -320,7 +372,14 @@ mod tests {
         assert!(c.add_missing_modes());
         assert_eq!(
             c.profiles.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(),
-            ["balanced", "streaming", "gaming", "quiet-downloads"]
+            [
+                "balanced",
+                "calls",
+                "focus",
+                "streaming",
+                "gaming",
+                "quiet-downloads"
+            ]
         );
         assert_eq!(c.profiles[0].rules.len(), 1, "the user's Balanced is kept");
         assert!(!c.add_missing_modes(), "nothing to add twice");

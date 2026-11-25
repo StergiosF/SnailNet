@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::classify::App;
 use crate::classify::family::{SYSTEM_ID, WINDOWS_SERVICES_ID};
 use crate::families::{Families, is_family_id};
+use crate::modes::{self, First};
 use crate::scheduler::{ClassConfig, Priority, SchedulerConfig, shares};
 use crate::sites::SiteDef;
 
@@ -96,14 +97,16 @@ pub struct Settings {
     pub low_latency: bool,
     /// Leave traffic to the local network alone.
     pub lan_exempt: bool,
-    /// The app in front, and games while they run, go first (High
-    /// priority, never a bigger share; PLAN.md §11.5).
+    /// Legacy (2026-11-25): what goes first is the active mode's behavior
+    /// now ([`Config::first`]), one mode at a time. Kept so older configs
+    /// parse; never written, never read.
+    #[serde(default = "yes", skip_serializing_if = "always")]
     pub focus_boost: bool,
-    /// Use the Gaming mode while a game runs, then go back (PLAN.md §11.5
-    /// "Optional automation"). Off by default.
+    /// Legacy, as [`Settings::focus_boost`].
+    #[serde(default, skip_serializing_if = "always")]
     pub gaming_while_playing: bool,
-    /// Live calls (and games' server streams), spotted by their traffic,
-    /// go first in any app and any mode (PLAN.md §11.9). On by default.
+    /// Legacy, as [`Settings::focus_boost`].
+    #[serde(default = "yes", skip_serializing_if = "always")]
     pub calls_first: bool,
     /// Apps (family ids) that are games whatever the detection says: they
     /// stay first while they run (PLAN.md §11.5 overrides).
@@ -322,6 +325,11 @@ pub struct Profile {
     pub name: String,
     #[serde(default)]
     pub rules: Vec<Rule>,
+    /// What a user's own mode puts first, inherited from the mode it was
+    /// copied from (2026-11-25). Built-in modes derive theirs from their id
+    /// ([`modes::first_for`]); absent on older configs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first: Option<First>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -339,6 +347,11 @@ pub struct Rule {
 }
 
 fn yes() -> bool {
+    true
+}
+
+/// Legacy fields parse from older configs but are never written back.
+fn always(_: &bool) -> bool {
     true
 }
 
@@ -639,6 +652,18 @@ impl Config {
             .unwrap_or(&self.profiles[0])
     }
 
+    /// What the active mode puts first (2026-11-25): a built-in mode's own
+    /// behavior, or the behavior a user's own mode inherited when copied.
+    /// One mode at a time; Balanced puts nothing first.
+    pub fn first(&self) -> First {
+        let p = self.active();
+        if modes::is_mode(&p.id) {
+            modes::first_for(&p.id)
+        } else {
+            p.first.unwrap_or_default()
+        }
+    }
+
     /// The pause, if it's still on at `now` (Unix seconds).
     pub fn pause_at(&self, now: u64) -> Option<Pause> {
         self.pause.filter(|p| p.is_on(now))
@@ -767,7 +792,7 @@ impl Config {
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
             focus: Vec::new(),
-            calls_first: self.settings.calls_first,
+            calls_first: self.first().calls,
             never_first: self
                 .settings
                 .never_first
@@ -1255,20 +1280,41 @@ ceiling = { down = \"10%\" }
     #[test]
     fn the_plan_carries_calls_first_and_never_first() {
         let mut c = Config::default();
-        assert!(c.plan(0).calls_first, "on by default");
-        assert!(!c.to_toml().contains("calls_first = false"));
+        assert!(!c.plan(0).calls_first, "Balanced puts nothing first");
+        c.active_profile = "calls".into();
+        assert!(c.plan(0).calls_first);
+        c.active_profile = "gaming".into();
+        assert!(c.plan(0).calls_first && c.first().focus && c.first().gaming);
         c.settings.never_first = vec!["OBS".into()];
         let p = c.plan(0);
         assert!(p.never_first("obs") && !p.never_first("discord"));
-        c.settings.calls_first = false;
-        assert!(!c.plan(0).calls_first);
-        // An older config without the key gets it on.
-        let old = c.to_toml().replace(
-            "calls_first = false
-",
-            "",
+        // The legacy switch parses from older configs but is ignored, and
+        // is never written back.
+        let old = c
+            .to_toml()
+            .replace("[settings]", "[settings]\ncalls_first = false");
+        let parsed = Config::parse(&old).unwrap();
+        assert!(
+            parsed.plan(0).calls_first,
+            "the mode decides, not the legacy key"
         );
-        assert!(Config::parse(&old).unwrap().settings.calls_first);
+        assert!(!c.to_toml().contains("calls_first"));
+    }
+
+    #[test]
+    fn a_copied_mode_keeps_what_goes_first() {
+        let mut c = Config::default();
+        let id = c.copy_profile("gaming", "My gaming").unwrap();
+        c.active_profile = id.clone();
+        assert!(c.first().calls && c.first().focus && c.first().gaming);
+        assert!(c.plan(0).calls_first);
+        let balanced = c.copy_profile("balanced", "My balanced").unwrap();
+        c.active_profile = balanced;
+        assert_eq!(c.first(), First::default());
+        // The behavior survives a save and load.
+        c.active_profile = id;
+        let back = Config::parse(&c.to_toml()).unwrap();
+        assert!(back.first().gaming);
     }
 
     #[test]

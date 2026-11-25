@@ -152,3 +152,17 @@ exes = ["dropbox.exe"]
 id = "qbittorrent"
 name = "qBittorrent"
 exes = ["qbittorrent.exe"]
+
+# ── Dev tools ────────────────────────────────────────────────────────────
+# Docker Desktop's helpers carry raw exe names (com.docker.build.exe);
+# people think "Docker" (2026-11-25).
+
+[[family]]
+id = "docker"
+name = "Docker"
+exes = ["docker desktop.exe", "com.docker.backend.exe", "com.docker.build.exe", "com.docker.service.exe", "docker.exe", "dockerd.exe"]
+
+[[family]]
+id = "opencode"
+name = "OpenCode"
+exes = ["opencode.exe"]

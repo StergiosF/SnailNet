@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { className, mbps, percent, rowMbps, stateKind, targetLabel } from "./format";
+import { appLabel, className, mbps, percent, rowMbps, stateKind, targetLabel } from "./format";
 describe("mbps", () => {
   it("keeps one decimal below 100 and none above", () => {
     expect(mbps(36_800_000)).toBe("36.8");
@@ -40,6 +40,23 @@ describe("targetLabel", () => {
   });
   it("names the class the scheduler reports", () => {
     expect(className({ kind: "site", id: "YouTube" })).toBe("site:youtube");
+  });
+  it("reads a raw exe name from an older service as the app people know", () => {
+    const id = String.raw`c:\program files\docker\com.docker.build.exe`;
+    const apps = [{ family: id, name: "com.docker.build.exe", exe: "com.docker.build.exe" }];
+    expect(targetLabel({ kind: "family", id }, apps, {})).toBe("Docker");
+  });
+});
+
+describe("appLabel", () => {
+  it("names raw exes as the apps people know", () => {
+    expect(appLabel("com.docker.build.exe", String.raw`c:\docker\com.docker.build.exe`)).toBe("Docker");
+    expect(appLabel("opencode.exe", String.raw`c:\users\me\opencode.exe`)).toBe("OpenCode");
+  });
+  it("drops the .exe tail from other raw names, keeps real names", () => {
+    expect(appLabel("MyGame.exe", String.raw`d:\games\mygame.exe`)).toBe("MyGame");
+    expect(appLabel("Thing Tool", "folder:x|y")).toBe("Thing Tool");
+    expect(appLabel("Brave", "brave")).toBe("Brave");
   });
 });
 

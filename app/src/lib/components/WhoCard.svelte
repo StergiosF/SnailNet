@@ -20,7 +20,7 @@
   import { unblock } from "../actions";
   import { flash } from "../flash";
   import { glide, ms } from "../motion";
-  import { boostLeft, boostShare, gameWhy, idle, inCall, inFront, liveBoost, users } from "../modes";
+  import { boostLeft, boostShare, firstOf, gameWhy, idle, inCall, inFront, liveBoost, users } from "../modes";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -48,9 +48,10 @@
 
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
   const live = $derived(liveBoost(service.snapshot?.config.boost, ui.now));
-  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
-  // Missing from older services: on.
-  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
+  // What goes first is the active mode's behavior (2026-11-25).
+  const goesFirst = $derived(firstOf(service.snapshot?.config));
+  const focusBoost = $derived(goesFirst.focus);
+  const callsFirst = $derived(goesFirst.calls);
   const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
   const list = $derived(ledger ? users(ledger, live, label, 5, calls) : []);
   const resting = $derived(ledger ? idle(ledger).slice(0, 3) : []);
@@ -181,10 +182,14 @@
 </section>
 
 <style>
+  /* Fills the column's leftover height; the rows scroll inside the card
+     while the heading and the footnotes stay put (2026-11-25). */
   .who {
     display: flex;
     flex-direction: column;
+    flex: 1;
     min-width: 0;
+    min-height: 176px;
     padding-bottom: 6px;
   }
   .hd {
@@ -202,9 +207,13 @@
   ul {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
     margin: 0;
     padding: 0 6px;
     list-style: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   li {
     position: relative;

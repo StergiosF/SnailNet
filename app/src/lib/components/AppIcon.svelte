@@ -1,9 +1,11 @@
 <script lang="ts">
   // What an app, a website or Everything else looks like in the list: the
   // program's own icon (icon.rs); else the brand's real logo (brands/,
-  // Simple Icons) for sites and known apps; else a letter tile in the
-  // site's colour. Windows' own traffic gets a PC glyph, Everything else
-  // four squares. Decorative: the name is always written beside it.
+  // Simple Icons) for sites and known apps; else a neutral app tile for
+  // apps (a random letter read as junk, 2026-11-25) or a letter tile in
+  // the site's colour for sites. Windows' own traffic gets a PC glyph,
+  // Everything else four squares. Decorative: the name is always written
+  // beside it.
   import { brandOf } from "../brands";
   import { icons } from "../icons.svelte";
   import { service } from "../service.svelte";
@@ -42,7 +44,6 @@
       ? (SITES[target.id.toLowerCase()] ?? { text: name.charAt(0).toUpperCase(), bg: "var(--surface-3)", fg: "var(--text-secondary)" })
       : null,
   );
-  const letter = $derived(name.trim().charAt(0).toUpperCase() || "?");
 </script>
 
 <span class="wrap" class:boxed style:--s="{size}px" aria-hidden="true">
@@ -74,7 +75,7 @@
   {:else if site}
     <span class="tile" style:background={site.bg} style:color={site.fg} class:wide={site.text.length > 1}>{site.text}</span>
   {:else}
-    <span class="tile plain">{letter}</span>
+    <span class="tile plain"><Glyph name="window" size={Math.round(size * 0.62)} /></span>
   {/if}
 </span>
 

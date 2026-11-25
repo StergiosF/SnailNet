@@ -5,6 +5,7 @@
 // a slice carves it out of Everything else first, taking one away hands it
 // back to the other slices in proportion.
 
+import { appLabel } from "./format";
 import { MIN_RULE, addSlice, normalize, removeSlice, setOther, setShare } from "./split";
 import type { Limit, Priority, Rule, SiteInfo, Target } from "./types";
 
@@ -166,6 +167,7 @@ export function pickable(
   for (const s of sites) push({ kind: "site", id: s.id }, s.name);
   const appList = [...apps]
     .filter((a) => a.family !== UNKNOWN_FAMILY)
+    .map((a) => ({ ...a, name: appLabel(a.name, a.family) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   for (const a of appList) push({ kind: "family", id: a.family }, a.name);
   return out;

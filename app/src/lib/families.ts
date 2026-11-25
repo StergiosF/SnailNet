@@ -2,6 +2,7 @@
 // its app ("Split out"), or a whole app counted as part of another
 // ("Merge into…"). The service applies them; these build the new lists.
 
+import { appLabel } from "./format";
 import type { AppInfo, Families, Merge } from "./types";
 
 /** A split-out program's family id. */
@@ -65,7 +66,10 @@ export type Grouping =
   | { kind: "merge"; key: string; from: string; name: string; into: string };
 
 export function groupings(f: Families | undefined, apps: AppInfo[]): Grouping[] {
-  const named = (id: string) => apps.find((a) => same(a.family, id))?.name;
+  const named = (id: string) => {
+    const n = apps.find((a) => same(a.family, id))?.name;
+    return n === undefined ? undefined : appLabel(n, id);
+  };
   return [
     ...splits(f).map((exe): Grouping => ({
       kind: "split",
@@ -77,8 +81,8 @@ export function groupings(f: Families | undefined, apps: AppInfo[]): Grouping[] 
       kind: "merge",
       key: `m ${m.from}`,
       from: m.from,
-      name: m.from_name || splitExe(m.from) || m.from,
-      into: m.name,
+      name: appLabel(m.from_name || splitExe(m.from) || m.from, m.from),
+      into: appLabel(m.name, m.into),
     })),
   ];
 }

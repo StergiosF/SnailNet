@@ -5,9 +5,9 @@
 import { sameTarget } from "./rules";
 import { QUIET_BPS, statusText, top, type Ledger } from "./ledger";
 import { t, type Key } from "./i18n";
-import type { Boost, GameTick, GameWhy, Profile, Target } from "./types";
+import type { Boost, Config, First, GameTick, GameWhy, Profile, Target } from "./types";
 
-export type ModeId = "balanced" | "streaming" | "gaming" | "quiet-downloads";
+export type ModeId = "balanced" | "calls" | "focus" | "streaming" | "gaming" | "quiet-downloads";
 
 export interface Mode {
   id: ModeId;
@@ -18,10 +18,42 @@ export interface Mode {
 /** The built-in modes (snailnet-core `modes::MODES`), in order. */
 export const MODES: Mode[] = [
   { id: "balanced", name: "mode.balanced", body: "mode.balanced.body" },
+  { id: "calls", name: "mode.calls", body: "mode.calls.body" },
+  { id: "focus", name: "mode.focus", body: "mode.focus.body" },
   { id: "streaming", name: "mode.streaming", body: "mode.streaming.body" },
   { id: "gaming", name: "mode.gaming", body: "mode.gaming.body" },
   { id: "quiet-downloads", name: "mode.quiet", body: "mode.quiet.body" },
 ];
+
+/** What a built-in mode puts first (snailnet-core `modes::first_for`). */
+const FIRST: Record<string, First> = {
+  calls: { calls: true, focus: false, gaming: false },
+  focus: { calls: false, focus: true, gaming: false },
+  streaming: { calls: true, focus: false, gaming: false },
+  gaming: { calls: true, focus: true, gaming: true },
+};
+
+const NONE: First = { calls: false, focus: false, gaming: false };
+
+/** What the active mode puts first (2026-11-25): one mode at a time,
+ *  Balanced nothing. A user's own mode keeps what it was copied with.
+ *  An older service has no Calls/Focus modes and still reads its old
+ *  settings, so its flags speak for it. */
+export function firstOf(config: Config | null | undefined): First {
+  const p = config?.profiles.find((x) => x.id === config.active_profile);
+  if (!config || !p) return NONE;
+  const known = FIRST[p.id];
+  if (known) return known;
+  if (p.first) return p.first;
+  const modern = config.profiles.some((x) => x.id === "calls") && config.profiles.some((x) => x.id === "focus");
+  if (modern) return NONE;
+  const s = config.settings;
+  return {
+    calls: s.calls_first !== false,
+    focus: s.focus_boost !== false,
+    gaming: s.gaming_while_playing === true,
+  };
+}
 
 /** A mode as the pickers show it: its words, and whether it's the user's
  *  own ("Duplicate & edit", §11.2) rather than built in. */

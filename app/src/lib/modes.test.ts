@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it } from "vitest";
 import { ledger } from "./ledger";
-import { availableModes, boostLeft, boostShare, copyName, gameWhy, idle, inCall, inFront, liveBoost, modeName, users } from "./modes";
-import type { Boost, DirStats, Profile, Rule, Target } from "./types";
+import { availableModes, boostLeft, boostShare, copyName, firstOf, gameWhy, idle, inCall, inFront, liveBoost, modeName, users } from "./modes";
+import type { Boost, Config, DirStats, Profile, Rule, Target } from "./types";
 
 const M = 1_000_000;
 const label = (t: Target) =>
@@ -46,6 +46,35 @@ describe("modes", () => {
     expect(modeName(profile("quiet-downloads", "x"))).toBe("Quiet downloads");
     expect(modeName(profile("mine", "Mine"))).toBe("Mine");
     expect(modeName(null)).toBe("");
+  });
+});
+
+describe("what goes first", () => {
+  const config = (active: string, own?: Profile) =>
+    ({
+      active_profile: active,
+      profiles: [profile("balanced"), profile("calls"), profile("focus"), profile("gaming"), ...(own ? [own] : [])],
+    }) as Config;
+  it("is the active mode's behavior, one mode at a time", () => {
+    expect(firstOf(config("balanced"))).toEqual({ calls: false, focus: false, gaming: false });
+    expect(firstOf(config("calls"))).toEqual({ calls: true, focus: false, gaming: false });
+    expect(firstOf(config("focus"))).toEqual({ calls: false, focus: true, gaming: false });
+    expect(firstOf(config("gaming"))).toEqual({ calls: true, focus: true, gaming: true });
+    expect(firstOf(null)).toEqual({ calls: false, focus: false, gaming: false });
+  });
+  it("a user's own mode keeps what it was copied with", () => {
+    const own: Profile = { id: "mine", name: "Mine", rules: [], first: { calls: true, focus: true, gaming: true } };
+    expect(firstOf(config("mine", own))).toEqual({ calls: true, focus: true, gaming: true });
+    const plain: Profile = { id: "plain", name: "Plain", rules: [] };
+    expect(firstOf(config("plain", plain))).toEqual({ calls: false, focus: false, gaming: false });
+  });
+  it("an older service's settings still speak for what goes first", () => {
+    const old = {
+      active_profile: "balanced",
+      profiles: [profile("balanced"), profile("streaming")],
+      settings: { focus_boost: true, calls_first: false, gaming_while_playing: true },
+    } as unknown as Config;
+    expect(firstOf(old)).toEqual({ calls: false, focus: true, gaming: true });
   });
 });
 

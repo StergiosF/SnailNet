@@ -52,6 +52,17 @@ export interface Profile {
   id: string;
   name: string;
   rules: Rule[];
+  /** What a user's own mode puts first, inherited when copied (missing on
+   *  older services and on built-in modes, which derive their own). */
+  first?: First;
+}
+
+/** What a mode puts first (2026-11-25: the old "What goes first" switches
+ *  became modes, one active at a time). */
+export interface First {
+  calls: boolean;
+  focus: boolean;
+  gaming: boolean;
 }
 
 export interface Line {
@@ -106,10 +117,11 @@ export interface Boost {
 export interface Settings {
   low_latency: boolean;
   lan_exempt: boolean;
-  /** The app in front, and games while they run, go first. */
-  focus_boost: boolean;
-  /** Use the Gaming mode while a game runs. */
-  gaming_while_playing: boolean;
+  /** Legacy (older services): what goes first is the active mode's
+   *  behavior now; see `firstOf` in modes.ts. */
+  focus_boost?: boolean;
+  /** Legacy, as `focus_boost`. */
+  gaming_while_playing?: boolean;
   /** Live calls go first, spotted by their traffic (missing from older
    *  services: on). */
   calls_first?: boolean;

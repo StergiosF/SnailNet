@@ -47,9 +47,11 @@
     | "search"
     | "close";
 
-  /** A mode's glyph: the four built-in modes have their own, the user's
+  /** A mode's glyph: the built-in modes have their own, the user's
    *  own modes share one. */
   export function modeGlyph(id: string): GlyphName {
+    if (id === "calls") return "phone";
+    if (id === "focus") return "window";
     return id === "balanced" || id === "streaming" || id === "gaming" || id === "quiet-downloads" ? id : "own-mode";
   }
 </script>

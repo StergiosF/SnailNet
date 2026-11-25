@@ -26,6 +26,8 @@ const site = (id: string, share: number): Rule => ({ target: { kind: "site", id 
 
 const profiles: Profile[] = [
   { id: "balanced", name: "Balanced", rules: [] },
+  { id: "calls", name: "Calls", rules: [] },
+  { id: "focus", name: "Focus", rules: [] },
   {
     id: "streaming",
     name: "Streaming",

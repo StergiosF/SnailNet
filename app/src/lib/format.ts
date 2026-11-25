@@ -20,6 +20,34 @@ export function percent(basisPoints: number): string {
   return `${Math.round(basisPoints / 100)}%`;
 }
 
+/** Raw exe file names people shouldn't have to read: the common name of
+ *  the app they belong to. The family pack names these on newer services;
+ *  this covers older ones that still report the exe (2026-11-25). */
+const EXE_NAMES: Record<string, string> = {
+  "com.docker.build.exe": "Docker",
+  "com.docker.backend.exe": "Docker",
+  "com.docker.service.exe": "Docker",
+  "docker desktop.exe": "Docker",
+  "docker.exe": "Docker",
+  "dockerd.exe": "Docker",
+  "opencode.exe": "OpenCode",
+};
+
+/** A family id that is really an exe path (the service's fallback for
+ *  unlisted apps) → its lowercased file name; plain ids pass through. */
+export function exeBase(id: string): string {
+  const i = Math.max(id.lastIndexOf("\\"), id.lastIndexOf("/"));
+  return (i >= 0 ? id.slice(i + 1) : id).toLowerCase();
+}
+
+/** The name to show for an app: the common name for a raw exe, else the
+ *  service's name without a ".exe" tail ("MyGame", not "MyGame.exe"). */
+export function appLabel(name: string, family: string): string {
+  const known = EXE_NAMES[exeBase(family)];
+  if (known) return known;
+  return name.toLowerCase().endsWith(".exe") ? name.slice(0, -4) : name;
+}
+
 /** A rule target as people read it: the app's or site's own name when
  *  known ("Brave", "YouTube"), else its id with a capital first letter. */
 export function targetLabel(
@@ -33,7 +61,8 @@ export function targetLabel(
       : target.kind === "family"
         ? apps.find((a) => a.family === target.id)?.name
         : undefined;
-  return known ?? target.id.charAt(0).toUpperCase() + target.id.slice(1);
+  if (known !== undefined) return appLabel(known, target.id);
+  return target.id.charAt(0).toUpperCase() + target.id.slice(1);
 }
 
 /** The scheduler class a rule becomes (`family:brave`, `site:youtube`). */

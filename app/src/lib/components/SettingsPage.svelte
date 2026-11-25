@@ -2,17 +2,18 @@
   // Settings (DESIGN.md, Settings): grouped by what people come for, with
   // an index beside the groups that follows the scroll: your line (speed,
   // Measure, the last test with its grades, following the line, other
-  // networks); what goes first (calls, the app you're using, Gaming while
-  // you play, the fix, the apps you marked); apps (how they are grouped);
-  // startup and keys; about; and last, quietly, starting over. One line per
-  // setting with a short "what it does"; lists you need once fold.
+  // networks); apps (how they are grouped, and the ones marked from their
+  // menu); notifications (the fix button); startup and keys; about; and
+  // last, quietly, starting over. What goes first is the mode switch now
+  // (2026-11-25), one mode at a time. One line per setting with a short
+  // "what it does"; lists you need once fold.
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { canMeasure, measureLine, putBack, resetAll, resetSplit, separate, setFirstChoice } from "../actions";
   import { groupings } from "../families";
-  import { shortDate, stateKind } from "../format";
+  import { appLabel, shortDate, stateKind } from "../format";
   import { fixer } from "../fixer.svelte";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
@@ -23,7 +24,7 @@
   import { ui } from "../ui.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Dropdown from "./Dropdown.svelte";
-  import Glyph, { type GlyphName } from "./Glyph.svelte";
+  import Glyph from "./Glyph.svelte";
   import UpdateRow from "./UpdateRow.svelte";
 
   let { canEdit }: { canEdit: boolean } = $props();
@@ -132,17 +133,13 @@
   });
   let pinning = $state(false);
   let focusing = $state(false);
-  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
-  const gamingWhilePlaying = $derived(service.snapshot?.config.settings.gaming_while_playing === true);
-  // Missing from older services: on.
-  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
   // Missing from older services: on.
   const packUpdates = $derived(service.snapshot?.config.settings.pack_updates !== false);
   // The apps the user marked from their Boost menu (§11.5 overrides).
   const choices = $derived.by(() => {
     const s = service.snapshot?.config.settings;
     const name = (id: string) =>
-      service.snapshot?.apps.find((a) => a.family.toLowerCase() === id.toLowerCase())?.name ?? id;
+      appLabel(service.snapshot?.apps.find((a) => a.family.toLowerCase() === id.toLowerCase())?.name ?? id, id);
     return [
       ...(s?.games ?? []).map((id) => ({ id, name: name(id), kind: t("first.list.game") })),
       ...(s?.never_first ?? []).map((id) => ({ id, name: name(id), kind: t("first.list.never") })),
@@ -176,48 +173,15 @@
   const mode = $derived(modeName(service.activeProfile));
   const serviceVersion = $derived(service.link.kind === "connected" ? service.link.service_version : null);
 
-  // The switches of "What goes first", in order.
-  const firstSwitches = $derived([
-    {
-      glyph: "phone" as GlyphName,
-      title: t("calls.title"),
-      body: t("calls.body"),
-      on: callsFirst,
-      disabled: !canEdit || focusing,
-      set: (on: boolean) => void setSetting({ calls_first: on }),
-    },
-    {
-      glyph: "window" as GlyphName,
-      title: t("focus.title"),
-      body: t("focus.body"),
-      on: focusBoost,
-      disabled: !canEdit || focusing,
-      set: (on: boolean) => void setSetting({ focus_boost: on }),
-    },
-    {
-      glyph: "gaming" as GlyphName,
-      title: t("gaming.title"),
-      body: t("gaming.body"),
-      on: gamingWhilePlaying,
-      disabled: !canEdit || focusing,
-      set: (on: boolean) => void setSetting({ gaming_while_playing: on }),
-    },
-    {
-      glyph: "bulb" as GlyphName,
-      title: t("fix.setting.title"),
-      body: t("fix.setting.body"),
-      on: fixer.prefs.on,
-      disabled: false,
-      set: (on: boolean) => fixer.setOn(on),
-    },
-  ]);
+  // What goes first is a mode now (2026-11-25), one at a time in the mode
+  // switch; only the fix suggestion stays a setting, under Notifications.
 
   // The index: one entry per group shown, lit for the group in view.
   // Words only: the rows carry the glyphs, once (DESIGN.md, Settings).
   const index = $derived<{ id: string; label: string }[]>([
     { id: "set-line", label: t("settings.connection") },
-    { id: "set-first", label: t("settings.first") },
-    ...(grouped.length > 0 ? [{ id: "set-apps", label: t("settings.apps") }] : []),
+    ...(grouped.length > 0 || choices.length > 0 ? [{ id: "set-apps", label: t("settings.apps") }] : []),
+    { id: "set-notes", label: t("settings.notifications") },
     { id: "set-start", label: t("settings.windows") },
     { id: "set-about", label: t("settings.about") },
     { id: "set-reset", label: t("settings.reset") },
@@ -376,57 +340,31 @@
       </div>
     </section>
 
-    <section id="set-first" aria-labelledby="set-first-h">
-      <h2 class="group-title" id="set-first-h">{t("settings.first")}</h2>
+    <section id="set-notes" aria-labelledby="set-notes-h">
+      <h2 class="group-title" id="set-notes-h">{t("settings.notifications")}</h2>
       <div class="card group">
-        {#each firstSwitches as sw (sw.title)}
-          <label class="item">
-            <span class="ic"><Glyph name={sw.glyph} size={20} /></span>
-            <div class="words">
-              <b>{sw.title}</b>
-              <span>{sw.body}</span>
-            </div>
-            <input
-              type="checkbox"
-              role="switch"
-              class="switch"
-              checked={sw.on}
-              disabled={sw.disabled}
-              onchange={(e) => sw.set(e.currentTarget.checked)}
-            />
-          </label>
-        {/each}
-        {#if choices.length > 0}
-          <details class="item fold">
-            <summary>
-              <span class="ic"><Glyph name="flag" size={20} /></span>
-              <span class="words"><b>{t("first.list.title")}</b><span>{t("first.list.body")}</span></span>
-              <span class="count">{t("settings.count", { count: choices.length })}<Glyph name="chevron" size={16} /></span>
-            </summary>
-            <ul class="nets choices">
-              {#each choices as c (c.id)}
-                <li>
-                  <span class="net">{c.name}</span>
-                  <span>{c.kind}</span>
-                  <button
-                    type="button"
-                    class="btn btn-quiet"
-                    disabled={!canEdit}
-                    aria-label={t("first.list.remove.label", { name: c.name })}
-                    onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
-                  >
-                </li>
-              {/each}
-            </ul>
-          </details>
-        {/if}
+        <label class="item">
+          <span class="ic"><Glyph name="bulb" size={20} /></span>
+          <div class="words">
+            <b>{t("fix.setting.title")}</b>
+            <span>{t("fix.setting.body")}</span>
+          </div>
+          <input
+            type="checkbox"
+            role="switch"
+            class="switch"
+            checked={fixer.prefs.on}
+            onchange={(e) => fixer.setOn(e.currentTarget.checked)}
+          />
+        </label>
       </div>
     </section>
 
-    {#if grouped.length > 0}
+    {#if grouped.length > 0 || choices.length > 0}
       <section id="set-apps" aria-labelledby="set-apps-h">
         <h2 class="group-title" id="set-apps-h">{t("settings.apps")}</h2>
         <div class="card group">
+          {#if grouped.length > 0}
           <details class="item fold">
             <summary>
               <span class="ic"><Glyph name="apps" size={20} /></span>
@@ -460,6 +398,31 @@
               {/each}
             </ul>
           </details>
+          {/if}
+          {#if choices.length > 0}
+            <details class="item fold">
+              <summary>
+                <span class="ic"><Glyph name="flag" size={20} /></span>
+                <span class="words"><b>{t("first.list.title")}</b><span>{t("first.list.body")}</span></span>
+                <span class="count">{t("settings.count", { count: choices.length })}<Glyph name="chevron" size={16} /></span>
+              </summary>
+              <ul class="nets choices">
+                {#each choices as c (c.id)}
+                  <li>
+                    <span class="net">{c.name}</span>
+                    <span>{c.kind}</span>
+                    <button
+                      type="button"
+                      class="btn btn-quiet"
+                      disabled={!canEdit}
+                      aria-label={t("first.list.remove.label", { name: c.name })}
+                      onclick={() => void setFirstChoice(c.id, c.name, "auto")}>{t("first.list.remove")}</button
+                    >
+                  </li>
+                {/each}
+              </ul>
+            </details>
+          {/if}
         </div>
       </section>
     {/if}

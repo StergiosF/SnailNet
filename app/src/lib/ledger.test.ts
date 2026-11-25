@@ -55,6 +55,17 @@ describe("ledger", () => {
     expect(members.find((m) => m.name === "Brave")?.bps).toBeCloseTo(0.4 * M);
   });
 
+  it("names raw-exe apps as people read them, not as file names", () => {
+    const d = busy();
+    d.families.push({
+      family: String.raw`c:\docker\com.docker.build.exe`,
+      name: "com.docker.build.exe",
+      bps: 5 * M,
+      unidentified_bps: 0,
+    });
+    expect(membersOf(d, rules).map((m) => m.name)).toContain("Docker");
+  });
+
   it("drops quiet apps and marks unrecognised traffic", () => {
     const d = busy();
     d.families.push({ family: "unknown", name: "Unknown", bps: 0.2 * M, unidentified_bps: 0 });

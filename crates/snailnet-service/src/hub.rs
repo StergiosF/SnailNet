@@ -127,7 +127,7 @@ impl Inner {
     /// first, as in `plan`).
     fn front(&self, tick: &StatsTick) -> Option<String> {
         let shaping = tick.down.is_some() || tick.up.is_some();
-        (self.config.settings.focus_boost && shaping)
+        (self.config.first().focus && shaping)
             .then(|| self.focus.front(&self.config.settings))
             .flatten()
     }
@@ -136,7 +136,7 @@ impl Inner {
     /// switch is off, never a "never first" app, each family once, sorted.
     fn calls(&self) -> Vec<String> {
         let s = &self.config.settings;
-        if !s.calls_first {
+        if !self.config.first().calls {
             return Vec::new();
         }
         let mut out: Vec<String> = self
@@ -151,7 +151,7 @@ impl Inner {
     }
 
     fn playing(&self) -> bool {
-        self.config.settings.gaming_while_playing
+        self.config.first().gaming
             && self.focus.has_games(&self.config.settings)
             && self.config.profiles.iter().any(|p| p.id == modes::GAMING)
     }
@@ -262,7 +262,13 @@ impl Hub {
             plan = i.config.plan_live(now, live);
             name = i.config.active().name.clone();
         }
-        if i.config.settings.focus_boost && plan.shapes_anything() {
+        // While Gaming takes over, its behavior applies, not the saved mode's.
+        let first = if i.playing() {
+            modes::first_for(modes::GAMING)
+        } else {
+            i.config.first()
+        };
+        if first.focus && plan.shapes_anything() {
             plan.focus = i.focus.pids(&i.config.settings);
         }
         if plan.strict {
@@ -1207,6 +1213,11 @@ mod tests {
             hub.plan(0).0.focus.is_empty(),
             "nothing shaped, nothing first"
         );
+        hub.change(hub.rev(), |c| {
+            c.active_profile = "focus".into();
+            Ok(())
+        })
+        .unwrap();
         let line = Line {
             down_mbps: Some(25.0),
             ..Line::default()
@@ -1215,21 +1226,26 @@ mod tests {
         assert_eq!(hub.plan(0).0.focus, vec![me]);
         hub.prune_focus();
         assert_eq!(hub.plan(0).0.focus, vec![me], "this test is still running");
-        assert!(!hub.latest_tick().playing, "the switch is off");
-        hub.change(hub.rev(), |c| {
-            c.settings.gaming_while_playing = true;
-            Ok(())
-        })
-        .unwrap();
+        assert!(!hub.latest_tick().playing, "Focus doesn't auto-switch");
+        // A copy of Gaming keeps the automation: while a game runs, the
+        // plan is Gaming's but the pick stays saved.
+        hub.copy_profile("gaming", "Game night", hub.rev()).unwrap();
         assert_eq!(hub.plan(0).1, "Gaming", "a game runs: Gaming mode");
-        assert_eq!(hub.config().active_profile, "balanced", "the pick is kept");
+        assert_eq!(
+            hub.config().active_profile,
+            "game-night",
+            "the pick is kept"
+        );
         assert!(hub.latest_tick().playing, "clients are told");
         hub.change(hub.rev(), |c| {
-            c.settings.focus_boost = false;
+            c.active_profile = "balanced".into();
             Ok(())
         })
         .unwrap();
-        assert!(hub.plan(0).0.focus.is_empty(), "switched off");
+        assert!(
+            hub.plan(0).0.focus.is_empty(),
+            "Balanced puts nothing first"
+        );
     }
 
     #[test]
@@ -1237,6 +1253,11 @@ mod tests {
         let (_t, hub) = hub();
         hub.set_state(ServiceState::Shaping);
         hub.set_family_of(|_| Some("firefox".into()));
+        hub.change(hub.rev(), |c| {
+            c.active_profile = "focus".into();
+            Ok(())
+        })
+        .unwrap();
         hub.focus_changed(std::process::id(), None);
         assert_eq!(hub.latest_tick().front, None, "no stats yet");
         let base = Instant::now();
@@ -1255,13 +1276,13 @@ mod tests {
         assert_eq!(hub.latest_tick().front.as_deref(), Some("firefox"));
 
         hub.change(hub.rev(), |c| {
-            c.settings.focus_boost = false;
+            c.active_profile = "balanced".into();
             Ok(())
         })
         .unwrap();
-        assert_eq!(hub.latest_tick().front, None, "switched off");
+        assert_eq!(hub.latest_tick().front, None, "Balanced: nothing first");
         hub.change(hub.rev(), |c| {
-            c.settings.focus_boost = true;
+            c.active_profile = "focus".into();
             Ok(())
         })
         .unwrap();
@@ -1299,7 +1320,7 @@ mod tests {
         let me = std::process::id();
         hub.change(hub.rev(), |c| {
             c.line.down_mbps = Some(25.0);
-            c.settings.gaming_while_playing = true;
+            c.active_profile = "gaming".into();
             c.settings.games = vec!["Hades".into()];
             Ok(())
         })
@@ -1315,7 +1336,11 @@ mod tests {
         })
         .unwrap();
         assert!(hub.plan(0).0.focus.is_empty(), "never first");
-        assert_eq!(hub.plan(0).1, "Balanced", "nor a game any more");
+        assert_eq!(
+            hub.plan(0).1,
+            "Gaming",
+            "the mode stays; the game isn't first"
+        );
         assert!(!hub.latest_tick().playing);
     }
 
@@ -1545,14 +1570,17 @@ mod tests {
                 ..Seen::default()
             })
         };
-        let mut c = Config::default();
+        let mut c = Config {
+            active_profile: "calls".into(),
+            ..Config::default()
+        };
         c.settings.never_first = vec!["obs".into()];
         hub.set_loaded(c.clone());
         hub.publish(&snap(0), seen());
         hub.publish(&snap(100), seen());
         assert_eq!(hub.latest_tick().calls, ["discord", "zoom"]);
 
-        c.settings.calls_first = false;
+        c.active_profile = "balanced".into();
         hub.set_loaded(c);
         assert!(hub.latest_tick().calls.is_empty());
 

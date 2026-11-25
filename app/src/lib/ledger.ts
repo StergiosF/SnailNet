@@ -4,7 +4,7 @@
 // apps that land in it. Also the sentence at the top that answers "who is
 // using my internet, and is it a problem?". Pure, so it's tested.
 
-import { className, mbps } from "./format";
+import { appLabel, className, mbps } from "./format";
 import { t } from "./i18n";
 import { barShares, isSlice, sameTarget } from "./rules";
 import type { ClassTick, DirStats, Priority, Rule, Target } from "./types";
@@ -120,7 +120,7 @@ export function membersOf(
     out.push({
       key: `family:${f.family}`,
       target,
-      name: f.name,
+      name: appLabel(f.name, f.family),
       bps,
       fixed,
       waiting: wants,
@@ -355,5 +355,5 @@ export function unnamed(dir: DirStats | null | undefined): { bps: number; apps: 
   const bps = fams.reduce((sum, f) => sum + f.unidentified_bps, 0);
   if (bps < QUIET_BPS) return null;
   fams.sort((a, b) => b.unidentified_bps - a.unidentified_bps);
-  return { bps, apps: fams.map((f) => f.name) };
+  return { bps, apps: fams.map((f) => appLabel(f.name, f.family)) };
 }

@@ -212,14 +212,18 @@
   .line:hover .pen {
     color: var(--text-primary);
   }
+  /* Two speeds side by side while they fit; a wide upload (111.5 Mbps)
+     drops to its own line rather than run past the rail (2026-11-25). */
   .dirs {
     display: flex;
-    gap: 14px;
+    flex-wrap: wrap;
+    gap: 2px 14px;
   }
   .dir {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
     font-size: 15px;
     font-weight: 700;
     color: var(--text-primary);

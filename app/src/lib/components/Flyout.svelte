@@ -13,7 +13,7 @@
   import { t } from "../i18n";
   import { glance, ledger } from "../ledger";
   import { pause, resume, startService, switchMode } from "../actions";
-  import { availableModes, boostLeft, gameWhy, inCall, inFront, liveBoost, timeLeft, users } from "../modes";
+  import { availableModes, boostLeft, firstOf, gameWhy, inCall, inFront, liveBoost, timeLeft, users } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
   import { placeMenu } from "../popover";
@@ -86,8 +86,9 @@
 
   // Who is using the internet now (what the tray is opened for), not the
   // split's rules: in Balanced there are none, and the flyout would be empty.
-  const focusBoost = $derived(service.snapshot?.config.settings.focus_boost !== false);
-  const callsFirst = $derived(service.snapshot?.config.settings.calls_first !== false);
+  const goesFirst = $derived(firstOf(service.snapshot?.config));
+  const focusBoost = $derived(goesFirst.focus);
+  const callsFirst = $derived(goesFirst.calls);
   const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
   const list = $derived(book ? users(book, boost, label, 4, calls) : []);
   const total = $derived(book?.total ?? 0);
@@ -324,10 +325,11 @@
   .note {
     padding: 0 16px;
   }
-  /* The modes as four tiles: glyph over name; the one that's on is ivory. */
+  /* The modes as tiles, three across: glyph over name; the one that's on
+     is ivory. */
   .modes {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     padding: 12px 12px 0;
   }

@@ -13,6 +13,14 @@ describe("brand logos", () => {
     expect(brandOf({ kind: "family", id: "brave" })).not.toBeNull();
     expect(brandOf({ kind: "family", id: "Chrome" })).not.toBeNull();
     expect(brandOf({ kind: "family", id: "steam" })).not.toBeNull();
+    expect(brandOf({ kind: "family", id: "docker" })).not.toBeNull();
+    expect(brandOf({ kind: "family", id: "opencode" })).not.toBeNull();
+  });
+
+  it("knows unlisted apps by their raw exe path, as older services report them", () => {
+    expect(brandOf({ kind: "family", id: String.raw`c:\program files\docker\com.docker.build.exe` })).not.toBeNull();
+    expect(brandOf({ kind: "family", id: String.raw`c:\users\me\.opencode\bin\opencode.exe` })).not.toBeNull();
+    expect(brandOf({ kind: "exe", id: "docker.exe" })).not.toBeNull();
   });
 
   it("has no look-alike for brands it doesn't carry", () => {
@@ -42,6 +50,6 @@ describe("brand logos", () => {
 
   it("credits every logo it ships", () => {
     expect(credits.every((c) => c.licence === "CC0-1.0" && c.trademark)).toBe(true);
-    expect(credits.length).toBe(20);
+    expect(credits.length).toBe(22);
   });
 });

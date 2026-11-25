@@ -109,14 +109,17 @@ of your own. Pick one and the whole split changes at once.
 | Mode | What it does |
 | --- | --- |
 | **Balanced** | Every app gets a fair share. |
+| **Calls** | A call in any app or browser goes first while it lasts. |
+| **Focus** | The window in front, or a running game, goes first. First, never more. |
 | **Streaming** | Videos and calls stay smooth. Downloads wait. |
 | **Gaming** | Your game and voice chat come first. |
 | **Quiet downloads** | Downloads never slow anything else down. |
 
-Press **Ctrl+Alt+S** anywhere to switch to the next mode (change the
-keys in Settings → Startup and keys). With *Gaming mode while you play*
-on, SnailNet switches to Gaming when a game starts and back to your mode
-when it closes.
+One mode is on at a time; each carries its own "what goes first", so
+picking a mode is all it takes. Press **Ctrl+Alt+S** anywhere to switch
+to the next mode (change the keys in Settings → Startup and keys). In
+Gaming (and modes copied from it), SnailNet switches to Gaming while a
+game runs and back to your mode when it closes.
 
 **Now** (the main window's first page) answers *what's happening, and is
 it OK?*
@@ -171,9 +174,9 @@ it OK?*
   last speed test, with a grade from A to F for how much ping rose while
   downloading, without SnailNet and with it; other networks, each with
   its own speed.
-- **What goes first:** calls, the app you're using, and Gaming mode while
-  you play (the first two are on by default), plus the apps you marked.
-- **Apps:** how apps are grouped.
+- **Apps:** how apps are grouped, and the apps you marked as games or
+  never first.
+- **Notifications:** the fix button on Now.
 - **Startup and keys:** start with Windows, and the keys that switch
   mode.
 - **Updates and About:** the version, **Check for updates**, and "Keep

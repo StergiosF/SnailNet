@@ -127,7 +127,7 @@
     <div class="col">
       <!-- The mode switch on every page: the strip never changes height. -->
       <TitleBar lead={modeSwitch} />
-      <main>
+      <main class:now={ui.page === "now"}>
         {#if service.link.kind === "connecting"}
           <p class="visually-hidden" role="status">{t("link.connecting")}</p>
         {/if}
@@ -181,9 +181,16 @@
     min-width: 0;
   }
   main {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     overflow-y: auto;
     padding: 14px var(--gutter) 28px;
+  }
+  /* Now fits the window: the page itself never scrolls, only the app
+     list inside it (WhoCard). Narrow windows still stack and scroll. */
+  main.now {
+    overflow: hidden;
   }
   @media (max-width: 900px) {
     main {
@@ -191,10 +198,18 @@
     }
   }
   .notice {
+    flex: none;
     margin-bottom: 16px;
     animation: page-in 320ms var(--ease-out) backwards;
   }
   .page {
+    flex: none;
     animation: page-in 380ms var(--ease-out) backwards;
+  }
+  main.now .page {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 </style>

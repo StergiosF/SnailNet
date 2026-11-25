@@ -13,6 +13,7 @@ import {
   siBattledotnet,
   siBrave,
   siDiscord,
+  siDocker,
   siDropbox,
   siEa,
   siEpicgames,
@@ -22,6 +23,7 @@ import {
   siGooglemeet,
   siKick,
   siNetflix,
+  siOpencode,
   siOpera,
   siQbittorrent,
   siSpotify,
@@ -31,6 +33,7 @@ import {
   siYoutube,
   siZoom,
 } from "simple-icons";
+import { exeBase } from "../format";
 import type { Target } from "../types";
 
 export interface Brand {
@@ -74,6 +77,21 @@ const APPS: Record<string, Icon> = {
   gog: siGogdotcom,
   dropbox: siDropbox,
   qbittorrent: siQbittorrent,
+  docker: siDocker,
+  opencode: siOpencode,
+};
+
+/** Unlisted apps the service still reports as a raw exe path: the brand
+ *  their exe belongs to, so the logo shows even before the pack knows
+ *  them (2026-11-25). */
+const EXES: Record<string, string> = {
+  "com.docker.build.exe": "docker",
+  "com.docker.backend.exe": "docker",
+  "com.docker.service.exe": "docker",
+  "docker desktop.exe": "docker",
+  "docker.exe": "docker",
+  "dockerd.exe": "docker",
+  "opencode.exe": "opencode",
 };
 
 /** The tile a logo sits on (--surface-2) and the cream it falls back to
@@ -114,7 +132,8 @@ export function inkOn(hex: string, tile = TILE): string {
 /** The logo for a website or app, or null (no logo: a letter tile). */
 export function brandOf(target: Target): Brand | null {
   const id = target.id.toLowerCase();
-  const icon = target.kind === "site" ? SITES[id] : target.kind === "family" ? APPS[id] : undefined;
+  let icon = target.kind === "site" ? SITES[id] : target.kind === "family" ? APPS[id] : undefined;
+  if (!icon && target.kind !== "site") icon = APPS[EXES[exeBase(id)] ?? ""];
   if (!icon) return null;
   const bg = `#${icon.hex.toLowerCase()}`;
   return { path: icon.path, ink: inkOn(icon.hex), bg, mark: markOn(bg) };

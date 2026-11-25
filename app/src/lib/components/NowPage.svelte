@@ -133,9 +133,14 @@
 
 <style>
   /* The page measures itself, not the window: the side rail and gutters
-     come off first. */
+     come off first. Wide windows fit the page to the window's height —
+     the app list (WhoCard) is the only thing that scrolls; narrow ones
+     stack and scroll here instead. */
   .wrap {
     container-type: inline-size;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
   .now {
     position: relative;
@@ -148,7 +153,9 @@
   @container (min-width: 860px) {
     .now {
       grid-template-columns: minmax(0, 1fr) 316px;
+      grid-template-rows: auto minmax(0, 1fr);
       column-gap: 24px;
+      height: 100%;
     }
     .hero {
       grid-column: 1 / -1;
@@ -215,6 +222,10 @@
     flex-direction: column;
     gap: 18px;
     min-width: 0;
+    min-height: 0;
+    /* Last resort on very short windows: the column scrolls, never the
+       window. */
+    overflow-y: auto;
   }
   .arrive {
     animation: rise-in 520ms 160ms var(--ease-out) backwards;
@@ -225,6 +236,8 @@
     flex-direction: column;
     gap: 18px;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
   }
   .side.arrive {
     animation-delay: 240ms;

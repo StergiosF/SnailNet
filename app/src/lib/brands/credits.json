@@ -198,5 +198,25 @@
     "url": "https://github.com/simple-icons/simple-icons",
     "trademark": true,
     "markUrl": "https://github.com/qbittorrent/qBittorrent/blob/73028f9930d9ab9d89edb60ed4aedb66d75669d9/src/icons/qbittorrent-tray-light.svg"
+  },
+  {
+    "slug": "docker",
+    "name": "Docker",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://www.docker.com/company/newsroom/press-kit/"
+  },
+  {
+    "slug": "opencode",
+    "name": "OpenCode",
+    "source": "simple-icons@16.37.0",
+    "author": "Simple Icons contributors",
+    "licence": "CC0-1.0",
+    "url": "https://github.com/simple-icons/simple-icons",
+    "trademark": true,
+    "markUrl": "https://opencode.ai"
   }
 ]
