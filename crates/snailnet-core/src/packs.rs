@@ -26,7 +26,7 @@
 //! [`current`] is what the rest of SnailNet reads; [`install`] swaps it.
 
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use minisign_verify::{PublicKey, Signature};
 use serde::Deserialize;
@@ -174,9 +174,14 @@ impl Packs {
     /// Whether `id` names a site in these packs or the compiled-in ones.
     /// Both count, so a rule made with either stays valid.
     pub fn knows_site(&self, id: &str) -> bool {
+        static BUILTIN_SITES: OnceLock<SitePack> = OnceLock::new();
         self.sites.sites.iter().any(|s| s.id == id)
             || (self.serial != builtin_serial()
-                && SitePack::builtin().sites.iter().any(|s| s.id == id))
+                && BUILTIN_SITES
+                    .get_or_init(SitePack::builtin)
+                    .sites
+                    .iter()
+                    .any(|s| s.id == id))
     }
 }
 

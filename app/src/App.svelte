@@ -5,6 +5,7 @@
   // the open page. First run takes the whole window until it's done.
   import { onMount, untrack } from "svelte";
   import { timeline } from "./lib/timeline.svelte";
+  import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
   import AddSlice from "./lib/components/AddSlice.svelte";
   import AutostartDialog from "./lib/components/AutostartDialog.svelte";
@@ -19,13 +20,15 @@
   import ModeSwitch from "./lib/components/ModeSwitch.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import Toast from "./lib/components/Toast.svelte";
+  import WhatsNewDialog from "./lib/components/WhatsNewDialog.svelte";
   import { targetLabel } from "./lib/format";
   import { t } from "./lib/i18n";
   import { glance, ledger } from "./lib/ledger";
-  import { ProofWatch, proofOf } from "./lib/proof";
+  import { ProofWatch, proofOf, type Proof } from "./lib/proof";
   import { needsFirstRun, newNetworkName } from "./lib/line";
   import { lineDialog } from "./lib/lineDialog.svelte";
   import { resume, startService } from "./lib/actions";
+  import { fixer } from "./lib/fixer.svelte";
   import { noticeOf } from "./lib/notice";
   import { service } from "./lib/service.svelte";
   import { ui } from "./lib/ui.svelte";
@@ -34,15 +37,26 @@
   import type { Target } from "./lib/types";
 
   onMount(() => {
+    const stopCatchup = service.onCatchup((ticks) => {
+      if (!service.snapshot) return;
+      const rules = service.activeProfile?.rules ?? [];
+      for (const tick of ticks) {
+        timeline.feed(tick.t_ms, ledger(rules, tick.down, label), ledger(rules, tick.up, label));
+      }
+    });
     service.start().catch((e: unknown) => {
       service.link = { kind: "lost", detail: String(e) };
     });
     invoke<boolean>("autostart_ask")
       .then((ask) => (autostartPending = ask))
       .catch(() => {});
+    getVersion()
+      .then((v) => updates.initVersion(v))
+      .catch(() => {});
     const stopTick = ui.tick();
     const stopUpdates = updates.watch();
     return () => {
+      stopCatchup();
       stopTick();
       stopUpdates();
     };
@@ -66,31 +80,37 @@
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
-  const dirStats = $derived(ui.dir === "down" ? service.stats?.down : service.stats?.up);
-  const book = $derived(connected ? ledger(ui.rules, dirStats, label, service.waiting[ui.dir]) : null);
   // The Now page's sentence always speaks of downloads (that's where the
   // sharing is felt); its list follows the Download / Upload choice.
   const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
   const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
-  // "Last 10 minutes" (timeline.svelte.ts): every tick, both directions,
-  // whatever page is open; and the marks from each new config.
+  const book = $derived(ui.dir === "down" ? downBook : upBook);
+  // "Last 10 minutes" (timeline.svelte.ts), ping proof (§11.10), and the
+  // one-tap fix (fixer.svelte.ts): driven strictly by stats ticks and link
+  // state, reusing the single down/up ledgers so Split-bar drags (`ui.rules`)
+  // never trigger side effects.
+  const proofWatch = new ProofWatch();
+  let proof = $state<Proof | null>(null);
   $effect(() => {
     const s = service.stats;
-    if (!s || !connected) return;
-    untrack(() => timeline.feed(s.t_ms, downBook, upBook));
+    const ok = connected;
+    untrack(() => {
+      if (!ok || !s) {
+        proof = proofWatch.step(null, 0, true);
+        fixer.sync(null, null);
+        return;
+      }
+      const down = downBook;
+      const up = upBook;
+      timeline.feed(s.t_ms, down, up);
+      const now = proofOf(s, down, up, service.snapshot?.config.line.measured);
+      proof = proofWatch.step(now, s.t_ms, s.state !== "Shaping");
+      fixer.sync(down, up);
+    });
   });
   $effect(() => {
     const c = service.snapshot?.config;
     if (c) untrack(() => timeline.config(c, label));
-  });
-  // The proof (§11.10): ping with and without SnailNet while the line is
-  // full, steadied by ProofWatch.
-  const proofWatch = new ProofWatch();
-  const proof = $derived.by(() => {
-    const s = service.stats;
-    if (!connected || !s) return proofWatch.step(null, 0, true);
-    const now = proofOf(s, downBook, upBook, service.snapshot?.config.line.measured);
-    return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
   });
   const downLine = $derived(service.snapshot?.config.line.down_mbps);
   const dirLine = $derived(ui.dir === "down" ? downLine : service.snapshot?.config.line.up_mbps);
@@ -161,6 +181,11 @@
   <LineDialog />
   <LeaveDialog />
   <AutostartDialog open={askAutostart} ondone={() => (autostartPending = false)} />
+  <WhatsNewDialog
+    data={updates.justUpdated}
+    open={!firstRun && !askAutostart && updates.justUpdated !== null}
+    onclose={() => updates.dismissWhatsNew()}
+  />
 </div>
 
 <style>

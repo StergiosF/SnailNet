@@ -6,6 +6,7 @@
 
 use std::ffi::c_void;
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use windows_sys::Win32::Networking::WinHttp::{
@@ -67,6 +68,11 @@ unsafe impl Sync for Https {}
 impl Https {
     /// `agent`: the User-Agent; `host`: e.g. `speed.cloudflare.com`.
     pub fn new(agent: &str, host: &str) -> io::Result<Self> {
+        Self::with_timeout(agent, host, 10_000)
+    }
+
+    /// As [`Self::new`], with a custom WinHTTP per-operation timeout (ms).
+    pub fn with_timeout(agent: &str, host: &str, timeout_ms: i32) -> io::Result<Self> {
         let agent = wide(agent);
         let host = wide(host);
         // SAFETY: the strings are NUL-terminated and outlive the calls.
@@ -79,9 +85,10 @@ impl Https {
                 0,
             )
         })?;
-        // 10 s to resolve, connect, send or wait for data.
         // SAFETY: an open session handle.
-        check(unsafe { WinHttpSetTimeouts(session.0, 10_000, 10_000, 10_000, 10_000) })?;
+        check(unsafe {
+            WinHttpSetTimeouts(session.0, timeout_ms, timeout_ms, timeout_ms, timeout_ms)
+        })?;
         // SAFETY: as above.
         let conn = Handle::new(unsafe {
             WinHttpConnect(session.0, host.as_ptr(), INTERNET_DEFAULT_HTTPS_PORT, 0)
@@ -131,18 +138,35 @@ impl Https {
     /// GET `path`, discarding the body, until it ends or `deadline`.
     /// Calls `moved` with each piece's size; returns the bytes read.
     pub fn download(&self, path: &str, deadline: Instant, moved: &dyn Fn(u64)) -> io::Result<u64> {
+        self.download_cancellable(path, deadline, &AtomicBool::new(false), moved)
+    }
+
+    /// As [`Self::download`], stopping early between chunks when `cancel` is set.
+    pub fn download_cancellable(
+        &self,
+        path: &str,
+        deadline: Instant,
+        cancel: &AtomicBool,
+        moved: &dyn Fn(u64),
+    ) -> io::Result<u64> {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(0);
+        }
         let req = self.request("GET", path)?;
         // SAFETY: an open request; no headers or body.
         check(unsafe {
             WinHttpSendRequest(req.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0)
         })?;
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(0);
+        }
         let code = Self::status(&req)?;
         if code != 200 {
             return Err(io::Error::other(format!("HTTP {code}")));
         }
         let mut buf = vec![0u8; CHUNK];
         let mut total = 0u64;
-        while Instant::now() < deadline {
+        while Instant::now() < deadline && !cancel.load(Ordering::Relaxed) {
             let mut n = 0u32;
             // SAFETY: `buf` holds `CHUNK` writable bytes.
             check(unsafe {
@@ -197,6 +221,21 @@ impl Https {
         deadline: Instant,
         moved: &dyn Fn(u64),
     ) -> io::Result<u64> {
+        self.upload_cancellable(path, len, deadline, &AtomicBool::new(false), moved)
+    }
+
+    /// As [`Self::upload`], stopping early between chunks when `cancel` is set.
+    pub fn upload_cancellable(
+        &self,
+        path: &str,
+        len: u32,
+        deadline: Instant,
+        cancel: &AtomicBool,
+        moved: &dyn Fn(u64),
+    ) -> io::Result<u64> {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(0);
+        }
         let req = self.request("POST", path)?;
         let headers = wide("Content-Type: application/octet-stream");
         // SAFETY: an open request; the header string is NUL-terminated
@@ -216,7 +255,7 @@ impl Https {
         let mut left = len as usize;
         let mut total = 0u64;
         while left > 0 {
-            if Instant::now() >= deadline {
+            if Instant::now() >= deadline || cancel.load(Ordering::Relaxed) {
                 return Ok(total);
             }
             let piece = left.min(CHUNK);
@@ -226,6 +265,9 @@ impl Https {
             left -= n as usize;
             total += u64::from(n);
             moved(u64::from(n));
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(total);
         }
         let code = Self::status(&req)?;
         if !(200..300).contains(&code) {

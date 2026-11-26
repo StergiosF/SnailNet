@@ -1,12 +1,9 @@
 // The main window's own state: which direction the numbers show, which
 // row is open, and rule changes on their way to the service.
 //
-// Two ways a rule change travels. The Split page edits a draft (draft.ts):
-// nothing reaches the line until Save, and leaving the page or switching
-// mode with unsaved changes asks first (`guard`). The tray flyout's quick
-// − / + still save by themselves (`change`): a change shows at once and
-// saves after a short pause, so a few quick clicks become one save; a save
-// waits for the previous one to come back, so they never race.
+// The Split page edits a draft (draft.ts): nothing reaches the line until
+// Save (`commit`), and leaving the page or switching mode with unsaved
+// changes asks first (`guard`).
 
 import { forgetFix } from "./fix";
 import { edit, isDirty, isSavable, isStale, startDraft, type Draft } from "./draft";
@@ -21,7 +18,7 @@ export type Page = "now" | "split" | "settings";
 
 /** A short message at the bottom of the window, with an optional action
  *  (Undo). It goes away by itself. */
-export type Toast = { message: string; action?: { label: string; run: () => void } };
+export type Toast = { message: string; kind?: "ok" | "error"; action?: { label: string; run: () => void } };
 
 const TOAST_MS = 8000;
 
@@ -32,8 +29,6 @@ export type Notice = {
   message: string;
   action?: { label: string; onclick: () => void };
 };
-
-const SETTLE_MS = 300;
 
 class Ui {
   page = $state<Page>("now");
@@ -57,12 +52,10 @@ class Ui {
   /** A speed test this window started is running, its check with
    *  SnailNet included (actions.ts measureLine). */
   measuring = $state(false);
-  error = $state<string | null>(null);
 
   #draft = $state<Rule[] | null>(null);
   /** The revision the last save produced, until the snapshot has it. */
   #waiting: number | null = null;
-  #timer: ReturnType<typeof setTimeout> | null = null;
 
   /** The Split page's unsaved copy, or null (nothing changed). */
   #edit = $state<Draft | null>(null);
@@ -177,44 +170,11 @@ class Ui {
     if (page !== this.page) this.guard(() => (this.page = page));
   }
 
-  change(next: Rule[]) {
-    this.error = null;
-    this.#draft = next;
-    this.#schedule(SETTLE_MS);
-  }
-
-  #schedule(ms: number) {
-    if (this.#timer) clearTimeout(this.#timer);
-    this.#timer = setTimeout(() => void this.#flush(), ms);
-  }
-
-  async #flush() {
-    this.#timer = null;
-    const next = this.#draft;
-    if (!next) return;
-    const rev = service.snapshot?.rev ?? 0;
-    if (this.#waiting !== null && rev < this.#waiting) {
-      this.#schedule(50);
-      return;
-    }
-    try {
-      const saved = await service.saveRules(next);
-      this.#waiting = saved;
-      this.#settle();
-    } catch (e) {
-      const err = e as SaveError;
-      this.error =
-        err.kind === "conflict" ? t("editor.conflict") : t("editor.failed", { message: err.message });
-      this.#draft = null;
-      this.#waiting = null;
-    }
-  }
-
   /** Drop the draft once the service's snapshot holds it. Called after a
    *  save and on every new snapshot. */
   #settle() {
     const rev = service.snapshot?.rev ?? 0;
-    if (this.#timer === null && this.#waiting !== null && rev >= this.#waiting) {
+    if (this.#waiting !== null && rev >= this.#waiting) {
       this.#draft = null;
       this.#waiting = null;
     }

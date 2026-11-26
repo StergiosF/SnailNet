@@ -103,16 +103,36 @@
         : t("history.quiet"),
   );
 
-  // Reading a moment.
+  // Reading a moment: O(1) bucket index against the cached plot rect.
   let at = $state<number | null>(null);
-  function point(e: PointerEvent) {
-    const box = (e.currentTarget as SVGElement).getBoundingClientRect();
-    const px = ((e.clientX - box.left) / box.width) * width;
-    let best = 0;
-    steps.forEach((s, i) => {
-      if (Math.abs(x(s + STEP_MS) - px) < Math.abs(x((steps[best] ?? 0) + STEP_MS) - px)) best = i;
-    });
-    at = best;
+  let plotBox: { left: number; width: number } | null = null;
+  $effect(() => {
+    void width;
+    plotBox = null;
+  });
+  function cacheBox(el: SVGSVGElement) {
+    const r = el.getBoundingClientRect();
+    plotBox = { left: r.left, width: r.width };
+  }
+  function enter(e: PointerEvent & { currentTarget: SVGSVGElement }) {
+    cacheBox(e.currentTarget);
+  }
+  function point(e: PointerEvent & { currentTarget: SVGSVGElement }) {
+    if (!enough || width <= 0) {
+      at = null;
+      return;
+    }
+    if (!plotBox) cacheBox(e.currentTarget);
+    if (!plotBox || plotBox.width <= 0) return;
+    const px = ((e.clientX - plotBox.left) / plotBox.width) * width;
+    const tMs = (px / width) * SPAN_MS + (end - SPAN_MS);
+    const first = (steps[0] as number) + STEP_MS;
+    const best = Math.max(0, Math.min(steps.length - 1, Math.round((tMs - first) / STEP_MS)));
+    if (at !== best) at = best;
+  }
+  function leave() {
+    at = null;
+    plotBox = null;
   }
   function ago(i: number): string {
     const s = Math.round((end - ((steps[i] ?? 0) + STEP_MS)) / 1000);
@@ -122,7 +142,7 @@
     return s % 60 === 0 ? t("history.at.m", { m }) : t("history.at.ms", { m, s: s % 60 });
   }
   const reading = $derived.by(() => {
-    if (at === null) return null;
+    if (at === null || at >= steps.length) return null;
     const i = at;
     const rows = bands
       .map((b) => ({ key: b.key, name: nameOf(b), v: b.values[i] ?? 0 }))
@@ -157,8 +177,9 @@
         height={TOP + H + AXIS}
         role="img"
         aria-label={t("history.label")}
+        onpointerenter={enter}
         onpointermove={point}
-        onpointerleave={() => (at = null)}
+        onpointerleave={leave}
       >
         <line class="grid" x1="0" x2={width} y1={TOP + H} y2={TOP + H} />
         {#if lineBps}
@@ -176,7 +197,7 @@
             >{t("history.speed", { line: mbps(lineBps) })}</text
           >
         {/if}
-        {#each shownMarks as m (m.t + m.text)}
+        {#each shownMarks as m, i (`${m.t}:${i}`)}
           <g class="mark">
             <line x1={m.mx} x2={m.mx} y1={TOP - 4} y2={TOP + H} />
             <circle cx={m.mx} cy={TOP - 4} r="2.5" />

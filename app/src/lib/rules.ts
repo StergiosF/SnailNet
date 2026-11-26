@@ -69,6 +69,19 @@ export function addRule(rules: Rule[], target: Target, want = NEW_SLICE): Rule[]
   return giveSlice([...rules, rule], rules.length, want);
 }
 
+/** Ensure `target` has an enabled rule with a slice of its own: adds one
+ *  if absent, turns a disabled rule back on (keeping its remembered share if
+ *  non-zero), and allocates `want` if its share is 0 ("only when free"). */
+export function giveShare(rules: Rule[], target: Target, want = NEW_SLICE): Rule[] {
+  const i = rules.findIndex((r) => sameTarget(r.target, target));
+  if (i < 0) return addRule(rules, target, want);
+  const r = rules[i];
+  if (!r) return rules;
+  if (r.share <= 0) return setRuleShare(setEnabled(rules, i, true), i, want);
+  if (!r.enabled) return setEnabled(rules, i, true);
+  return rules;
+}
+
 export function removeRule(rules: Rule[], i: number): Rule[] {
   return takeSlice(rules, i, { enabled: false }).filter((_, j) => j !== i);
 }

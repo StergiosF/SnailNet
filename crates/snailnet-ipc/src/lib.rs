@@ -37,6 +37,10 @@ pub const MAX_FRAME: usize = 1 << 20;
 /// A client that lists this in Hello's `ui_capabilities` gets
 /// [`Event::NewApp`] (older clients can't decode it).
 pub const CAP_NEW_APPS: &str = "new-apps";
+/// A request-only client that lists this in Hello's `ui_capabilities` opts out
+/// of unsolicited [`ServerMsg::Event`] pushes (preventing pipe buffer stalls
+/// and unbounded client backlogs on idle persistent connections).
+pub const CAP_NO_EVENTS: &str = "no-events";
 
 /// The pipe's DACL. NETWORK denied (listed first, so it wins); SYSTEM,
 /// Administrators and the pipe's owner (`OW`: whoever created it — the
@@ -352,6 +356,9 @@ pub struct AppInfo {
     pub name: String,
     /// Lowercase exe file name; empty for System.
     pub exe: String,
+    /// Full path to the executable on disk, for extracting its app icon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -707,6 +714,7 @@ mod tests {
                         family: "steam".into(),
                         name: "Steam".into(),
                         exe: "steam.exe".into(),
+                        path: Some(r"C:\Program Files (x86)\Steam\steam.exe".into()),
                     }],
                     sites: vec![SiteInfo {
                         id: "youtube".into(),

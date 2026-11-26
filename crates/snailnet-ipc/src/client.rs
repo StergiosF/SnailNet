@@ -141,4 +141,15 @@ impl Client {
         }
         Ok(read_frame(&mut self.pipe)?)
     }
+
+    /// Discard any unsolicited stats/events buffered while waiting for replies
+    /// (for request-only persistent clients that never call [`Self::recv`]).
+    pub fn clear_backlog(&mut self) {
+        self.backlog.clear();
+    }
+
+    /// Number of unsolicited messages currently buffered in the client backlog.
+    pub fn backlog_len(&self) -> usize {
+        self.backlog.len()
+    }
 }

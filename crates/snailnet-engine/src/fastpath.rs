@@ -47,6 +47,13 @@ pub type Tag = u32;
 /// No owner known.
 pub const NO_TAG: Tag = Tag::MAX;
 
+/// The classifier's decision for a packet on the rx thread.
+#[derive(Debug, Clone, Copy)]
+pub enum Verdict {
+    Drop,
+    Pass(PacketMeta, Tag),
+}
+
 /// Decides which class a shaped packet belongs to. Each rx thread gets its
 /// own clone, so per-thread caches need no locking.
 pub trait Classifier: Clone + Send + 'static {
@@ -62,6 +69,23 @@ pub trait Classifier: Clone + Send + 'static {
     /// or not, before [`Classifier::classify`]; never for LAN traffic.
     fn blocked(&mut self, _info: &PacketInfo, _outbound: bool) -> bool {
         false
+    }
+
+    /// Combined block-check and classification for an admitted packet,
+    /// allowing implementations to share a single flow lookup.
+    fn decide(
+        &mut self,
+        pkt: &[u8],
+        info: &PacketInfo,
+        outbound: bool,
+        check_blocked: bool,
+    ) -> Verdict {
+        if check_blocked && self.blocked(info, outbound) {
+            Verdict::Drop
+        } else {
+            let (meta, tag) = self.classify(pkt, info, outbound);
+            Verdict::Pass(meta, tag)
+        }
     }
 }
 
@@ -522,18 +546,29 @@ fn rx_loop<C: Classifier>(
                 let remote = if up { i.dst } else { i.src };
                 !is_local_network(remote)
             });
-            if let Some(i) = &info
-                && internet
-                && classifier.blocked(i, up)
-            {
-                c.blocked.fetch_add(1, Relaxed);
-                continue;
-            }
-            let meta = info.filter(|_| admitted(up, internet, shaped)).map(|info| {
-                let (meta, tag) = classifier.classify(data, &info, up);
-                let control = info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
-                (PacketMeta { control, ..meta }, tag)
-            });
+            let meta = if let Some(info) = info {
+                if admitted(up, internet, shaped) {
+                    match classifier.decide(data, &info, up, internet) {
+                        Verdict::Drop => {
+                            c.blocked.fetch_add(1, Relaxed);
+                            continue;
+                        }
+                        Verdict::Pass(meta, tag) => {
+                            let control =
+                                info.protocol == PROTO_TCP && info.tcp_payload_len == Some(0);
+                            Some((PacketMeta { control, ..meta }, tag))
+                        }
+                    }
+                } else {
+                    if internet && classifier.blocked(&info, up) {
+                        c.blocked.fetch_add(1, Relaxed);
+                        continue;
+                    }
+                    None
+                }
+            } else {
+                None
+            };
             let Some((meta, tag)) = meta else {
                 c.bypassed.fetch_add(1, Relaxed);
                 push(engine, shared, &mut bypass, data, addr);
@@ -591,8 +626,9 @@ fn push(
 const SNAPSHOT_EVERY: Nanos = 100 * NANOS_PER_MILLI;
 /// Longest nap, so newly arrived packets are queued promptly.
 const MAX_NAP: Nanos = NANOS_PER_MILLI;
-/// When idle, wait this long for a packet before beating again.
-const IDLE_WAIT: Duration = Duration::from_millis(20);
+/// When idle, wait this long for a packet before beating again (10× below
+/// the 500 ms stall limit, cutting idle wakeups by 2.5×).
+const IDLE_WAIT: Duration = Duration::from_millis(50);
 
 fn schedule_loop(
     engine: &dyn PacketEngine,
@@ -605,14 +641,20 @@ fn schedule_loop(
     let clock = &shared.clock;
     let mut out = SendBatch::new(DEFAULT_BATCH);
     let mut next_snapshot = 0;
+    let mut dirty = true;
     // Bytes sent per tag: [down, up].
     let mut sent: [SentByTag; 2] = Default::default();
 
-    let enqueue = |item: Item, down: &mut Option<Scheduler<Queued>>, up: &mut Option<_>| {
+    let enqueue = |now: Nanos,
+                   item: Item,
+                   down: &mut Option<Scheduler<Queued>>,
+                   up: &mut Option<Scheduler<Queued>>,
+                   dirty: &mut bool| {
         let s: Option<&mut Scheduler<Queued>> = if item.up { up.as_mut() } else { down.as_mut() };
         match s {
             Some(s) => {
-                s.enqueue(clock.now(), item.meta, item.packet);
+                s.enqueue(now, item.meta, item.packet);
+                *dirty = true;
                 None
             }
             // rx only queues shaped directions; be safe anyway.
@@ -625,15 +667,17 @@ fn schedule_loop(
         shared.heartbeat.store(now, Relaxed);
         shared.counters.passes.fetch_add(1, Relaxed);
         for (s, live) in [down.as_mut(), up.as_mut()].into_iter().zip(&shared.live) {
-            if let (Some(s), Some(live)) = (s, live) {
-                s.sync(live, now);
+            if let (Some(s), Some(live)) = (s, live)
+                && s.sync(live, now)
+            {
+                dirty = true;
             }
         }
         if shared.stop.load(Relaxed) || shared.failing_open.load(Relaxed) {
             break;
         }
         if now >= next_snapshot {
-            publish(shared, down.as_ref(), up.as_ref(), &sent);
+            publish(shared, down.as_ref(), up.as_ref(), &sent, &mut dirty);
             next_snapshot = now + SNAPSHOT_EVERY;
         }
 
@@ -642,17 +686,27 @@ fn schedule_loop(
         if idle {
             match rx.recv_timeout(IDLE_WAIT) {
                 Ok(item) => {
-                    if let Some(p) = enqueue(item, &mut down, &mut up) {
+                    let batch_now = clock.now();
+                    if let Some(p) = enqueue(batch_now, item, &mut down, &mut up, &mut dirty) {
                         push(engine, shared, &mut out, &p.buf, &p.addr);
+                    }
+                    for item in rx.try_iter().take(4095) {
+                        if let Some(p) = enqueue(batch_now, item, &mut down, &mut up, &mut dirty) {
+                            push(engine, shared, &mut out, &p.buf, &p.addr);
+                        }
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => break 'run,
             }
-        }
-        for item in rx.try_iter().take(4096) {
-            if let Some(p) = enqueue(item, &mut down, &mut up) {
-                push(engine, shared, &mut out, &p.buf, &p.addr);
+        } else {
+            // Read the clock once per drained rx batch instead of per packet.
+            let mut batch_now: Option<Nanos> = None;
+            for item in rx.try_iter().take(4096) {
+                let t = *batch_now.get_or_insert_with(|| clock.now());
+                if let Some(p) = enqueue(t, item, &mut down, &mut up, &mut dirty) {
+                    push(engine, shared, &mut out, &p.buf, &p.addr);
+                }
             }
         }
 
@@ -660,9 +714,11 @@ fn schedule_loop(
         let mut wake: Option<Nanos> = None;
         for (s, sent) in [down.as_mut(), up.as_mut()].into_iter().zip(&mut sent) {
             let Some(s) = s else { continue };
+            let before_backlog = s.backlog_bytes();
             loop {
                 match s.dequeue(now) {
                     Dequeue::Packet { packet, .. } => {
+                        dirty = true;
                         *sent.entry(packet.tag).or_default() += packet.buf.len() as u64;
                         push(engine, shared, &mut out, &packet.buf, &packet.addr);
                     }
@@ -672,6 +728,9 @@ fn schedule_loop(
                     }
                     Dequeue::Empty => break,
                 }
+            }
+            if s.backlog_bytes() != before_backlog {
+                dirty = true;
             }
         }
         shared.send(engine, &mut out);
@@ -692,12 +751,13 @@ fn schedule_loop(
     for (s, sent) in [down.as_mut(), up.as_mut()].into_iter().zip(&mut sent) {
         let Some(s) = s else { continue };
         for (_, p) in s.drain_all() {
+            dirty = true;
             *sent.entry(p.tag).or_default() += p.buf.len() as u64;
             push(engine, shared, &mut out, &p.buf, &p.addr);
         }
     }
     shared.send(engine, &mut out);
-    publish(shared, down.as_ref(), up.as_ref(), &sent);
+    publish(shared, down.as_ref(), up.as_ref(), &sent, &mut dirty);
     loop {
         shared.heartbeat.store(clock.now(), Relaxed);
         match rx.recv_timeout(IDLE_WAIT) {
@@ -722,33 +782,54 @@ fn schedule_loop(
 
 type SentByTag = HashMap<Tag, u64>;
 
+fn update_dir(
+    slot: &mut Option<DirectionStats>,
+    sched: Option<&Scheduler<Queued>>,
+    sent: &SentByTag,
+) {
+    let Some(s) = sched else {
+        *slot = None;
+        return;
+    };
+    let d = slot.get_or_insert_with(DirectionStats::default);
+    d.rate_bytes_per_sec = s.rate_bytes_per_sec();
+    d.tags.clear();
+    d.tags.extend(sent.iter().map(|(&t, &b)| (t, b)));
+    d.tags.sort_unstable();
+    s.pressure(&mut d.pressure);
+    let count = s.class_count();
+    let names_match = d.classes.len() == count
+        && d.classes
+            .iter()
+            .enumerate()
+            .all(|(i, (name, _))| name == s.class_name(i));
+    if names_match {
+        for (i, (_, st)) in d.classes.iter_mut().enumerate() {
+            *st = s.stats(i);
+        }
+    } else {
+        d.classes.clear();
+        d.classes
+            .extend((0..count).map(|i| (s.class_name(i).to_owned(), s.stats(i))));
+    }
+}
+
 fn publish(
     shared: &Shared,
     down: Option<&Scheduler<Queued>>,
     up: Option<&Scheduler<Queued>>,
     sent: &[SentByTag; 2],
+    dirty: &mut bool,
 ) {
-    let stats = |s: &Scheduler<Queued>, sent: &SentByTag| {
-        let mut tags: Vec<(Tag, u64)> = sent.iter().map(|(&t, &b)| (t, b)).collect();
-        tags.sort_unstable();
-        let mut pressure = Vec::new();
-        s.pressure(&mut pressure);
-        DirectionStats {
-            pressure,
-            rate_bytes_per_sec: s.rate_bytes_per_sec(),
-            classes: (0..s.class_count())
-                .map(|i| (s.class_name(i).to_owned(), s.stats(i)))
-                .collect(),
-            tags,
-        }
-    };
     // Never block the scheduler on a reader.
     if let Ok(mut snap) = shared.snapshot.try_lock() {
-        *snap = Snapshot {
-            taken: Some(Instant::now()),
-            down: down.map(|s| stats(s, &sent[0])),
-            up: up.map(|s| stats(s, &sent[1])),
-        };
+        snap.taken = Some(Instant::now());
+        if !*dirty {
+            return;
+        }
+        update_dir(&mut snap.down, down, &sent[0]);
+        update_dir(&mut snap.up, up, &sent[1]);
+        *dirty = false;
     }
 }
 

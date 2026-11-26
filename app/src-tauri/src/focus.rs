@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use snailnet_core::packs;
-use snailnet_ipc::{Client, GameWhy, PIPE_NAME, Request};
+use snailnet_ipc::{CAP_NO_EVENTS, Client, ClientError, GameWhy, PIPE_NAME, Request};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
@@ -96,13 +96,14 @@ pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
         .spawn(move || {
             let mut d = Debounce::default();
             let mut packs = SavedPacks::default();
+            let mut client: Option<Client> = None;
             let own = std::process::id();
             while !stop.load(Ordering::Relaxed) {
                 packs.refresh(Instant::now());
                 // SnailNet's own window isn't worth putting first.
                 let pid = foreground_pid().filter(|p| *p != own);
                 if let Some(pid) = d.step(pid, Instant::now()) {
-                    tell(pid, game_why(pid));
+                    tell(&mut client, pid, game_why(pid));
                 }
                 std::thread::sleep(POLL);
             }
@@ -110,17 +111,57 @@ pub fn spawn(stop: Arc<AtomicBool>) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Send `req` over a persistent connection, opening one if needed. If the
+/// cached connection fails on a transport error (e.g. service restarted),
+/// drop it and reconnect once immediately.
+fn send_with_reconnect<C>(
+    slot: &mut Option<C>,
+    connect: impl Fn() -> Result<C, ClientError>,
+    call: impl Fn(&mut C, Request) -> Result<(), ClientError>,
+    req: Request,
+) -> bool {
+    if let Some(c) = slot.as_mut() {
+        match call(c, req.clone()) {
+            Ok(()) => return true,
+            Err(ClientError::Refused { .. }) => return false,
+            Err(_) => *slot = None,
+        }
+    }
+    let Ok(mut fresh) = connect() else {
+        return false;
+    };
+    match call(&mut fresh, req) {
+        Ok(()) => {
+            *slot = Some(fresh);
+            true
+        }
+        Err(ClientError::Refused { .. }) => {
+            *slot = Some(fresh);
+            false
+        }
+        Err(_) => false,
+    }
+}
+
 /// Best effort: if the service isn't there, the next change or repeat
 /// tries again.
-fn tell(pid: u32, why: Option<GameWhy>) {
-    if let Ok(mut c) = Client::connect(PIPE_NAME, env!("CARGO_PKG_VERSION")) {
-        let _ = c.call(Request::FocusChanged {
-            pid,
-            is_game: why.is_some(),
-            confidence: if why.is_some() { 1.0 } else { 0.0 },
-            why,
-        });
-    }
+fn tell(client: &mut Option<Client>, pid: u32, why: Option<GameWhy>) {
+    let req = Request::FocusChanged {
+        pid,
+        is_game: why.is_some(),
+        confidence: if why.is_some() { 1.0 } else { 0.0 },
+        why,
+    };
+    let _ = send_with_reconnect(
+        client,
+        || Client::connect_with(PIPE_NAME, env!("CARGO_PKG_VERSION"), &[CAP_NO_EVENTS]),
+        |c, r| {
+            let res = c.call(r).map(|_| ());
+            c.clear_backlog();
+            res
+        },
+        req,
+    );
 }
 
 fn foreground_pid() -> Option<u32> {
@@ -160,11 +201,20 @@ fn game_why(pid: u32) -> Option<GameWhy> {
         .and_then(|p| p.rsplit(['\\', '/']).next())
         .map(str::to_lowercase)
         .unwrap_or_default();
-    let borderless = !exe.is_empty()
-        && !NOT_GAMES.contains(&exe.as_str())
-        && foreground_covers_screen()
-        && draws_3d(pid) != Some(false);
+    let borderless = is_borderless_game(&exe, foreground_covers_screen, || draws_3d(pid));
     borderless.then_some(GameWhy::Fullscreen)
+}
+
+/// Whether a borderless window covering its monitor counts as a game:
+/// requires a confirmed 3D runtime (`Some(true)`) so elevated apps
+/// (`ERROR_ACCESS_DENIED` → `None`) and non-3D fullscreen apps never trigger
+/// Gaming mode falsely.
+fn is_borderless_game(
+    exe: &str,
+    covers_screen: impl FnOnce() -> bool,
+    has_3d: impl FnOnce() -> Option<bool>,
+) -> bool {
+    !exe.is_empty() && !NOT_GAMES.contains(&exe) && covers_screen() && has_3d() == Some(true)
 }
 
 /// Programs that often fill the screen without being games (video,
@@ -273,7 +323,9 @@ fn covers(w: (i32, i32, i32, i32), m: (i32, i32, i32, i32)) -> bool {
 }
 
 /// Whether `pid` has a 3D graphics runtime loaded. `None` when Windows
-/// won't let us look (anti-cheat protected games): treated as yes.
+/// won't let us look (e.g. elevated processes): treated as unknown rather
+/// than a game (games in a launcher library or exclusive Direct3D are still
+/// caught directly).
 fn draws_3d(pid: u32) -> Option<bool> {
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW, TH32CS_SNAPMODULE,
@@ -384,6 +436,77 @@ mod tests {
     #[test]
     fn this_test_process_draws_no_3d() {
         assert_eq!(draws_3d(std::process::id()), Some(false));
+    }
+
+    #[test]
+    fn borderless_game_requires_confirmed_3d_runtime() {
+        assert!(is_borderless_game("eldenring.exe", || true, || Some(true)));
+        // Elevated apps (ERROR_ACCESS_DENIED → None) and non-3D apps must not
+        // falsely trigger Gaming mode.
+        assert!(!is_borderless_game("elevatedapp.exe", || true, || None));
+        assert!(!is_borderless_game("plainapp.exe", || true, || Some(false)));
+        assert!(!is_borderless_game("chrome.exe", || true, || Some(true)));
+        assert!(!is_borderless_game("", || true, || Some(true)));
+        assert!(!is_borderless_game(
+            "eldenring.exe",
+            || false,
+            || Some(true)
+        ));
+    }
+
+    #[test]
+    fn focus_sender_reuses_client_and_reconnects_once_on_broken_pipe() {
+        use std::cell::Cell;
+        use std::io;
+
+        let req = || Request::FocusChanged {
+            pid: 42,
+            is_game: false,
+            confidence: 0.0,
+            why: None,
+        };
+        let connects = Cell::new(0u32);
+        let broken = || {
+            ClientError::Frame(snailnet_ipc::FrameError::Io(io::Error::from(
+                io::ErrorKind::BrokenPipe,
+            )))
+        };
+        let mut slot: Option<u32> = None;
+
+        // First call opens connection #1; second call reuses #1.
+        assert!(send_with_reconnect(
+            &mut slot,
+            || {
+                connects.set(connects.get() + 1);
+                Ok(connects.get())
+            },
+            |_, _| Ok(()),
+            req(),
+        ));
+        assert!(send_with_reconnect(
+            &mut slot,
+            || {
+                connects.set(connects.get() + 1);
+                Ok(connects.get())
+            },
+            |_, _| Ok(()),
+            req(),
+        ));
+        assert_eq!(connects.get(), 1);
+        assert_eq!(slot, Some(1));
+
+        // If #1 breaks, it drops #1 and reconnects once (#2) immediately.
+        assert!(send_with_reconnect(
+            &mut slot,
+            || {
+                connects.set(connects.get() + 1);
+                Ok(connects.get())
+            },
+            |conn, _| if *conn == 1 { Err(broken()) } else { Ok(()) },
+            req(),
+        ));
+        assert_eq!(connects.get(), 2);
+        assert_eq!(slot, Some(2));
     }
 
     #[test]

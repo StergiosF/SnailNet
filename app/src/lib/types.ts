@@ -175,6 +175,8 @@ export interface AppInfo {
   family: string;
   name: string;
   exe: string;
+  /** Full path to the executable on disk (for icon extraction), when known. */
+  path?: string;
 }
 
 export interface Snapshot {
@@ -289,4 +291,6 @@ export interface Latest {
   link: Link;
   snapshot: Snapshot | null;
   stats: StatsTick | null;
+  /** Ticks buffered while the window was hidden, oldest first. */
+  missed_stats?: StatsTick[];
 }

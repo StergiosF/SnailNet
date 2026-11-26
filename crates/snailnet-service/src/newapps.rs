@@ -203,6 +203,12 @@ impl Newcomers {
         self.pending.clear();
         self.holds.clear();
     }
+
+    /// Shaping restarted with a fresh attribution table: scan from index 0
+    /// next time even if the new shaper already sees ≥ `checked` apps.
+    pub fn reset_cursor(&mut self) {
+        self.checked = 0;
+    }
 }
 
 /// The user already said something about `app`: a rule in any mode, a
@@ -243,6 +249,7 @@ mod tests {
             family: family.into(),
             name: family.to_uppercase(),
             exe: exe.into(),
+            path: None,
         }
     }
 
@@ -425,6 +432,7 @@ mod tests {
             family: family.into(),
             name: String::new(),
             exe: String::new(),
+            path: None,
             how,
         };
         let win = r"C:\Windows";
@@ -442,5 +450,31 @@ mod tests {
         ));
         assert!(!windows_part(&mk(r"c:\windowsapps\x.exe", How::Own), win));
         assert!(!windows_part(&mk("steam", How::Pack), win));
+    }
+
+    #[test]
+    fn reset_cursor_catches_new_apps_after_shaper_restart() {
+        let mut n = settled();
+        let c = Config::default();
+        let none = HashSet::new();
+        // Before restart: 2 apps seen (checked = 2).
+        let (p, _) = n.observe(
+            &[app("a", "a.exe"), app("b", "b.exe")],
+            &none,
+            &c,
+            NewApps::Notify,
+            LATER,
+        );
+        assert_eq!(names(&p), ["a", "b"]);
+        // Shaper restarts with 2 apps in a different order (new app at index 0).
+        n.reset_cursor();
+        let (p, _) = n.observe(
+            &[app("c", "c.exe"), app("a", "a.exe")],
+            &none,
+            &c,
+            NewApps::Notify,
+            LATER + 1,
+        );
+        assert_eq!(names(&p), ["c"]);
     }
 }

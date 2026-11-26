@@ -72,37 +72,53 @@ pub fn rates(counts: &[(Duration, u64)]) -> Vec<f64> {
     out
 }
 
-/// What one stream does until the deadline, adding to the byte counter.
-type Work = fn(&Https, Instant, &AtomicU64) -> std::io::Result<()>;
+/// What one stream does until the deadline or cancellation, adding to the byte counter.
+type Work = fn(&Https, Instant, &AtomicBool, &AtomicU64) -> std::io::Result<()>;
+
+/// Sleep up to `d`, waking early if `cancel` is set or `deadline` passes.
+fn sleep_cancellable(d: Duration, cancel: &AtomicBool, deadline: Option<Instant>) {
+    let end = Instant::now() + d;
+    let stop_at = deadline.map_or(end, |dl| end.min(dl));
+    while !cancel.load(Ordering::Relaxed) {
+        let now = Instant::now();
+        if now >= stop_at {
+            break;
+        }
+        std::thread::sleep(
+            stop_at
+                .saturating_duration_since(now)
+                .min(Duration::from_millis(50)),
+        );
+    }
+}
 
 /// Run `streams` workers until the phase ends, sampling the shared byte
-/// counter; the direction's speed in bits/s. `cancel` stops sampling early.
+/// counter; the direction's speed in bits/s. `cancel` stops workers & sampling early.
 fn phase(https: &Arc<Https>, streams: usize, cancel: &AtomicBool, work: Work) -> Result<f64> {
     let start = Instant::now();
     let deadline = start + PHASE;
-    let bytes = Arc::new(AtomicU64::new(0));
-    let errors = Arc::new(AtomicU64::new(0));
-    let workers: Vec<_> = (0..streams)
-        .map(|_| {
-            let (h, b, e) = (https.clone(), bytes.clone(), errors.clone());
-            std::thread::spawn(move || {
-                while Instant::now() < deadline {
-                    if work(&h, deadline, &b).is_err() {
+    let bytes = AtomicU64::new(0);
+    let errors = AtomicU64::new(0);
+    let mut counts = vec![(Duration::ZERO, 0)];
+    std::thread::scope(|scope| {
+        for _ in 0..streams {
+            let h = https.as_ref();
+            let b = &bytes;
+            let e = &errors;
+            scope.spawn(move || {
+                while Instant::now() < deadline && !cancel.load(Ordering::Relaxed) {
+                    if work(h, deadline, cancel, b).is_err() {
                         e.fetch_add(1, Ordering::Relaxed);
-                        std::thread::sleep(Duration::from_millis(200));
+                        sleep_cancellable(Duration::from_millis(200), cancel, Some(deadline));
                     }
                 }
-            })
-        })
-        .collect();
-    let mut counts = vec![(Duration::ZERO, 0)];
-    while Instant::now() < deadline && !cancel.load(Ordering::Relaxed) {
-        std::thread::sleep(SAMPLE);
-        counts.push((start.elapsed(), bytes.load(Ordering::Relaxed)));
-    }
-    for w in workers {
-        let _ = w.join();
-    }
+            });
+        }
+        while Instant::now() < deadline && !cancel.load(Ordering::Relaxed) {
+            sleep_cancellable(SAMPLE, cancel, Some(deadline));
+            counts.push((start.elapsed(), bytes.load(Ordering::Relaxed)));
+        }
+    });
     if cancel.load(Ordering::Relaxed) {
         bail!("cancelled");
     }
@@ -115,32 +131,48 @@ fn phase(https: &Arc<Https>, streams: usize, cancel: &AtomicBool, work: Work) ->
     }
 }
 
-fn download(h: &Https, deadline: Instant, bytes: &AtomicU64) -> std::io::Result<()> {
+fn download(
+    h: &Https,
+    deadline: Instant,
+    cancel: &AtomicBool,
+    bytes: &AtomicU64,
+) -> std::io::Result<()> {
     let path = format!("/__down?bytes={DOWN_BYTES}");
-    h.download(&path, deadline, &|n| {
+    h.download_cancellable(&path, deadline, cancel, &|n| {
         bytes.fetch_add(n, Ordering::Relaxed);
     })
     .map(drop)
 }
 
-fn upload(h: &Https, deadline: Instant, bytes: &AtomicU64) -> std::io::Result<()> {
-    h.upload("/__up", UP_BYTES, deadline, &|n| {
+fn upload(
+    h: &Https,
+    deadline: Instant,
+    cancel: &AtomicBool,
+    bytes: &AtomicU64,
+) -> std::io::Result<()> {
+    h.upload_cancellable("/__up", UP_BYTES, deadline, cancel, &|n| {
         bytes.fetch_add(n, Ordering::Relaxed);
     })
     .map(drop)
 }
 
-/// The median of up to `n` pings `gap` apart (stopping at `until`), ms.
-fn median_ping(p: &mut Pinger, n: usize, gap: Duration, until: Option<Instant>) -> Option<f64> {
+/// The median of up to `n` pings `gap` apart (stopping at `until` or `cancel`), ms.
+fn median_ping(
+    p: &mut Pinger,
+    n: usize,
+    gap: Duration,
+    until: Option<Instant>,
+    cancel: &AtomicBool,
+) -> Option<f64> {
     let mut v = Vec::new();
     for _ in 0..n {
-        if until.is_some_and(|u| Instant::now() >= u) {
+        if cancel.load(Ordering::Relaxed) || until.is_some_and(|u| Instant::now() >= u) {
             break;
         }
-        if let Some(rtt) = p.ping(PUBLIC_HOST, Duration::from_millis(1500)) {
+        if let Some(rtt) = p.ping(PUBLIC_HOST, Duration::from_millis(1000)) {
             v.push(rtt.as_secs_f64() * 1e3);
         }
-        std::thread::sleep(gap);
+        sleep_cancellable(gap, cancel, until);
     }
     quantile(&v, 0.5)
 }
@@ -155,34 +187,44 @@ fn loaded_phase(
     work: Work,
     pinger: Option<Pinger>,
 ) -> (Result<f64>, Option<f64>, Option<Pinger>) {
-    let pings = std::thread::spawn(move || {
-        let mut pinger = pinger;
-        let until = Instant::now() + PHASE;
-        std::thread::sleep(WARMUP);
-        let ms = pinger
-            .as_mut()
-            .and_then(|p| median_ping(p, 32, Duration::from_millis(500), Some(until)));
-        (ms, pinger)
-    });
-    let bps = phase(https, streams, cancel, work);
-    let (ms, pinger) = pings.join().unwrap_or((None, None));
-    (bps, ms, pinger)
+    std::thread::scope(|scope| {
+        let pings = scope.spawn(move || {
+            let mut pinger = pinger;
+            let until = Instant::now() + PHASE;
+            sleep_cancellable(WARMUP, cancel, Some(until));
+            let ms = pinger
+                .as_mut()
+                .and_then(|p| median_ping(p, 32, Duration::from_millis(500), Some(until), cancel));
+            (ms, pinger)
+        });
+        let bps = phase(https, streams, cancel, work);
+        let (ms, pinger) = pings.join().unwrap_or((None, None));
+        (bps, ms, pinger)
+    })
 }
 
 fn client() -> Result<Arc<Https>> {
-    Ok(Arc::new(Https::new(
+    // 3 s per-op timeout so cancelling on service stop never blocks for 10 s.
+    Ok(Arc::new(Https::with_timeout(
         concat!("SnailNet/", env!("CARGO_PKG_VERSION")),
         HOST,
+        3_000,
     )?))
 }
 
 /// Run the whole test (blocking, ~20 s). `now`: Unix seconds for the record.
 pub fn run(cancel: &AtomicBool, now: u64) -> Result<Measured> {
+    if cancel.load(Ordering::Relaxed) {
+        bail!("cancelled");
+    }
     let https = client()?;
     let mut pinger = Pinger::new().ok();
     let idle_ms = pinger
         .as_mut()
-        .and_then(|p| median_ping(p, 5, Duration::from_millis(200), None));
+        .and_then(|p| median_ping(p, 5, Duration::from_millis(200), None, cancel));
+    if cancel.load(Ordering::Relaxed) {
+        bail!("cancelled");
+    }
     let (down, loaded_ms, pinger) = loaded_phase(&https, DOWN_STREAMS, cancel, download, pinger);
     let down = down?;
     let (up, loaded_up_ms, _) = loaded_phase(&https, UP_STREAMS, cancel, upload, pinger);
@@ -203,6 +245,9 @@ pub fn run(cancel: &AtomicBool, now: u64) -> Result<Measured> {
 /// SnailNet like any app's. The median ping meanwhile, ms; `None` when no
 /// ping came back (ICMP blocked).
 pub fn check(cancel: &AtomicBool) -> Result<Option<f64>> {
+    if cancel.load(Ordering::Relaxed) {
+        bail!("cancelled");
+    }
     let https = client()?;
     let pinger = Pinger::new().ok();
     let (down, ms, _) = loaded_phase(&https, DOWN_STREAMS, cancel, download, pinger);

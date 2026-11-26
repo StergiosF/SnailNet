@@ -264,12 +264,20 @@ impl<P: Packet> Class<P> {
         }
     }
 
-    fn charge(&mut self, len: u64) {
+    fn consume_ceiling(&mut self, len: u64) {
         if let Some(b) = &mut self.ceil {
             b.consume(len);
         }
+    }
+
+    fn record_sent(&mut self, len: u64) {
         self.stats.sent_packets += 1;
         self.stats.sent_bytes += len;
+    }
+
+    fn charge(&mut self, len: u64) {
+        self.consume_ceiling(len);
+        self.record_sent(len);
     }
 
     fn tally(&mut self, v: Verdicts) {
@@ -349,6 +357,11 @@ impl<P: Packet> Scheduler<P> {
         self.backlog_bytes == 0 && self.express.is_empty()
     }
 
+    /// Bytes currently waiting in class queues (express lane not included).
+    pub fn backlog_bytes(&self) -> u64 {
+        self.backlog_bytes
+    }
+
     /// Pressure per tag, over every class: `out` is cleared, then gets one
     /// entry per tag with queued bytes or CoDel actions, sorted by tag. Walks
     /// every flow sub-queue, so call it at the stats rate, not per packet.
@@ -382,7 +395,8 @@ impl<P: Packet> Scheduler<P> {
         let len = packet.wire_len() as u64;
         let c = &mut self.classes[class];
         let urgent = packet.wire_len() <= EXPRESS_MAX_LEN
-            && (c.p.prio == Priority::High || meta.prio == Priority::High);
+            && (c.p.prio == Priority::High || meta.prio == Priority::High)
+            && c.under_ceiling(now).is_ok();
         if (meta.control || urgent)
             // Express traffic is paid for up front, as it enters the lane. A
             // class that keeps it up past its share runs out of credit and
@@ -391,6 +405,9 @@ impl<P: Packet> Scheduler<P> {
             && self.express_bytes + len <= EXPRESS_LIMIT_BYTES
         {
             c.deficit -= len as i64;
+            // Charge the ceiling up front too so a single rx batch of urgent
+            // packets cannot burst past the ceiling's burst window.
+            c.consume_ceiling(len);
             self.express.push_back((class, packet));
             self.express_bytes += len;
             return;
@@ -423,8 +440,8 @@ impl<P: Packet> Scheduler<P> {
             let len = packet.wire_len() as u64;
             self.express_bytes -= len;
             let c = &mut self.classes[class];
-            // Credit was taken at enqueue.
-            c.charge(len);
+            // Credit and ceiling tokens were taken at enqueue.
+            c.record_sent(len);
             c.stats.express_packets += 1;
             self.root.consume(len);
             return Dequeue::Packet { class, packet };
@@ -498,6 +515,11 @@ impl<P: Packet> Scheduler<P> {
             .min()
             .expect("called only when some class is eligible");
         for c in &mut self.classes {
+            // A class currently blocked by its ceiling shouldn't accumulate
+            // free DRR credit from rounds driven by other classes.
+            if !c.fq.is_empty() && c.under_ceiling(now).is_err() {
+                continue;
+            }
             c.deficit = c
                 .deficit
                 .saturating_add(rounds.saturating_mul(c.p.quantum))
@@ -506,12 +528,16 @@ impl<P: Packet> Scheduler<P> {
     }
 
     /// Apply the latest [`LiveConfig`] if it changed since the last call.
-    /// Cheap enough to call on every scheduler loop iteration.
-    pub fn sync(&mut self, live: &LiveConfig, now: Nanos) {
+    /// Cheap enough to call on every scheduler loop iteration. Returns `true`
+    /// if a new config was applied.
+    pub fn sync(&mut self, live: &LiveConfig, now: Nanos) -> bool {
         let latest = live.load();
         if !Arc::ptr_eq(&latest, &self.config) {
             self.reconfigure(latest, now)
                 .expect("LiveConfig only holds valid configs");
+            true
+        } else {
+            false
         }
     }
 

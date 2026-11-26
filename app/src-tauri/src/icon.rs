@@ -9,16 +9,17 @@ use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
 
 use base64::Engine as _;
+use windows::Win32::Foundation::S_OK;
 use windows::Win32::Graphics::Gdi::{
     BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, DeleteObject, GetDC, GetDIBits,
     GetObjectW, HBITMAP, HGDIOBJ, ReleaseDC,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyIcon, GetIconInfo, HICON, ICONINFO, PrivateExtractIconsW,
-};
+use windows::Win32::UI::Shell::SHDefExtractIconW;
+use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
+use windows::core::PCWSTR;
 
 /// Pixels per side: sharp at 40 px on a 150% display.
-const SIZE: i32 = 64;
+const SIZE: u32 = 64;
 
 /// Exe path → data URL, or `None` when it has no icon.
 #[derive(Default)]
@@ -31,6 +32,9 @@ pub async fn app_icon(
     icons: tauri::State<'_, Icons>,
     exe: String,
 ) -> Result<Option<String>, String> {
+    if !valid_exe_path(&exe) {
+        return Ok(None);
+    }
     if let Some(hit) = icons
         .0
         .lock()
@@ -52,8 +56,28 @@ pub async fn app_icon(
     Ok(url)
 }
 
+/// Only local, absolute `.exe` paths go to Win32: rejecting UNC/network paths
+/// (`\\host\...`, `//host/...`) avoids triggering outbound SMB authentication,
+/// and rejecting relative paths avoids searching the working directory or PATH.
+fn valid_exe_path(exe: &str) -> bool {
+    if exe.is_empty() || exe.contains('\0') {
+        return false;
+    }
+    if exe.starts_with(r"\\")
+        || exe.starts_with("//")
+        || exe.starts_with(r"\/")
+        || exe.starts_with(r"/\")
+    {
+        return false;
+    }
+    if !std::path::Path::new(exe).is_absolute() {
+        return false;
+    }
+    exe.to_ascii_lowercase().ends_with(".exe")
+}
+
 fn data_url(exe: &str) -> Option<String> {
-    if !exe.to_ascii_lowercase().ends_with(".exe") {
+    if !valid_exe_path(exe) {
         return None;
     }
     let (w, h, rgba) = extract(exe)?;
@@ -66,22 +90,19 @@ fn data_url(exe: &str) -> Option<String> {
 
 /// The exe's first icon at [`SIZE`], as straight RGBA rows top to bottom.
 fn extract(exe: &str) -> Option<(u32, u32, Vec<u8>)> {
-    let mut name = [0u16; 260];
-    let wide: Vec<u16> = exe.encode_utf16().collect();
-    if wide.len() >= name.len() {
+    if !valid_exe_path(exe) {
         return None;
     }
-    name[..wide.len()].copy_from_slice(&wide);
-    let mut handles = [HICON::default()];
-    // SAFETY: `name` is NUL-terminated (zeroed past the path); `handles`
-    // has room for the one icon asked for.
-    let got = unsafe { PrivateExtractIconsW(&name, 0, SIZE, SIZE, Some(&mut handles), None, 0) };
-    let icon = handles[0];
-    if got == 0 || got == u32::MAX || icon.is_invalid() {
+    let wide: Vec<u16> = exe.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut icon = HICON::default();
+    // SAFETY: `wide` is NUL-terminated and outlives the call; `icon` is a valid
+    // out pointer for the single requested large icon at `SIZE`.
+    let hr = unsafe { SHDefExtractIconW(PCWSTR(wide.as_ptr()), 0, 0, Some(&mut icon), None, SIZE) };
+    if hr != S_OK || icon.is_invalid() {
         return None;
     }
     let out = pixels(icon);
-    // SAFETY: the icon came from PrivateExtractIconsW and is ours to free.
+    // SAFETY: the icon came from SHDefExtractIconW and is ours to free.
     unsafe {
         let _ = DestroyIcon(icon);
     }
@@ -198,5 +219,41 @@ mod tests {
     fn non_exe_paths_and_missing_files_have_none() {
         assert_eq!(data_url(r"C:\Windows\win.ini"), None);
         assert_eq!(data_url(r"C:\nope\missing.exe"), None);
+    }
+
+    #[test]
+    fn iconless_system_exe_returns_none() {
+        let windir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
+        assert_eq!(data_url(&format!(r"{windir}\System32\svchost.exe")), None);
+    }
+
+    #[test]
+    fn rejects_empty_unc_and_relative_paths() {
+        for bad in [
+            "",
+            r"\\attacker\share\evil.exe",
+            "//attacker/share/evil.exe",
+            r"\/attacker\share\evil.exe",
+            r"/\attacker\share\evil.exe",
+            r"\\?\C:\Windows\explorer.exe",
+            "explorer.exe",
+            r"relative\app.exe",
+            r"C:relative.exe",
+            r"\Windows\explorer.exe",
+            "C:\\Windows\\explorer.exe\0.exe",
+        ] {
+            assert!(!valid_exe_path(bad), "should reject {bad:?}");
+            assert_eq!(data_url(bad), None, "should not extract {bad:?}");
+        }
+    }
+
+    #[test]
+    fn accepts_normal_and_long_absolute_exe_paths() {
+        assert!(valid_exe_path(r"C:\Windows\explorer.exe"));
+        assert!(valid_exe_path("C:/Windows/EXPLORER.EXE"));
+        let long = format!(r"C:\{}\app.exe", "a".repeat(300));
+        assert!(long.len() > 260);
+        assert!(valid_exe_path(&long));
+        assert_eq!(data_url(&long), None);
     }
 }

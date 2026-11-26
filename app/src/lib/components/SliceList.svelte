@@ -77,9 +77,6 @@
       {/if}
     </ul>
   {/if}
-  {#if ui.error}
-    <p class="error" role="alert">{ui.error}</p>
-  {/if}
 </section>
 
 <style>
@@ -221,9 +218,6 @@
     display: block;
     color: var(--text-primary);
     font-weight: 600;
-  }
-  .error {
-    margin: 12px 12px 0;
   }
   @media (forced-colors: active) {
     .rows > :global(li + li)::before {

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  NEW_SLICE,
   addRule,
   barShares,
   canStep,
+  giveShare,
   shareOf,
   stepShare,
   clampLimit,
@@ -159,5 +161,42 @@ describe("stepShare", () => {
     expect(shareOf(stepShare(small, 0, -1), 0)).toBe(100);
     const tiny: Rule[] = [{ ...r[0]!, share: 100 }, r[1]!];
     expect(canStep(tiny, 0, -1)).toBe(false);
+  });
+});
+
+describe("giveShare", () => {
+  it("adds a new rule with a starting slice when absent", () => {
+    const out = giveShare([rule("brave", 3000)], fam("steam"));
+    expect(out).toEqual([rule("brave", 3000), rule("steam", NEW_SLICE)]);
+    expect(isValid(barShares(out))).toBe(true);
+  });
+
+  it("allocates a slice to an existing enabled spare-only (share 0) rule", () => {
+    const initial = [rule("steam", 0, { priority: "low" }), rule("brave", 4000)];
+    const out = giveShare(initial, fam("steam"));
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual(rule("steam", NEW_SLICE, { priority: "low", enabled: true }));
+    expect(isValid(barShares(out))).toBe(true);
+  });
+
+  it("enables and allocates a slice to an existing disabled spare-only (share 0) rule", () => {
+    const initial = [rule("steam", 0, { enabled: false }), rule("brave", 4000)];
+    const out = giveShare(initial, fam("steam"), 2500);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual(rule("steam", 2500, { enabled: true }));
+    expect(isValid(barShares(out))).toBe(true);
+  });
+
+  it("enables a disabled rule with a remembered share and gives its share back", () => {
+    const initial = [rule("steam", 3500, { enabled: false }), rule("brave", 4000)];
+    const out = giveShare(initial, fam("steam"));
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual(rule("steam", 3500, { enabled: true }));
+    expect(isValid(barShares(out))).toBe(true);
+  });
+
+  it("leaves an already enabled rule with a non-zero share untouched", () => {
+    const initial = [rule("steam", 3500), rule("brave", 4000)];
+    expect(giveShare(initial, fam("steam"))).toBe(initial);
   });
 });

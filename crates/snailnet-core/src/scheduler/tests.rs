@@ -709,3 +709,67 @@ fn pressure_survives_a_removed_rule() {
     assert_eq!(pressure_of(&s, 4), before);
     s.check_invariants(1500);
 }
+
+#[test]
+fn high_priority_small_packets_cannot_bypass_ceiling_via_express() {
+    // High-priority class capped at 200 KB/s alongside a saturating bulk class
+    // on a 2 MB/s line: sending 200-byte packets must stay within the ceiling.
+    let mut capped = class("capped", 5000, Priority::High);
+    capped.ceil_bytes_per_sec = Some(200_000);
+    let cfg = config(2 * MB, vec![capped, ClassConfig::new("other", 5000)]);
+    let s = Scheduler::new(cfg, 0).unwrap();
+    let mut sim = Sim::new(
+        s,
+        vec![
+            Src {
+                meta: PacketMeta {
+                    prio: Priority::High,
+                    ..PacketMeta::new(0, 1)
+                },
+                size: 200,
+                mode: Mode::Backlog(16 * 1024),
+            },
+            saturating(1, 1500),
+        ],
+    );
+    sim.run(2 * SEC);
+    let rate = sim.sent[0] as f64 / 2.0;
+    assert!(
+        rate <= 215_000.0,
+        "ceiling bypassed via express lane: {rate:.0} B/s (limit 200000)"
+    );
+    sim.s.check_invariants(1500);
+}
+
+#[test]
+fn single_batch_of_urgent_packets_respects_ceiling_burst() {
+    let mut capped = class("capped", 5000, Priority::High);
+    capped.ceil_bytes_per_sec = Some(200_000);
+    let cfg = config(2 * MB, vec![capped, ClassConfig::new("other", 5000)]);
+    let mut s = Scheduler::new(cfg, 0).unwrap();
+    let meta = PacketMeta {
+        prio: Priority::High,
+        ..PacketMeta::new(0, 1)
+    };
+    // Enqueue 100 small urgent packets (20 KB) at the exact same timestamp.
+    for _ in 0..100 {
+        s.enqueue(0, meta, p(200, 0));
+    }
+    // Ceiling burst is 2*MTU (~3028 B), so only ~16 packets may take the express
+    // lane; the rest must sit in the class queue until the ceiling refills.
+    let mut express_sent = 0usize;
+    let mut t = 0;
+    while let Dequeue::Packet { .. } = s.dequeue(t) {
+        express_sent += 1;
+        t += 1;
+    }
+    assert!(
+        express_sent <= 20,
+        "single batch flooded express lane past ceiling burst: {express_sent} packets"
+    );
+    assert!(
+        s.backlog_bytes() > 0,
+        "excess packets should queue normally"
+    );
+    s.check_invariants(1500);
+}

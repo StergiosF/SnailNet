@@ -92,11 +92,12 @@ pub struct WinDivertLib {
 }
 
 impl WinDivertLib {
-    /// Find and load WinDivert.dll. Search order:
-    /// `$SNAILNET_WINDIVERT_DIR`, the executable's folder, then the repo's
-    /// pinned `third_party/windivert/x64` (dev builds).
+    /// Find and load WinDivert.dll. Release builds load strictly from the
+    /// executable's folder (LocalSystem safety). Debug builds also check
+    /// `$SNAILNET_WINDIVERT_DIR` and the repo's pinned `third_party/windivert/x64`.
     pub fn load() -> Result<Arc<Self>, EngineError> {
         let mut dirs: Vec<PathBuf> = Vec::new();
+        #[cfg(debug_assertions)]
         if let Some(d) = std::env::var_os("SNAILNET_WINDIVERT_DIR") {
             dirs.push(d.into());
         }
@@ -106,6 +107,7 @@ impl WinDivertLib {
         {
             dirs.push(d);
         }
+        #[cfg(debug_assertions)]
         dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../third_party/windivert/x64"));
 
         let dll = dirs

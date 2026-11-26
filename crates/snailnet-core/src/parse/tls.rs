@@ -206,10 +206,9 @@ pub fn host_name(raw: &[u8]) -> Option<String> {
             .iter()
             .all(|&b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
     ok.then(|| {
-        raw.to_ascii_lowercase()
-            .into_iter()
-            .map(char::from)
-            .collect()
+        let mut bytes = raw.to_vec();
+        bytes.make_ascii_lowercase();
+        String::from_utf8(bytes).expect("checked ASCII above")
     })
 }
 

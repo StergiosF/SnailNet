@@ -86,6 +86,9 @@ pub struct App {
     /// This process's lowercase exe file name (`steamwebhelper.exe`).
     /// Empty for System and Unknown.
     pub exe: String,
+    /// Full image path on disk (without `\\?\` prefix), used for icon
+    /// extraction. `None` for System, Unknown, or unopenable processes.
+    pub path: Option<String>,
     pub how: How,
 }
 
@@ -107,6 +110,7 @@ impl App {
             family: id.into(),
             name: name.into(),
             exe: String::new(),
+            path: None,
             how,
         }
     }
@@ -262,6 +266,8 @@ pub struct Resolved {
 /// Bounded so a long uptime with many short-lived processes can't grow it
 /// without limit; when full it simply starts over.
 const MAX_CACHE: usize = 8192;
+/// Bounded so many distinct install folders can't grow the map forever.
+const MAX_FOLDERS: usize = 4096;
 /// Generic hosts nested deeper than this are their own app.
 const MAX_DEPTH: usize = 8;
 
@@ -335,25 +341,32 @@ impl Resolver {
         src: &mut dyn ProcessSource,
         depth: usize,
     ) -> App {
-        let Some(path) = facts.path.as_deref().map(normalise_path) else {
+        let Some(raw_path) = facts.path.as_deref() else {
             return App::unknown();
+        };
+        let path = normalise_path(raw_path);
+        let full_path = {
+            let clean = raw_path.strip_prefix(r"\\?\").unwrap_or(raw_path);
+            (!clean.is_empty()).then(|| clean.replace('/', "\\"))
         };
         let exe = file_name(&path).to_owned();
         let dir = parent_dir(&path).to_owned();
         let publisher = facts.publisher.as_deref().map(str::trim).unwrap_or("");
+        let publisher_key = publisher.to_lowercase();
 
         if let Some(f) = self.pack.family_for(&exe, &path) {
             let (id, name) = (f.id.clone(), f.name.clone());
-            self.learn_folder(&dir, &path, publisher, &id, &name);
+            self.learn_folder(&dir, &path, &publisher_key, &id, &name);
             return App {
                 family: id,
                 name,
                 exe,
+                path: full_path,
                 how: How::Pack,
             };
         }
         if exe == "svchost.exe" && self.in_windows(&path) {
-            return self.service(facts.command_line.as_deref(), exe);
+            return self.service(facts.command_line.as_deref(), exe, full_path);
         }
         if self.pack.generic_hosts.contains(&exe)
             && depth < MAX_DEPTH
@@ -377,27 +390,33 @@ impl Resolver {
                 family: format!("pkg:{}", pkg.to_lowercase()),
                 name: display.unwrap_or(short).into(),
                 exe,
+                path: full_path,
                 how: How::Package,
             };
         }
-        let groupable = !publisher.is_empty() && self.groupable(&dir, &path);
+        let groupable = !publisher_key.is_empty() && self.groupable(&dir, &path);
         if groupable {
-            if let Some((id, name)) = self.folders.get(&(dir.clone(), publisher.to_owned())) {
+            if let Some((id, name)) = self.folders.get(&(dir.clone(), publisher_key.clone())) {
                 return App {
                     family: id.clone(),
                     name: name.clone(),
                     exe,
+                    path: full_path,
                     how: How::Folder,
                 };
             }
-            let id = format!("folder:{dir}|{}", publisher.to_lowercase());
+            let id = format!("folder:{dir}|{publisher_key}");
             let name = display.map_or_else(|| display_exe(facts), str::to_owned);
+            if self.folders.len() >= MAX_FOLDERS {
+                self.folders.clear();
+            }
             self.folders
-                .insert((dir, publisher.to_owned()), (id.clone(), name.clone()));
+                .insert((dir, publisher_key), (id.clone(), name.clone()));
             return App {
                 family: id,
                 name,
                 exe,
+                path: full_path,
                 how: How::Folder,
             };
         }
@@ -405,16 +424,20 @@ impl Resolver {
             family: path,
             name: display.map_or_else(|| display_exe(facts), str::to_owned),
             exe,
+            path: full_path,
             how: How::Own,
         }
     }
 
     /// Remember a pack family's folder so unlisted helpers next to it (same
     /// publisher) join it.
-    fn learn_folder(&mut self, dir: &str, path: &str, publisher: &str, id: &str, name: &str) {
-        if !publisher.is_empty() && self.groupable(dir, path) {
+    fn learn_folder(&mut self, dir: &str, path: &str, publisher_key: &str, id: &str, name: &str) {
+        if !publisher_key.is_empty() && self.groupable(dir, path) {
+            if self.folders.len() >= MAX_FOLDERS {
+                self.folders.clear();
+            }
             self.folders
-                .entry((dir.to_owned(), publisher.to_owned()))
+                .entry((dir.to_owned(), publisher_key.to_owned()))
                 .or_insert_with(|| (id.to_owned(), name.to_owned()));
         }
     }
@@ -430,7 +453,7 @@ impl Resolver {
             .is_some_and(|rest| rest.starts_with('\\'))
     }
 
-    fn service(&self, command_line: Option<&str>, exe: String) -> App {
+    fn service(&self, command_line: Option<&str>, exe: String, path: Option<String>) -> App {
         let group = command_line
             .and_then(service_name)
             .and_then(|s| self.pack.service_group(&s));
@@ -442,6 +465,7 @@ impl Resolver {
             family,
             name,
             exe,
+            path,
             how: How::Service,
         }
     }

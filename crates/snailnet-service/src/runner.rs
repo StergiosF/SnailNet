@@ -451,18 +451,20 @@ fn supervise<E: Engine>(
                     ServiceState::Unshaped
                 });
                 log_plan(&plan, &profile);
-                let mut since_report = Duration::ZERO;
+                let mut last_report = Instant::now();
                 // The live line speed for this session (§10.2).
                 let mut autorate = Autorate::new(timing.autorate);
                 autorate.follow(&hub.config());
-                let mut since_rate = Duration::ZERO;
+                let mut last_rate = Instant::now();
+                let mut last_sample = Instant::now();
                 let mut moved = Moved::default();
                 // The "with SnailNet" check (§11.10) measures the download.
                 let started = Instant::now();
                 let down_shaped = plan.down.is_some();
                 let mut check: Option<Check> = None;
                 let outcome = loop {
-                    match stop.wait_any(timing.poll) {
+                    let wake = stop.wait_any(timing.poll);
+                    match wake {
                         Wake::Stop => break Outcome::Stop,
                         // A speed test runs with shaping stopped.
                         Wake::Reload if hub.speedtest_pending() => break Outcome::Reload,
@@ -529,13 +531,15 @@ fn supervise<E: Engine>(
                         let network = hub.config().network.map(|n| n.id);
                         check = Some(Check::start(f, at, network));
                     }
-                    if let Some(s) = running.sample() {
+                    if (wake == Wake::Timeout || last_sample.elapsed() >= timing.poll / 2)
+                        && let Some(s) = running.sample()
+                    {
+                        last_sample = Instant::now();
                         hub.publish(&s, Some(running.seen()));
                         moved.add(hub.moved_bps());
                     }
-                    since_rate += timing.poll;
-                    if since_rate >= RATE_EVERY {
-                        since_rate = Duration::ZERO;
+                    if last_rate.elapsed() >= RATE_EVERY {
+                        last_rate = Instant::now();
                         hub.prune_focus();
                         if let Some(live) = autorate.tick(moved.take()) {
                             let (plan, _) = hub.plan_live(now(), live);
@@ -545,10 +549,9 @@ fn supervise<E: Engine>(
                         }
                         hub.set_ping(autorate.ping());
                     }
-                    since_report += timing.poll;
-                    if since_report >= timing.report_every {
+                    if last_report.elapsed() >= timing.report_every {
                         running.report();
-                        since_report = Duration::ZERO;
+                        last_report = Instant::now();
                     }
                 };
                 if let Some(c) = check.take() {

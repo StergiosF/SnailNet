@@ -135,6 +135,7 @@ mod tests {
             family: family.into(),
             name: String::new(),
             exe: exe.into(),
+            path: None,
             how: snailnet_core::classify::How::Pack,
         };
         let helper = app("steam", "steamwebhelper.exe");

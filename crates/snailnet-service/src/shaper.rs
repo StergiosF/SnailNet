@@ -37,7 +37,7 @@ use snailnet_core::sites::{DomainCache, Names, SiteMatcher};
 use snailnet_core::sniff::{FlowNames, Named, Via};
 use snailnet_engine::batch::DEFAULT_BATCH;
 use snailnet_engine::fastpath::{
-    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot, Tag,
+    Classifier, Counters, DirectionStats, FastPath, FastPathConfig, Nap, Snapshot, Tag, Verdict,
 };
 use snailnet_engine::windivert::{Layer, WinDivert, WinDivertLib, event, flags};
 use snailnet_engine::{Address, RecvBatch};
@@ -265,6 +265,11 @@ pub trait Rules: Send + Sync + 'static {
     fn focus_pids(&self) -> &[u32] {
         &[]
     }
+    /// Pre-resolved app families going first (§11.5), avoiding PID resolution
+    /// on the packet RX thread.
+    fn focus_families(&self) -> &[String] {
+        &[]
+    }
     /// Live calls go first (§11.9).
     fn calls_first(&self) -> bool {
         false
@@ -318,6 +323,10 @@ impl Rules for PlanRules {
 
     fn focus_pids(&self) -> &[u32] {
         &self.plan.focus
+    }
+
+    fn focus_families(&self) -> &[String] {
+        &self.plan.focus_families
     }
 
     fn calls_first(&self) -> bool {
@@ -487,6 +496,24 @@ impl LiveRules {
     }
 }
 
+/// Bounded per-rx-thread flow verdict cache, cleared on rule reloads and
+/// attribution table epochs (~1/s on port snapshot).
+const MAX_FLOW_CACHE: usize = 4096;
+
+#[derive(Clone, Copy)]
+struct FlowCacheEntry {
+    app: AppId,
+    source: Source,
+    app_class: ClassId,
+    blocked: bool,
+    focused: bool,
+    site_known: bool,
+    site_class: Option<ClassId>,
+    site: Site,
+    site_via: Via,
+    flow_hash: u64,
+}
+
 /// Packet → app → class. Each rx thread has its own clone (caches and
 /// pending list); the attribution behind it is shared.
 pub struct AppClassifier {
@@ -496,14 +523,19 @@ pub struct AppClassifier {
     /// The rules this thread uses, as of generation `seen`.
     rules: Arc<dyn Rules>,
     seen: u64,
+    /// Last observed `attribution.table_epoch()`, for invalidating `flow_cache`.
+    seen_table_epoch: u64,
+    /// Per-thread flow cache: avoids shared locks and site re-matching on
+    /// established flows.
+    flow_cache: HashMap<FlowKey, FlowCacheEntry>,
     /// App ids are never reused (a reused PID is a new process key and is
     /// resolved afresh), so this needs no expiry. One entry per app; cleared
     /// when the rules change.
     app_class: HashMap<AppId, ClassId>,
     /// Whether each app is blocked; cleared with the rules.
     app_blocked: HashMap<AppId, bool>,
-    /// The families going first (§11.5), from the rules' focus PIDs, and
-    /// whether each app is one of them; both renewed with the rules.
+    /// The pre-resolved families going first (§11.5), and whether each app is
+    /// one of them; both renewed with the rules.
     focus: Vec<String>,
     app_focus: HashMap<AppId, bool>,
     /// Which UDP flows are live calls (§11.9), shared by the rx threads so
@@ -532,6 +564,8 @@ impl Clone for AppClassifier {
             live: self.live.clone(),
             rules: self.rules.clone(),
             seen: self.seen,
+            seen_table_epoch: self.seen_table_epoch,
+            flow_cache: HashMap::new(),
             app_class: self.app_class.clone(),
             app_blocked: self.app_blocked.clone(),
             focus: self.focus.clone(),
@@ -548,32 +582,52 @@ impl Clone for AppClassifier {
 }
 
 impl AppClassifier {
-    /// Pick up new rules if they changed since this thread last looked.
+    /// Pick up new rules if they changed since this thread last looked, and
+    /// drop the per-flow cache when flow/port ownership epochs advance.
     fn refresh(&mut self) {
         let g = self.live.generation.load(Acquire);
+        let epoch = self.attribution.table_epoch();
         if g != self.seen {
             self.rules = self.live.load();
             self.app_class.clear();
             self.app_blocked.clear();
             self.app_focus.clear();
             self.app_calls.clear();
-            // A focus change is rare (alt-tab, debounced): resolving its
-            // few PIDs here is cheap, and cached per process after that.
-            let attribution = &self.attribution;
-            self.focus = self
-                .rules
-                .focus_pids()
-                .iter()
-                .map(|&pid| {
-                    attribution
-                        .app(attribution.owner_of(pid).app)
-                        .family
-                        .clone()
-                })
-                .collect();
+            self.focus = self.rules.focus_families().to_vec();
             self.site_slots.clear();
+            self.flow_cache.clear();
             self.seen = g;
+            self.seen_table_epoch = epoch;
+        } else if epoch != self.seen_table_epoch {
+            self.flow_cache.clear();
+            self.seen_table_epoch = epoch;
         }
+    }
+
+    fn is_blocked(&mut self, app: AppId) -> bool {
+        let (rules, attribution) = (&self.rules, &self.attribution);
+        *self
+            .app_blocked
+            .entry(app)
+            .or_insert_with(|| rules.blocks(&attribution.app(app)))
+    }
+
+    fn record_source(&self, source: Source) {
+        match source {
+            Source::Flow => self.who.by_flow.fetch_add(1, Relaxed),
+            Source::Socket => self.who.by_socket.fetch_add(1, Relaxed),
+            Source::Port => self.who.by_port.fetch_add(1, Relaxed),
+        };
+    }
+
+    fn record_via(&self, via: Via) {
+        match via {
+            Via::Sni => &self.who.named_sni,
+            Via::Dns => &self.who.named_dns,
+            Via::Ech => &self.who.named_ech,
+            Via::None => &self.who.unnamed,
+        }
+        .fetch_add(1, Relaxed);
     }
 
     /// Whether `app` goes first (§11.5).
@@ -643,45 +697,42 @@ impl AppClassifier {
     }
 
     /// The site rule's class for this flow, if it has a name a site rule
-    /// claims, and its site for stats. Only called while site rules exist.
+    /// claims, its site for stats, and `Some(via)` once settled (`Named::Known`).
+    /// Only called while site rules exist.
     fn site_class(
         &mut self,
         key: FlowKey,
         pkt: &[u8],
         info: &PacketInfo,
         outbound: bool,
-    ) -> (Option<ClassId>, Site) {
+    ) -> (Option<ClassId>, Site, Option<Via>) {
         if !matches!(info.protocol, PROTO_TCP | PROTO_UDP) {
-            return (None, Site::None);
+            return (None, Site::None, Some(Via::None));
         }
         let named = {
             let cache = self.sites.cache.read().unwrap_or_else(|e| e.into_inner());
             let mut names = self.sites.names.lock().unwrap_or_else(|e| e.into_inner());
             names.observe(key, pkt, info, outbound, &cache, self.clock.now())
         };
-        let who = &self.who;
         match named {
             Named::Pending => {
-                who.naming.fetch_add(1, Relaxed);
-                (None, Site::None)
+                self.who.naming.fetch_add(1, Relaxed);
+                (None, Site::None, None)
             }
             Named::Known { names, via } => {
-                match via {
-                    Via::Sni => &who.named_sni,
-                    Via::Dns => &who.named_dns,
-                    Via::Ech => &who.named_ech,
-                    Via::None => &who.unnamed,
-                }
-                .fetch_add(1, Relaxed);
-                let rules = self.rules.clone();
-                match names.as_deref().and_then(|n| rules.site_of(n)) {
-                    Some((id, name)) => (rules.site_class(id), self.site_slot(id, name)),
+                self.record_via(via);
+                let matched = names
+                    .as_deref()
+                    .and_then(|n| self.rules.site_of(n))
+                    .map(|(id, name)| (self.rules.site_class(id), id.to_owned(), name.to_owned()));
+                match matched {
+                    Some((class, id, name)) => (class, self.site_slot(&id, &name), Some(via)),
                     // Only web connections count as unidentified (PLAN.md
                     // 8.4): a game talking UDP to a bare IP never had a name.
                     None if matches!(via, Via::Ech | Via::None) && key.remote.1 == 443 => {
-                        (None, Site::Unidentified)
+                        (None, Site::Unidentified, Some(via))
                     }
-                    None => (None, Site::None),
+                    None => (None, Site::None, Some(via)),
                 }
             }
         }
@@ -698,52 +749,126 @@ impl Classifier for AppClassifier {
             return false;
         }
         let key = FlowKey::from_packet(info, outbound);
+        if let Some(entry) = self.flow_cache.get(&key) {
+            return entry.blocked;
+        }
         let Some((owner, _)) = self.attribution.lookup(&key) else {
             return false;
         };
-        let (rules, attribution) = (&self.rules, &self.attribution);
-        *self
-            .app_blocked
-            .entry(owner.app)
-            .or_insert_with(|| rules.blocks(&attribution.app(owner.app)))
+        self.is_blocked(owner.app)
     }
 
-    /// The tag packs the packet's [`AppId`] and, while flows are named, its
-    /// site ([`tags`]), so per-tag byte counts give per-app and per-site
-    /// rates.
-    fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+    fn decide(
+        &mut self,
+        pkt: &[u8],
+        info: &PacketInfo,
+        outbound: bool,
+        check_blocked: bool,
+    ) -> Verdict {
         self.refresh();
         let key = FlowKey::from_packet(info, outbound);
-        let who = self.who.clone();
-        let mut focused = false;
-        let (app_class, tag) = match self.attribution.lookup(&key) {
-            Some((owner, source)) => {
-                if self.pending.hit(&key) {
-                    who.late_flows.fetch_add(1, Relaxed);
+        if let Some(mut entry) = self.flow_cache.get(&key).copied() {
+            if check_blocked && entry.blocked {
+                return Verdict::Drop;
+            }
+            self.record_source(entry.source);
+            let call = self.in_call(key, entry.app, pkt, info, outbound);
+            let focused = entry.focused || call;
+            let (class, site) = if self.rules.has_site_rules() {
+                if entry.site_known {
+                    self.record_via(entry.site_via);
+                    (entry.site_class.unwrap_or(entry.app_class), entry.site)
+                } else {
+                    let (sc, site, settled) = self.site_class(key, pkt, info, outbound);
+                    if let Some(via) = settled {
+                        entry.site_known = true;
+                        entry.site_class = sc;
+                        entry.site = site;
+                        entry.site_via = via;
+                        if let Some(slot) = self.flow_cache.get_mut(&key) {
+                            *slot = entry;
+                        }
+                    }
+                    (sc.unwrap_or(entry.app_class), site)
                 }
-                match source {
-                    Source::Flow => who.by_flow.fetch_add(1, Relaxed),
-                    Source::Socket => who.by_socket.fetch_add(1, Relaxed),
-                    Source::Port => who.by_port.fetch_add(1, Relaxed),
-                };
+            } else {
+                (entry.app_class, Site::None)
+            };
+            let meta = PacketMeta {
+                prio: if focused {
+                    Priority::High
+                } else {
+                    self.rules.prio_of(class)
+                },
+                ..PacketMeta::new(class, entry.flow_hash)
+            };
+            return Verdict::Pass(meta, tags::pack(Some(entry.app), site));
+        }
+
+        let mut focused = false;
+        let (app_class, tag, flow_hash, cached) = match self.attribution.lookup(&key) {
+            Some((owner, source)) => {
+                let blocked = self.rules.blocks_any() && self.is_blocked(owner.app);
+                let app_class = self.class_of(owner.app);
+                let app_focused = self.focused(owner.app);
+                let flow_hash = self.flow_hasher.hash_one(key);
+                if self.flow_cache.len() >= MAX_FLOW_CACHE {
+                    self.flow_cache.clear();
+                }
+                self.flow_cache.insert(
+                    key,
+                    FlowCacheEntry {
+                        app: owner.app,
+                        source,
+                        app_class,
+                        blocked,
+                        focused: app_focused,
+                        site_known: false,
+                        site_class: None,
+                        site: Site::None,
+                        site_via: Via::None,
+                        flow_hash,
+                    },
+                );
+                if check_blocked && blocked {
+                    return Verdict::Drop;
+                }
+                if self.pending.hit(&key) {
+                    self.who.late_flows.fetch_add(1, Relaxed);
+                }
+                self.record_source(source);
                 // Always watch for calls, even in the app in front, so a
                 // call keeps going first when its window loses focus.
                 let call = self.in_call(key, owner.app, pkt, info, outbound);
-                focused = self.focused(owner.app) || call;
-                (self.class_of(owner.app), Some(owner.app))
+                focused = app_focused || call;
+                (app_class, Some(owner.app), flow_hash, true)
             }
             None => {
                 match self.pending.miss(key, self.clock.now()) {
-                    Miss::Pending => who.pending.fetch_add(1, Relaxed),
-                    Miss::Unknown => who.unknown.fetch_add(1, Relaxed),
+                    Miss::Pending => self.who.pending.fetch_add(1, Relaxed),
+                    Miss::Unknown => self.who.unknown.fetch_add(1, Relaxed),
                 };
-                (self.rules.other_class(), None)
+                (
+                    self.rules.other_class(),
+                    None,
+                    self.flow_hasher.hash_one(key),
+                    false,
+                )
             }
         };
         // A site rule beats the app's rule, in any app (PLAN.md §8.3).
         let (class, site) = if self.rules.has_site_rules() {
-            let (class, site) = self.site_class(key, pkt, info, outbound);
-            (class.unwrap_or(app_class), site)
+            let (sc, site, settled) = self.site_class(key, pkt, info, outbound);
+            if cached
+                && let Some(via) = settled
+                && let Some(slot) = self.flow_cache.get_mut(&key)
+            {
+                slot.site_known = true;
+                slot.site_class = sc;
+                slot.site = site;
+                slot.site_via = via;
+            }
+            (sc.unwrap_or(app_class), site)
         } else {
             (app_class, Site::None)
         };
@@ -753,9 +878,19 @@ impl Classifier for AppClassifier {
             } else {
                 self.rules.prio_of(class)
             },
-            ..PacketMeta::new(class, self.flow_hasher.hash_one(key))
+            ..PacketMeta::new(class, flow_hash)
         };
-        (meta, tags::pack(tag, site))
+        Verdict::Pass(meta, tags::pack(tag, site))
+    }
+
+    /// The tag packs the packet's [`AppId`] and, while flows are named, its
+    /// site ([`tags`]), so per-tag byte counts give per-app and per-site
+    /// rates.
+    fn classify(&mut self, pkt: &[u8], info: &PacketInfo, outbound: bool) -> (PacketMeta, Tag) {
+        match self.decide(pkt, info, outbound, false) {
+            Verdict::Pass(meta, tag) => (meta, tag),
+            Verdict::Drop => unreachable!("check_blocked is false"),
+        }
     }
 }
 
@@ -849,15 +984,19 @@ impl Shaper {
         } else {
             None
         };
+        let initial_rules = rules.load();
+        let initial_focus = initial_rules.focus_families().to_vec();
         let classifier = AppClassifier {
             attribution: attribution.clone(),
             who: who.clone(),
-            rules: rules.load(),
+            rules: initial_rules,
             live: rules.clone(),
             seen: 0,
+            seen_table_epoch: attribution.table_epoch(),
+            flow_cache: HashMap::new(),
             app_class: HashMap::new(),
             app_blocked: HashMap::new(),
-            focus: Vec::new(),
+            focus: initial_focus,
             app_focus: HashMap::new(),
             calls: calls.clone(),
             app_calls: HashMap::new(),
@@ -1006,6 +1145,7 @@ impl runner::Engine for WinEngine {
             report,
             shape_lan: plan.shape_lan,
             blocking: plan.blocking(),
+            seen_apps_version: AtomicU64::new(u64::MAX),
         })
     }
 }
@@ -1017,6 +1157,9 @@ pub struct Running {
     shape_lan: bool,
     /// Started for blocking: both directions diverted.
     blocking: bool,
+    /// Last `attribution.apps_version()` sent to the hub, avoiding 4 Hz
+    /// rebuilds of the seen-apps list when nothing changed.
+    seen_apps_version: AtomicU64,
 }
 
 impl runner::Running for Running {
@@ -1033,6 +1176,18 @@ impl runner::Running for Running {
     }
 
     fn seen(&self) -> Seen {
+        let ver = self.shaper.attribution().apps_version();
+        let prev = self.seen_apps_version.swap(ver, Relaxed);
+        if prev == ver {
+            return Seen {
+                apps: Vec::new(),
+                sites: self.shaper.site_slots(),
+                names: Some(self.shaper.who().names()),
+                windows: std::collections::HashSet::new(),
+                calls: self.shaper.calls(),
+                apps_unchanged: true,
+            };
+        }
         let all = self.shaper.attribution().apps();
         let apps = all
             .iter()
@@ -1040,6 +1195,7 @@ impl runner::Running for Running {
                 family: a.family.clone(),
                 name: a.name.clone(),
                 exe: a.exe.clone(),
+                path: a.path.clone(),
             })
             .collect();
         let win = windows_dir();
@@ -1054,6 +1210,7 @@ impl runner::Running for Running {
             names: Some(self.shaper.who().names()),
             windows,
             calls: self.shaper.calls(),
+            apps_unchanged: false,
         }
     }
 

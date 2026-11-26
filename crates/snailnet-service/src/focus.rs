@@ -129,6 +129,27 @@ impl Focus {
         out
     }
 
+    /// The resolved app families to put first: the one in front, then the
+    /// running games; never-first apps left out, deduplicated.
+    pub fn families(&self, s: &Settings) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut push = |seen: &Seen| {
+            if seen.allowed(s)
+                && let Some(fam) = &seen.family
+                && !out.contains(fam)
+            {
+                out.push(fam.clone());
+            }
+        };
+        if let Some(front) = &self.foreground {
+            push(front);
+        }
+        for (_, seen, _) in &self.games {
+            push(seen);
+        }
+        out
+    }
+
     /// The app family in front, for the app to label (never a "never
     /// first" one, nor one whose family couldn't be resolved).
     pub fn front(&self, s: &Settings) -> Option<String> {

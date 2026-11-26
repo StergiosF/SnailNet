@@ -48,9 +48,19 @@ pub enum Named {
 
 #[derive(Debug)]
 enum State {
-    Tcp { buf: Vec<u8>, segments: u8 },
-    Quic { asm: CryptoAssembler, packets: u8 },
-    Known { names: Option<Names>, via: Via },
+    Tcp {
+        base_seq: u32,
+        asm: CryptoAssembler,
+        segments: u8,
+    },
+    Quic {
+        asm: CryptoAssembler,
+        packets: u8,
+    },
+    Known {
+        names: Option<Names>,
+        via: Via,
+    },
 }
 
 #[derive(Debug)]
@@ -108,10 +118,45 @@ impl FlowNames {
             return Named::Pending;
         }
 
+        // Fast path for a single-segment TCP ClientHello: inspect the packet
+        // slice directly without allocating or touching the map twice.
+        if key.protocol == PROTO_TCP && !self.flows.contains_key(&key) {
+            return match tls::from_tcp(payload) {
+                Hello::Complete(h) => self.finish_hello(key, h, cache, now),
+                Hello::NotHello => {
+                    self.settle(key, from_cache(cache, key.remote.0, now, Via::None), now)
+                }
+                Hello::NeedMore => {
+                    if self.make_room(now) {
+                        let mut asm = CryptoAssembler::default();
+                        asm.push(0, payload);
+                        self.flows.insert(
+                            key,
+                            Entry {
+                                state: State::Tcp {
+                                    base_seq: info.tcp_seq.unwrap_or(0),
+                                    asm,
+                                    segments: 1,
+                                },
+                                last_seen: now,
+                            },
+                        );
+                        Named::Pending
+                    } else {
+                        Named::Known {
+                            names: None,
+                            via: Via::None,
+                        }
+                    }
+                }
+            };
+        }
+
         let fresh = || {
             if key.protocol == PROTO_TCP {
                 State::Tcp {
-                    buf: Vec::new(),
+                    base_seq: info.tcp_seq.unwrap_or(0),
+                    asm: CryptoAssembler::default(),
                     segments: 0,
                 }
             } else {
@@ -137,16 +182,29 @@ impl FlowNames {
             &mut scratch
         };
         let hello = match state {
-            State::Tcp { buf, segments } => {
+            State::Tcp {
+                base_seq,
+                asm,
+                segments,
+            } => {
                 *segments += 1;
-                if buf.len() + payload.len() > MAX_HELLO {
+                let seq = info.tcp_seq.unwrap_or(0);
+                let diff = seq.wrapping_sub(*base_seq) as i32;
+                if diff >= 0 {
+                    let off = diff as usize;
+                    if off >= MAX_HELLO {
+                        Hello::NotHello
+                    } else {
+                        asm.push(off as u64, payload);
+                        match tls::from_tcp(asm.prefix()) {
+                            Hello::NeedMore if *segments >= MAX_TCP_SEGMENTS => Hello::NotHello,
+                            h => h,
+                        }
+                    }
+                } else if *segments >= MAX_TCP_SEGMENTS {
                     Hello::NotHello
                 } else {
-                    buf.extend_from_slice(payload);
-                    match tls::from_tcp(buf) {
-                        Hello::NeedMore if *segments >= MAX_TCP_SEGMENTS => Hello::NotHello,
-                        h => h,
-                    }
+                    Hello::NeedMore
                 }
             }
             State::Quic { asm, packets } => {
@@ -174,26 +232,40 @@ impl FlowNames {
                 names: None,
                 via: Via::None,
             },
-            Hello::Complete(h) => {
-                let decided = match h.sni {
-                    Some(sni) if !h.ech => (Some(Arc::from(vec![sni])), Via::Sni),
-                    _ => from_cache(
-                        cache,
-                        key.remote.0,
-                        now,
-                        if h.ech { Via::Ech } else { Via::None },
-                    ),
-                };
-                self.settle(key, decided, now)
-            }
+            Hello::Complete(h) => self.finish_hello(key, h, cache, now),
             Hello::NotHello => {
                 self.settle(key, from_cache(cache, key.remote.0, now, Via::None), now)
             }
         }
     }
 
+    fn finish_hello(
+        &mut self,
+        key: FlowKey,
+        h: tls::ClientHello,
+        cache: &DomainCache,
+        now: Nanos,
+    ) -> Named {
+        let decided = match h.sni {
+            Some(sni) if !h.ech => (Some(Arc::from(vec![sni])), Via::Sni),
+            _ => from_cache(
+                cache,
+                key.remote.0,
+                now,
+                if h.ech { Via::Ech } else { Via::None },
+            ),
+        };
+        self.settle(key, decided, now)
+    }
+
     fn settle(&mut self, key: FlowKey, (names, via): (Option<Names>, Via), now: Nanos) -> Named {
-        if self.flows.contains_key(&key) || self.make_room(now) {
+        if let Some(e) = self.flows.get_mut(&key) {
+            e.state = State::Known {
+                names: names.clone(),
+                via,
+            };
+            e.last_seen = now;
+        } else if self.make_room(now) {
             self.flows.insert(
                 key,
                 Entry {
@@ -257,6 +329,10 @@ mod tests {
 
     /// An IPv4 TCP/UDP packet between ME:50000 and THEM:port.
     fn packet(proto: u8, port: u16, outbound: bool, payload: &[u8]) -> Vec<u8> {
+        packet_seq(proto, port, outbound, 1000, payload)
+    }
+
+    fn packet_seq(proto: u8, port: u16, outbound: bool, seq: u32, payload: &[u8]) -> Vec<u8> {
         let th = if proto == PROTO_TCP { 20 } else { 8 };
         let total = 20 + th + payload.len();
         let mut p = vec![0u8; total];
@@ -273,6 +349,7 @@ mod tests {
         p[20..22].copy_from_slice(&sp.to_be_bytes());
         p[22..24].copy_from_slice(&dp.to_be_bytes());
         if proto == PROTO_TCP {
+            p[24..28].copy_from_slice(&seq.to_be_bytes());
             p[32] = 5 << 4;
         }
         p[20 + th..].copy_from_slice(payload);
@@ -282,6 +359,7 @@ mod tests {
     struct Rig {
         names: FlowNames,
         cache: DomainCache,
+        tcp_seq: u32,
     }
 
     impl Rig {
@@ -289,10 +367,25 @@ mod tests {
             Self {
                 names: FlowNames::new(64),
                 cache: DomainCache::new(64),
+                tcp_seq: 1000,
             }
         }
         fn feed(&mut self, proto: u8, port: u16, outbound: bool, payload: &[u8]) -> Named {
-            let p = packet(proto, port, outbound, payload);
+            let seq = self.tcp_seq;
+            if proto == PROTO_TCP && outbound {
+                self.tcp_seq = self.tcp_seq.wrapping_add(payload.len() as u32);
+            }
+            self.feed_seq(proto, port, outbound, seq, payload)
+        }
+        fn feed_seq(
+            &mut self,
+            proto: u8,
+            port: u16,
+            outbound: bool,
+            seq: u32,
+            payload: &[u8],
+        ) -> Named {
+            let p = packet_seq(proto, port, outbound, seq, payload);
             let info = ip::parse(&p).unwrap();
             let key = FlowKey::from_packet(&info, outbound);
             self.names.observe(key, &p, &info, outbound, &self.cache, 0)
@@ -335,6 +428,33 @@ mod tests {
         // Later packets either way: remembered.
         assert_eq!(
             r.feed(PROTO_TCP, 443, false, b"data"),
+            known("www.youtube.com", Via::Sni)
+        );
+    }
+
+    #[test]
+    fn tcp_retransmission_and_reordering_still_reads_sni() {
+        let mut r = Rig::new();
+        let h = hello(b"www.youtube.com", false, 2000);
+        let base = u32::MAX - 500; // also tests u32 sequence wraparound
+        // Segment 1
+        assert_eq!(
+            r.feed_seq(PROTO_TCP, 443, true, base, &h[..800]),
+            Named::Pending
+        );
+        // Retransmit segment 1 under congestion
+        assert_eq!(
+            r.feed_seq(PROTO_TCP, 443, true, base, &h[..800]),
+            Named::Pending
+        );
+        // Segment 3 arrives before segment 2
+        assert_eq!(
+            r.feed_seq(PROTO_TCP, 443, true, base.wrapping_add(1600), &h[1600..]),
+            Named::Pending
+        );
+        // Segment 2 fills the gap
+        assert_eq!(
+            r.feed_seq(PROTO_TCP, 443, true, base.wrapping_add(800), &h[800..1600]),
             known("www.youtube.com", Via::Sni)
         );
     }

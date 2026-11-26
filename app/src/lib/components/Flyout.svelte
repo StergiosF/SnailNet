@@ -8,16 +8,17 @@
   // tray is where people reach for it) and the way to the main window. It
   // hides on Escape and when it loses focus (tray.rs).
   import { getCurrentWindow, Window } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { mbps, targetLabel } from "../format";
   import { t } from "../i18n";
   import { glance, ledger } from "../ledger";
   import { pause, resume, startService, switchMode } from "../actions";
+  import { fixer } from "../fixer.svelte";
   import { availableModes, boostLeft, firstOf, gameWhy, inCall, inFront, liveBoost, timeLeft, users } from "../modes";
   import { newNetworkName } from "../line";
   import { noticeOf } from "../notice";
   import { placeMenu } from "../popover";
-  import { ProofWatch, grade, proofOf, rise } from "../proof";
+  import { ProofWatch, grade, proofOf, rise, type Proof } from "../proof";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -36,14 +37,25 @@
 
   const connected = $derived(service.link.kind === "connected" && service.snapshot !== null);
   const label = (target: Target) => targetLabel(target, service.snapshot?.apps ?? [], service.siteNames);
-  const book = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
+  const downBook = $derived(connected ? ledger(ui.rules, service.stats?.down, label, service.waiting.down) : null);
   const upBook = $derived(connected ? ledger(ui.rules, service.stats?.up, label, service.waiting.up) : null);
   const proofWatch = new ProofWatch();
-  const proof = $derived.by(() => {
+  let proof = $state<Proof | null>(null);
+  $effect(() => {
     const s = service.stats;
-    if (!connected || !s) return proofWatch.step(null, 0, true);
-    const now = proofOf(s, book, upBook, service.snapshot?.config.line.measured);
-    return proofWatch.step(now, s.t_ms, s.state !== "Shaping");
+    const ok = connected;
+    untrack(() => {
+      if (!ok || !s) {
+        proof = proofWatch.step(null, 0, true);
+        fixer.sync(null, null);
+        return;
+      }
+      const down = downBook;
+      const up = upBook;
+      const now = proofOf(s, down, up, service.snapshot?.config.line.measured);
+      proof = proofWatch.step(now, s.t_ms, s.state !== "Shaping");
+      fixer.sync(down, up);
+    });
   });
   // Ping is only ever shown live while the service measures it (busy);
   // quiet, the last speed test's grades speak instead, never a made-up ping.
@@ -64,7 +76,7 @@
   );
   const lineMbps = $derived(service.snapshot?.config.line.down_mbps);
   const lineBps = $derived(lineMbps === undefined ? null : lineMbps * 1e6);
-  const sentence = $derived(book && service.stats ? glance(book, lineBps) : null);
+  const sentence = $derived(downBook && service.stats ? glance(downBook, lineBps) : null);
   const notice = $derived(
     noticeOf(
       service.link,
@@ -90,8 +102,8 @@
   const focusBoost = $derived(goesFirst.focus);
   const callsFirst = $derived(goesFirst.calls);
   const calls = $derived(callsFirst ? (service.stats?.calls ?? []) : []);
-  const list = $derived(book ? users(book, boost, label, 4, calls) : []);
-  const total = $derived(book?.total ?? 0);
+  const list = $derived(downBook ? users(downBook, boost, label, 4, calls) : []);
+  const total = $derived(downBook?.total ?? 0);
   function sub(u: (typeof list)[number]): string {
     if (u.boosted && boost) return t("who.boost.left", { left: boostLeft(boost, ui.now) });
     const why = gameWhy(u.target, service.stats?.games, focusBoost);
@@ -196,7 +208,7 @@
     <p class="proof num" aria-live="off"><Glyph name="ping" size={18} /><span>{proofLine}</span></p>
   {/if}
 
-  {#if book}
+  {#if downBook}
     <div class="list">
       <h2>
         {t("who.title")}
@@ -225,8 +237,26 @@
   {:else}
     <div class="quiet"><Snail size={32} light /></div>
   {/if}
-  {#if ui.error}
-    <p class="error" role="alert">{ui.error}</p>
+  {#if ui.toast}
+    {@const toast = ui.toast}
+    {@const isError = toast.kind === "error"}
+    <div class="toast" class:err={isError} role={isError ? "alert" : "status"}>
+      <Glyph name={isError ? "info" : "check"} size={16} />
+      <span class="msg">{toast.message}</span>
+      {#if toast.action}
+        <button
+          type="button"
+          class="act"
+          onclick={() => {
+            toast.action?.run();
+            ui.toast = null;
+          }}>{toast.action.label}</button
+        >
+      {/if}
+      <button type="button" class="x" aria-label={t("dismiss")} onclick={() => (ui.toast = null)}>
+        <Glyph name="close" size={14} />
+      </button>
+    </div>
   {/if}
 
   <div class="foot">
@@ -472,8 +502,62 @@
     display: grid;
     place-items: center;
   }
-  .error {
-    margin: 8px 16px 0;
+  .toast {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 12px 0;
+    padding: 6px 6px 6px 10px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    line-height: 1.35;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--stroke-strong);
+  }
+  .toast > :global(.glyph) {
+    color: var(--shell-bright);
+  }
+  .toast.err > :global(.glyph) {
+    color: var(--critical);
+  }
+  .toast .msg {
+    flex: 1;
+    min-width: 0;
+  }
+  .toast button {
+    flex: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+  }
+  .toast .act {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font-weight: 700;
+    background: var(--surface-3);
+    transition: background-color 120ms linear;
+  }
+  .toast .act:hover {
+    background: var(--surface-1);
+  }
+  .toast .x {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    color: var(--text-secondary);
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
+  }
+  .toast .x:hover {
+    background: var(--hover-strong);
+    color: var(--text-primary);
   }
   .foot {
     display: flex;
@@ -494,7 +578,8 @@
   }
   @media (forced-colors: active) {
     .modes button,
-    .proof {
+    .proof,
+    .toast {
       border: 1px solid ButtonText;
     }
     .modes button.on {

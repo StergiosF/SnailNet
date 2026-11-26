@@ -15,7 +15,10 @@ import { ui } from "./ui.svelte";
 /** A failed change in words, under `key` ("Couldn't … {message}"). */
 function failed(key: Key, e: unknown) {
   const err = e as SaveError;
-  ui.say({ message: err.kind === "conflict" ? t("editor.conflict") : t(key, { message: err.message ?? "" }) });
+  ui.say({
+    kind: "error",
+    message: err.kind === "conflict" ? t("editor.conflict") : t(key, { message: err.message ?? "" }),
+  });
 }
 
 /** Switch mode; with unsaved changes on the Split page, ask first (the
@@ -134,7 +137,16 @@ export async function setFirstChoice(familyId: string, name: string, choice: Fir
     await service.setSettings(withFirstChoice(settings, familyId, choice));
     ui.say({
       message: t(`first.done.${choice}`, { name }),
-      action: { label: t("undo"), run: () => void setFirstChoice(familyId, name, before) },
+      action: {
+        label: t("undo"),
+        run: () => {
+          const cur = service.snapshot?.config.settings ?? settings;
+          void service
+            .setSettings(withFirstChoice(cur, familyId, before))
+            .then(() => ui.say({ message: t(`first.done.${before}`, { name }) }))
+            .catch((e: unknown) => failed("first.failed", e));
+        },
+      },
     });
   } catch (e) {
     failed("first.failed", e);
@@ -174,7 +186,7 @@ export async function renameMode(id: string, name: string): Promise<boolean> {
  *  (Undo of a copy goes back to the mode it was copied from). */
 export async function deleteMode(id: string, name: string, back?: string): Promise<void> {
   try {
-    await caughtUp(await service.deleteMode(id));
+    await service.deleteMode(id);
     if (back) await service.switchMode(back);
     else ui.say({ message: t("mode.delete.done", { mode: name }) });
   } catch (e) {
@@ -230,9 +242,9 @@ export async function startService(): Promise<void> {
     outcome = { failed: { message: String(e) } };
   }
   if (outcome === "asked") ui.say({ message: t("start.asked") });
-  else if (outcome === "cancelled") ui.say({ message: t("start.cancelled") });
-  else if (outcome === "not_installed") ui.say({ message: t("start.not_installed") });
-  else ui.say({ message: t("start.failed", { message: outcome.failed.message }) });
+  else if (outcome === "cancelled") ui.say({ kind: "error", message: t("start.cancelled") });
+  else if (outcome === "not_installed") ui.say({ kind: "error", message: t("start.not_installed") });
+  else ui.say({ kind: "error", message: t("start.failed", { message: outcome.failed.message }) });
 }
 
 /** Wait (up to 2 s) until the snapshot shows revision `rev`, so the next
@@ -298,7 +310,7 @@ async function measure(): Promise<Measured | null> {
   const got = await until(() => (service.snapshot?.config.line.measured?.at ?? before) !== before, 3_000);
   const first = service.snapshot?.config.line.measured;
   if (!got || !first) {
-    ui.say({ message: t("measure.none") });
+    ui.say({ kind: "error", message: t("measure.none") });
     return null;
   }
   // No ping during the test (ICMP blocked): there's nothing to compare.

@@ -144,11 +144,11 @@ impl Probe {
                         }
                     }
                     // 1 s while busy; 30 s while idle, cut short when the
-                    // line gets busy (set_busy wakes this wait).
-                    let idle = !b.load(Ordering::Relaxed);
-                    let every = Duration::from_secs(if idle { 30 } else { 1 });
+                    // line gets busy (set_busy wakes this wait under the lock).
                     let (lock, cv) = &*s;
                     let guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
+                    let idle = !b.load(Ordering::Relaxed);
+                    let every = Duration::from_secs(if idle { 30 } else { 1 });
                     let (stopped, _) = cv
                         .wait_timeout_while(guard, every, |stopped| {
                             !*stopped && !(idle && b.load(Ordering::Relaxed))
@@ -169,10 +169,12 @@ impl Probe {
     }
 
     fn set_busy(&self, busy: bool) {
+        let (lock, cv) = &*self.stop;
+        let _guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
         let was = self.busy.swap(busy, Ordering::Relaxed);
         if busy && !was {
             // Start the 1 Hz pings now rather than after the idle wait.
-            self.stop.1.notify_all();
+            cv.notify_all();
         }
     }
 

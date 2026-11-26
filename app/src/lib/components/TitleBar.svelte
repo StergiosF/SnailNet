@@ -19,11 +19,21 @@
   let maximized = $state(false);
 
   onMount(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
-    const sync = async () => (maximized = await win.isMaximized());
+    const sync = async () => {
+      const m = await win.isMaximized();
+      if (!cancelled) maximized = m;
+    };
     void sync();
-    void win.onResized(sync).then((u) => (unlisten = u));
-    return () => unlisten?.();
+    void win.onResized(sync).then((u) => {
+      if (cancelled) u();
+      else unlisten = u;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   });
 </script>
 

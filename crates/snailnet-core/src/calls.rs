@@ -20,6 +20,7 @@
 //! the flow gets High priority inside its own class (PLAN.md §9.3, §9.5).
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 use crate::clock::{NANOS_PER_SEC, Nanos};
@@ -96,7 +97,7 @@ impl<A> Shape<A> {
     /// Returns whether the flow is a call afterwards.
     fn close_window(&mut self, now: Nanos) -> bool {
         let span = (now - self.start).max(1);
-        let bps = |bytes: u64| bytes * 8 * NANOS_PER_SEC / span;
+        let bps = |bytes: u64| ((bytes as u128 * 8 * NANOS_PER_SEC as u128) / span as u128) as u64;
         let bulky = self.dir_bytes.iter().any(|&b| bps(b) > MAX_DIR_BPS)
             || self.bytes > self.pkts * MAX_MEAN_LEN
             || self.quic * 2 > self.pkts;
@@ -150,16 +151,24 @@ impl<K: Hash + Eq + Copy, A: Hash + Eq + Copy> CallWatch<K, A> {
         if now.saturating_sub(self.swept) >= WINDOW {
             self.sweep(now);
         }
-        if !self.flows.contains_key(&key) && self.flows.len() >= MAX_FLOWS {
-            return false;
-        }
-        let shape = self
-            .flows
-            .entry(key)
-            .or_insert_with(|| Shape::new(app, now));
+        let full = self.flows.len() >= MAX_FLOWS;
+        let shape = match self.flows.entry(key) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => {
+                if full {
+                    return false;
+                }
+                e.insert(Shape::new(app, now))
+            }
+        };
+        let prev_app = shape.app;
         let was = shape.call;
         let mut is = was;
-        if now.saturating_sub(shape.start) >= WINDOW {
+        let expired = was && now.saturating_sub(shape.last) >= HOLD;
+        if prev_app != app || expired {
+            *shape = Shape::new(app, now);
+            is = false;
+        } else if now.saturating_sub(shape.start) >= WINDOW {
             is = shape.close_window(now);
         }
         shape.last = now;
@@ -167,9 +176,10 @@ impl<K: Hash + Eq + Copy, A: Hash + Eq + Copy> CallWatch<K, A> {
         shape.bytes += p.len as u64;
         shape.dir_bytes[usize::from(p.outbound)] += p.len as u64;
         shape.quic += u64::from(p.quic_like());
-        let app = shape.app;
-        if was != is {
-            self.count(app, is);
+        if was && !is {
+            self.count(prev_app, false);
+        } else if !was && is {
+            self.count(app, true);
         }
         is && self.per_app.get(&app).is_some_and(|&n| n <= MAX_CALL_FLOWS)
     }
@@ -402,5 +412,27 @@ mod tests {
         w.observe(2, 8, rtp(true, 100), now + FORGET + NANOS_PER_SEC);
         assert_eq!(w.len(), 1, "flow 1 is gone, flow 2 is new");
         assert!(w.apps(now + FORGET).is_empty());
+    }
+
+    #[test]
+    fn port_reuse_by_another_app_resets_call_and_per_app_count() {
+        let mut w = Watch::new();
+        let (call, now) = feed(&mut w, 1, 7, 0, 4, 50, |o| rtp(o, 160));
+        assert!(call);
+        assert_eq!(w.apps(now), vec![7]);
+        // Flow key 1 is now owned by app 8 (reused ephemeral port).
+        assert!(!w.observe(1, 8, rtp(true, 160), now + 10 * NANOS_PER_MILLI));
+        assert!(w.apps(now + 10 * NANOS_PER_MILLI).is_empty());
+    }
+
+    #[test]
+    fn silent_call_past_hold_ends_even_without_intermediate_sweep() {
+        let mut w = Watch::new();
+        let (call, now) = feed(&mut w, 1, 7, 0, 4, 50, |o| rtp(o, 160));
+        assert!(call);
+        // Simulate sweep timestamp being recent while this flow sat idle >= HOLD.
+        w.swept = now + HOLD;
+        assert!(!w.observe(1, 7, rtp(true, 60), now + HOLD + 10 * NANOS_PER_MILLI));
+        assert!(w.apps(now + HOLD + 10 * NANOS_PER_MILLI).is_empty());
     }
 }

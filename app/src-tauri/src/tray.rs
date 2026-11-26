@@ -7,7 +7,7 @@
 //! when it loses focus. The flyout loads the same page as the main window;
 //! the page picks its view from the window label ([`FLYOUT`]).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -16,13 +16,14 @@ use crate::tray_icon;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    App, AppHandle, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindow,
+    App, AppHandle, Manager, PhysicalPosition, PhysicalSize, Rect, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
 
 /// Window label of the flyout.
 pub const FLYOUT: &str = "flyout";
-const MAIN: &str = "main";
+/// Window label of the main window.
+pub(crate) const MAIN: &str = "main";
 /// Logical size of the flyout (PLAN.md §14.4: 380 × 500).
 const FLYOUT_W: f64 = 380.0;
 const FLYOUT_H: f64 = 500.0;
@@ -31,6 +32,9 @@ const GAP: f64 = 12.0;
 /// A tray click this soon after the flyout hid on blur is the click that
 /// blurred it: don't open it again.
 const REOPEN_GUARD: Duration = Duration::from_millis(250);
+/// How long a passive (non-activating) hotkey confirmation flyout stays up
+/// if the user doesn't focus it or press the hotkey again.
+const PASSIVE_HIDE: Duration = Duration::from_secs(3);
 
 /// The tray menu's Pause / Resume item, renamed as the service pauses.
 pub struct PauseItem(MenuItem<tauri::Wry>);
@@ -95,6 +99,10 @@ fn first_time(marker: &std::path::Path) -> bool {
 #[derive(Default)]
 struct Blurred(Mutex<Option<Instant>>);
 
+/// Generation counter cancelling stale passive auto-hide timers.
+#[derive(Default)]
+struct PassiveHide(AtomicU64);
+
 /// Guards against clicking Quit twice while the service is stopping.
 #[derive(Default)]
 struct Quitting(AtomicBool);
@@ -104,6 +112,7 @@ const QUIT_STOP_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub fn setup(app: &mut App) -> tauri::Result<()> {
     app.manage(Blurred::default());
+    app.manage(PassiveHide::default());
     app.manage(Quitting::default());
     app.manage(tray_icon::Shown::default());
 
@@ -120,23 +129,34 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         .visible(false)
         .build()?;
     let handle = app.handle().clone();
-    flyout.on_window_event(move |e| {
-        if let WindowEvent::Focused(false) = e {
+    flyout.on_window_event(move |e| match e {
+        WindowEvent::Focused(true) => {
+            cancel_passive_hide(&handle);
+        }
+        WindowEvent::Focused(false) => {
             hide_flyout(&handle, true);
         }
+        _ => {}
     });
 
     // Closing the main window keeps SnailNet in the tray, and says so the
-    // first time.
+    // first time. Restoring from the taskbar (or showing from the flyout)
+    // immediately flushes any buffered catchup stats.
     if let Some(main) = app.get_webview_window(MAIN) {
         let w = main.clone();
         let handle = app.handle().clone();
-        main.on_window_event(move |e| {
-            if let WindowEvent::CloseRequested { api, .. } = e {
+        main.on_window_event(move |e| match e {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = w.hide();
                 first_close_notice(&handle);
             }
+            WindowEvent::Focused(true) | WindowEvent::Resized(_)
+                if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) =>
+            {
+                crate::flush_if_missed(&handle);
+            }
+            _ => {}
         });
     }
 
@@ -220,6 +240,7 @@ pub fn open_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        crate::flush_window(app, MAIN);
     }
 }
 
@@ -257,7 +278,36 @@ fn quit_app(app: &AppHandle) {
     });
 }
 
+fn cancel_passive_hide(app: &AppHandle) {
+    if let Some(p) = app.try_state::<PassiveHide>() {
+        p.0.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn arm_passive_hide(app: &AppHandle) {
+    let Some(p) = app.try_state::<PassiveHide>() else {
+        return;
+    };
+    let token = p.0.fetch_add(1, Ordering::Relaxed) + 1;
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(PASSIVE_HIDE);
+        let still_current = handle
+            .try_state::<PassiveHide>()
+            .is_some_and(|p| p.0.load(Ordering::Relaxed) == token);
+        if !still_current {
+            return;
+        }
+        if let Some(w) = handle.get_webview_window(FLYOUT)
+            && !w.is_focused().unwrap_or(false)
+        {
+            hide_flyout(&handle, false);
+        }
+    });
+}
+
 fn hide_flyout(app: &AppHandle, blurred: bool) {
+    cancel_passive_hide(app);
     if let Some(w) = app.get_webview_window(FLYOUT)
         && w.is_visible().unwrap_or(false)
     {
@@ -289,58 +339,147 @@ fn toggle_flyout(app: &AppHandle, icon: Rect) {
     if recently {
         return;
     }
-    let _ = place(&w, icon);
+    cancel_passive_hide(app);
+    let _ = place(&w, Some(icon));
     let _ = w.show();
     let _ = w.set_focus();
+    crate::flush_window(app, FLYOUT);
 }
 
-/// Open the flyout by the tray icon (the hotkey); already open, it stays.
+/// Open the flyout by the tray icon and focus it; already open, it stays.
 pub fn show_flyout(app: &AppHandle) {
+    show_flyout_with(app, true);
+}
+
+/// Show the flyout without activating it or stealing focus (used by the
+/// global hotkey so switching modes inside a fullscreen game never minimises
+/// or blurs the game).
+pub fn show_flyout_passive(app: &AppHandle) {
+    show_flyout_with(app, false);
+}
+
+fn show_flyout_with(app: &AppHandle, activate: bool) {
     let Some(w) = app.get_webview_window(FLYOUT) else {
         return;
     };
     if w.is_visible().unwrap_or(false) {
+        if !activate && !w.is_focused().unwrap_or(false) {
+            arm_passive_hide(app);
+        }
         return;
     }
-    if let Some(icon) = app
+    let icon = app
         .tray_by_id(tray_icon::TRAY_ID)
-        .and_then(|t| t.rect().ok().flatten())
-    {
-        let _ = place(&w, icon);
+        .and_then(|t| t.rect().ok().flatten());
+    let _ = place(&w, icon);
+    if activate {
+        cancel_passive_hide(app);
+        let _ = w.show();
+        let _ = w.set_focus();
+    } else {
+        show_window_no_activate(&w);
+        arm_passive_hide(app);
     }
-    let _ = w.show();
-    let _ = w.set_focus();
+    crate::flush_window(app, FLYOUT);
 }
 
-/// Put the flyout next to the tray icon, inside the icon's monitor's work
-/// area (above the taskbar, or below it when the taskbar is at the top).
-fn place(w: &WebviewWindow, icon: Rect) -> tauri::Result<()> {
-    let scale = w.scale_factor()?;
-    let pos: PhysicalPosition<f64> = icon.position.to_physical(scale);
-    let size: tauri::PhysicalSize<f64> = icon.size.to_physical(scale);
-    let Some(monitor) = w.monitor_from_point(pos.x, pos.y)? else {
+fn show_window_no_activate(w: &WebviewWindow) {
+    #[cfg(windows)]
+    if let Ok(hwnd) = w.hwnd() {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{SW_SHOWNOACTIVATE, ShowWindow};
+        // SAFETY: `hwnd` is a valid window handle owned by Tauri for the
+        // lifetime of `w`; `SW_SHOWNOACTIVATE` displays it without taking
+        // foreground focus or activating the window.
+        unsafe {
+            let _ = ShowWindow(HWND(hwnd.0), SW_SHOWNOACTIVATE);
+        }
+        return;
+    }
+    let _ = w.show();
+}
+
+/// Pick the monitor where the flyout should open: the tray icon's monitor,
+/// else the monitor under the cursor, else the primary or current monitor.
+fn target_monitor(w: &WebviewWindow, icon: Option<Rect>) -> tauri::Result<Option<tauri::Monitor>> {
+    if let Some(rect) = icon {
+        let guess = w.scale_factor().unwrap_or(1.0);
+        let pos: PhysicalPosition<f64> = rect.position.to_physical(guess);
+        let size: PhysicalSize<f64> = rect.size.to_physical(guess);
+        if let Some(m) =
+            w.monitor_from_point(pos.x + size.width / 2.0, pos.y + size.height / 2.0)?
+        {
+            return Ok(Some(m));
+        }
+        if let Some(m) = w.monitor_from_point(pos.x, pos.y)? {
+            return Ok(Some(m));
+        }
+    }
+    if let Ok(cursor) = w.cursor_position()
+        && let Some(m) = w.monitor_from_point(cursor.x, cursor.y)?
+    {
+        return Ok(Some(m));
+    }
+    if let Some(m) = w.primary_monitor()? {
+        return Ok(Some(m));
+    }
+    w.current_monitor()
+}
+
+/// Put the flyout next to the tray icon, inside the target monitor's work
+/// area (above the taskbar, or below it when the taskbar is at the top),
+/// sized with the target monitor's DPI rather than the window's previous one.
+fn place(w: &WebviewWindow, icon: Option<Rect>) -> tauri::Result<()> {
+    let Some(monitor) = target_monitor(w, icon)? else {
         return Ok(());
     };
     let s = monitor.scale_factor();
     let work = monitor.work_area();
-    let (x, y) = flyout_origin(
+    let icon_area = icon.map(|r| {
+        let pos: PhysicalPosition<f64> = r.position.to_physical(s);
+        let size: PhysicalSize<f64> = r.size.to_physical(s);
         Area {
             x: pos.x,
             y: pos.y,
             w: size.width,
             h: size.height,
-        },
+        }
+    });
+    let (x, y, phys_w, phys_h) = flyout_geometry(
+        icon_area,
         Area {
             x: work.position.x.into(),
             y: work.position.y.into(),
             w: work.size.width.into(),
             h: work.size.height.into(),
         },
-        (FLYOUT_W * s, FLYOUT_H * s),
-        GAP * s,
+        s,
     );
-    w.set_size(tauri::LogicalSize::new(FLYOUT_W, FLYOUT_H))?;
-    w.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))
+    let target_pos = PhysicalPosition::new(x, y);
+    let target_size = PhysicalSize::new(phys_w, phys_h);
+    // Position first so moving across monitors with different DPI updates
+    // the window's scale before setting physical size, then re-confirm
+    // position in case WM_DPICHANGED adjusted the rect.
+    w.set_position(target_pos)?;
+    w.set_size(target_size)?;
+    w.set_position(target_pos)
+}
+
+/// Physical `(x, y, width, height)` for the flyout on a monitor with `work`
+/// area and `scale` factor. Without an icon rect, anchors near the
+/// bottom-right corner of the work area.
+fn flyout_geometry(icon: Option<Area>, work: Area, scale: f64) -> (i32, i32, u32, u32) {
+    let w = (FLYOUT_W * scale).round();
+    let h = (FLYOUT_H * scale).round();
+    let gap = GAP * scale;
+    let anchor = icon.unwrap_or(Area {
+        x: work.x + work.w,
+        y: work.y + work.h,
+        w: 0.0,
+        h: 0.0,
+    });
+    let (x, y) = flyout_origin(anchor, work, (w, h), gap);
+    (x.round() as i32, y.round() as i32, w as u32, h as u32)
 }
 
 /// A rectangle in physical pixels.
@@ -439,6 +578,30 @@ mod tests {
         };
         let (x, y) = flyout_origin(icon, work, (540.0, 630.0), 18.0);
         assert_eq!((x, y), (-558.0, 744.0));
+    }
+
+    #[test]
+    fn mixed_dpi_geometry_scales_with_target_monitor() {
+        // 4K secondary monitor at 200% DPI to the right of a 1080p 100% monitor.
+        let work = Area {
+            x: 1920.0,
+            y: 0.0,
+            w: 3840.0,
+            h: 2064.0,
+        };
+        let icon = Area {
+            x: 5600.0,
+            y: 2080.0,
+            w: 64.0,
+            h: 80.0,
+        };
+        let (x, y, w, h) = flyout_geometry(Some(icon), work, 2.0);
+        assert_eq!((w, h), (760, 1000));
+        // Clamped to work right edge minus 24 px gap: 1920 + 3840 - 760 - 24 = 4976.
+        assert_eq!((x, y), (4976, 1040));
+
+        // Without an icon rect, falls back to bottom-right of target monitor.
+        assert_eq!(flyout_geometry(None, work, 2.0), (4976, 1040, 760, 1000));
     }
 
     #[test]

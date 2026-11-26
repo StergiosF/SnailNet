@@ -10,10 +10,16 @@ import { WaitWatch } from "./waiting";
 import type { Families, Latest, Link, Rule, SaveError, ServiceState, Settings, Snapshot, StatsTick, Target } from "./types";
 
 const notConnected: SaveError = { kind: "failed", message: "not connected" };
+/** Cap buffered catchup ticks for windows that never register `onCatchup` (e.g. flyout). */
+const MAX_PENDING_CATCHUP = 2_400;
 
 class Service {
   link = $state<Link>({ kind: "connecting" });
   snapshot = $state<Snapshot | null>(null);
+  /** Highest config revision we know the service holds: updated when a
+   *  snapshot arrives and immediately when a write returns a new rev, so
+   *  back-to-back writes or immediate Undo don't race the bridge push. */
+  #knownRev = $state(0);
   /** The live stats, steadied for the eye (steady.ts). */
   stats = $state<StatsTick | null>(null);
   #steady = new Steady();
@@ -22,8 +28,64 @@ class Service {
   waiting = $state<{ down: string[]; up: string[] }>({ down: [], up: [] });
   #waitDown = new WaitWatch();
   #waitUp = new WaitWatch();
+  #catchupListeners = new Set<(ticks: StatsTick[]) => void>();
+  #pendingCatchup: StatsTick[] = [];
+
+  get rev(): number {
+    return Math.max(this.snapshot?.rev ?? 0, this.#knownRev);
+  }
+
+  #applySnapshot(snap: Snapshot) {
+    this.snapshot = snap;
+    if (snap.rev > this.#knownRev) this.#knownRev = snap.rev;
+    this.#flushCatchup();
+  }
+
+  #rememberSites(tick: StatsTick) {
+    for (const s of tick.down?.sites ?? []) {
+      if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
+    }
+    for (const s of tick.up?.sites ?? []) {
+      if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
+    }
+  }
+
+  #flushCatchup() {
+    if (!this.snapshot || this.#catchupListeners.size === 0 || this.#pendingCatchup.length === 0) return;
+    const pending = this.#pendingCatchup;
+    this.#pendingCatchup = [];
+    for (const fn of this.#catchupListeners) fn(pending);
+  }
+
+  #deliverCatchup(ticks: StatsTick[]) {
+    if (ticks.length === 0) return;
+    for (const tick of ticks) this.#rememberSites(tick);
+    if (!this.snapshot || this.#catchupListeners.size === 0) {
+      this.#pendingCatchup.push(...ticks);
+      if (this.#pendingCatchup.length > MAX_PENDING_CATCHUP) {
+        this.#pendingCatchup.splice(0, this.#pendingCatchup.length - MAX_PENDING_CATCHUP);
+      }
+      return;
+    }
+    for (const fn of this.#catchupListeners) fn(ticks);
+  }
+
+  /** Receive ticks missed while the window was hidden, in chronological
+   *  order. Flushes any buffered catchup ticks if registered after `start()`. */
+  onCatchup(fn: (ticks: StatsTick[]) => void): () => void {
+    this.#catchupListeners.add(fn);
+    if (this.snapshot && this.#pendingCatchup.length > 0) {
+      const pending = this.#pendingCatchup;
+      this.#pendingCatchup = [];
+      fn(pending);
+    }
+    return () => {
+      this.#catchupListeners.delete(fn);
+    };
+  }
 
   #take(tick: StatsTick) {
+    this.#rememberSites(tick);
     this.stats = this.#steady.step(tick);
     const down = this.#waitDown.feed(tick.down?.families ?? []);
     const up = this.#waitUp.feed(tick.up?.families ?? []);
@@ -65,7 +127,9 @@ class Service {
   async #change(command: string, args: Record<string, unknown>): Promise<number> {
     const snap = this.snapshot;
     if (!snap || this.link.kind !== "connected") throw notConnected;
-    return invoke<number>(command, { ...args, rev: snap.rev });
+    const rev = await invoke<number>(command, { ...args, rev: this.rev });
+    if (rev > this.#knownRev) this.#knownRev = rev;
+    return rev;
   }
 
   /** Save the active profile's rules. */
@@ -176,33 +240,82 @@ class Service {
   }
 
   async start(): Promise<void> {
+    // Track live events that arrive while `current` is in flight so stale
+    // `current` fields never overwrite fresher events and catchup ticks
+    // always reach the timeline strictly before newer live ticks.
+    let ready = false;
+    let sawLink = false;
+    let sawSnapshot = false;
+    let sawState: ServiceState | null = null;
+    let sawCatchup = false;
+    const earlyCatchup: StatsTick[][] = [];
+    const earlyStats: StatsTick[] = [];
     // Listen first so nothing falls between `current` and the first event.
     await Promise.all([
       listen<Link>("link", (e) => {
+        sawLink = true;
         this.link = e.payload;
         if (e.payload.kind !== "connected") {
           this.stats = null;
+          this.#knownRev = 0;
+          this.#pendingCatchup = [];
+          earlyCatchup.length = 0;
+          earlyStats.length = 0;
           this.#steady.reset();
           this.#waitDown.reset();
           this.#waitUp.reset();
           this.waiting = { down: [], up: [] };
         }
       }),
-      listen<Snapshot>("snapshot", (e) => (this.snapshot = e.payload)),
+      listen<Snapshot>("snapshot", (e) => {
+        sawSnapshot = true;
+        sawState = null;
+        this.#applySnapshot(e.payload);
+      }),
       listen<ServiceState>("service-state", (e) => {
         if (this.snapshot) this.snapshot.state = e.payload;
+        else sawState = e.payload;
       }),
       listen<StatsTick>("stats", (e) => {
-        this.#take(e.payload);
-        for (const s of e.payload.down?.sites ?? []) {
-          if (this.#seenSiteNames[s.site] !== s.name) this.#seenSiteNames[s.site] = s.name;
+        if (!ready) {
+          earlyStats.push(e.payload);
+          return;
         }
+        this.#take(e.payload);
+      }),
+      listen<StatsTick[]>("stats-catchup", (e) => {
+        sawCatchup = true;
+        if (!ready) {
+          earlyCatchup.push(e.payload);
+          return;
+        }
+        this.#deliverCatchup(e.payload);
       }),
     ]);
-    const now = await invoke<Latest>("current");
-    this.link = now.link;
-    this.snapshot ??= now.snapshot;
-    if (this.stats === null && now.stats) this.#take(now.stats);
+    try {
+      const now = await invoke<Latest>("current");
+      if (!sawLink) this.link = now.link;
+      if (!sawSnapshot && now.snapshot) {
+        this.#applySnapshot(sawState !== null ? { ...now.snapshot, state: sawState } : now.snapshot);
+      }
+      if (this.link.kind === "connected") {
+        if (!sawCatchup && now.missed_stats && now.missed_stats.length > 0) {
+          this.#deliverCatchup(now.missed_stats);
+        }
+        for (const batch of earlyCatchup) {
+          this.#deliverCatchup(batch);
+        }
+        if (earlyStats.length === 0 && now.stats) {
+          this.#take(now.stats);
+        } else {
+          for (const tick of earlyStats) {
+            this.#take(tick);
+          }
+        }
+      }
+    } finally {
+      ready = true;
+    }
   }
 }
 

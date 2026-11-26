@@ -17,11 +17,12 @@
   import { fixer } from "../fixer.svelte";
   import { t } from "../i18n";
   import { lineDialog } from "../lineDialog.svelte";
-  import { modeName } from "../modes";
+  import { isOwnMode, modeName } from "../modes";
   import { grade, rise, type Grade } from "../proof";
   import { service } from "../service.svelte";
   import type { Settings } from "../types";
   import { ui } from "../ui.svelte";
+  import { updates } from "../update.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Dropdown from "./Dropdown.svelte";
   import Glyph from "./Glyph.svelte";
@@ -171,6 +172,7 @@
     }
   }
   const mode = $derived(modeName(service.activeProfile));
+  const ownMode = $derived(service.activeProfile !== null && isOwnMode(service.activeProfile.id));
   const serviceVersion = $derived(service.link.kind === "connected" ? service.link.service_version : null);
 
   // What goes first is a mode now (2026-11-25), one at a time in the mode
@@ -180,8 +182,8 @@
   // Words only: the rows carry the glyphs, once (DESIGN.md, Settings).
   const index = $derived<{ id: string; label: string }[]>([
     { id: "set-line", label: t("settings.connection") },
-    ...(grouped.length > 0 || choices.length > 0 ? [{ id: "set-apps", label: t("settings.apps") }] : []),
     { id: "set-notes", label: t("settings.notifications") },
+    ...(grouped.length > 0 || choices.length > 0 ? [{ id: "set-apps", label: t("settings.apps") }] : []),
     { id: "set-start", label: t("settings.windows") },
     { id: "set-about", label: t("settings.about") },
     { id: "set-reset", label: t("settings.reset") },
@@ -489,6 +491,11 @@
             <b>{t("settings.about.version", { app: version })}</b>
             {#if serviceVersion}<span>{t("settings.about.service", { version: serviceVersion })}</span>{/if}
           </div>
+          {#if version}
+            <button type="button" class="btn btn-quiet" onclick={() => updates.openWhatsNew(version)}>
+              {t("settings.about.whatsNew")}
+            </button>
+          {/if}
         </div>
         <UpdateRow />
         <label class="item">
@@ -512,16 +519,18 @@
     <section id="set-reset" aria-labelledby="set-reset-h">
       <h2 class="group-title" id="set-reset-h">{t("settings.reset")}</h2>
       <div class="card group">
-        <div class="item">
-          <span class="ic"><Glyph name="reset" size={20} /></span>
-          <div class="words">
-            <b>{t("settings.resetMode", { mode })}</b>
-            <span>{t("settings.resetMode.body", { mode })}</span>
+        {#if !ownMode}
+          <div class="item">
+            <span class="ic"><Glyph name="reset" size={20} /></span>
+            <div class="words">
+              <b>{t("settings.resetMode", { mode })}</b>
+              <span>{t("settings.resetMode.body", { mode })}</span>
+            </div>
+            <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
+              {t("split.reset")}
+            </button>
           </div>
-          <button type="button" class="btn" disabled={!canEdit} onclick={() => void resetSplit()}>
-            {t("split.reset")}
-          </button>
-        </div>
+        {/if}
         <div class="item">
           <span class="ic"><Glyph name="trash" size={20} /></span>
           <div class="words">

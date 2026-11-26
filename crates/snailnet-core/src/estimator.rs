@@ -180,7 +180,7 @@ impl Direction {
             self.peak = (self.peak * 0.5f64.powf(1.0 / PEAK_HALF_LIFE_S)).max(sustained);
         }
 
-        let Some(cap) = self.capacity else {
+        let Some(mut cap) = self.capacity else {
             // Nothing known: what the line has carried is the first estimate,
             // once it has carried something real.
             if self.peak >= LEARN_MIN_BPS {
@@ -189,9 +189,12 @@ impl Direction {
             }
             return;
         };
-        if self.source == Source::Passive {
-            // Learning from traffic: capacity follows the peak up.
-            self.capacity = Some(cap.max(self.peak));
+        if self.source == Source::Passive && self.recent.len() == SUSTAIN_S && sustained > cap {
+            // Learning from live traffic: only raise when the line just proved
+            // it can carry more right now (not snapping back to an old peak
+            // after a congestion cut).
+            cap = sustained;
+            self.capacity = Some(cap);
         }
         if self.source == Source::Fixed {
             return;
@@ -250,7 +253,10 @@ impl Direction {
     /// A second that wasn't busy: what was cut drifts back.
     fn recover(&mut self) {
         self.idle_for = self.idle_for.saturating_add(1);
-        if let (Some(cap), Some(r)) = (self.capacity, self.reference)
+        let target = self.reference.or_else(|| {
+            (self.source == Source::Passive && self.peak >= LEARN_MIN_BPS).then_some(self.peak)
+        });
+        if let (Some(cap), Some(r)) = (self.capacity, target)
             && cap < r
         {
             let next = r - (r - cap) * 0.5f64.powf(1.0 / RECOVER_HALF_LIFE_S);
@@ -326,6 +332,28 @@ mod tests {
         assert!(
             close(d.capacity_bps().unwrap(), 30.0 * MBPS),
             "follows the peak up"
+        );
+    }
+
+    #[test]
+    fn passive_congestion_cuts_stick_and_recover_when_quiet() {
+        let mut d = Direction::new(None, Source::Passive, None);
+        run(&mut d, 5, 20.0 * MBPS, None);
+        assert!(close(d.capacity_bps().unwrap(), 20.0 * MBPS));
+        // Sustained ping jump cuts passive capacity down to the floor and keeps it there.
+        press(&mut d, SLOW_HOLD_S + 10, 1.0, 80.0);
+        assert!(
+            close(d.capacity_bps().unwrap(), d.peak_bps() * FLOOR),
+            "passive cut must stick: {:?} vs floor {}",
+            d.capacity_bps(),
+            d.peak_bps() * FLOOR
+        );
+        // Once traffic goes quiet, capacity drifts back toward the peak.
+        run(&mut d, 900, 0.0, None);
+        assert!(
+            d.capacity_bps().unwrap() > 19.8 * MBPS,
+            "passive cut recovers when quiet: {:?}",
+            d.capacity_bps()
         );
     }
 

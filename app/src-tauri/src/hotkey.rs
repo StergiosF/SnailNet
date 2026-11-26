@@ -122,21 +122,57 @@ fn register(app: &AppHandle, keys: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Switch to the next mode and show the flyout.
+fn next_from_snapshot(snap: &snailnet_ipc::Snapshot) -> Option<(String, u64)> {
+    let ids = snap.config.profiles.iter().map(|p| p.id.as_str());
+    next_mode(ids, &snap.config.active_profile).map(|id| (id, snap.rev))
+}
+
+/// Try switching to `(id, rev)`; on a stale-revision conflict (such as rapid
+/// hotkey presses before the bridge refreshes its snapshot), fetch a fresh
+/// snapshot and retry once from the latest active mode and revision.
+async fn switch_with_retry<S, SFut, G, GFut>(
+    id: String,
+    rev: u64,
+    mut switch: S,
+    fetch_snapshot: G,
+) -> Result<u64, crate::SaveError>
+where
+    S: FnMut(String, u64) -> SFut,
+    SFut: std::future::Future<Output = Result<u64, crate::SaveError>>,
+    G: FnOnce() -> GFut,
+    GFut: std::future::Future<Output = Option<snailnet_ipc::Snapshot>>,
+{
+    match switch(id, rev).await {
+        Err(crate::SaveError::Conflict) => {
+            let Some(snap) = fetch_snapshot().await else {
+                return Err(crate::SaveError::Conflict);
+            };
+            let Some((retry_id, retry_rev)) = next_from_snapshot(&snap) else {
+                return Err(crate::SaveError::Conflict);
+            };
+            switch(retry_id, retry_rev).await
+        }
+        other => other,
+    }
+}
+
+/// Switch to the next mode and show the flyout without stealing focus.
 fn cycle(app: &AppHandle) {
-    let next = {
-        let shared = app.state::<Arc<Shared>>();
-        let latest = shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-        latest.snapshot.as_ref().and_then(|s| {
-            let ids = s.config.profiles.iter().map(|p| p.id.as_str());
-            next_mode(ids, &s.config.active_profile).map(|id| (id, s.rev))
-        })
-    };
-    crate::tray::show_flyout(app);
+    let next = app
+        .state::<Arc<Shared>>()
+        .with_snapshot(next_from_snapshot)
+        .flatten();
+    crate::tray::show_flyout_passive(app);
     if let Some((id, rev)) = next {
         tauri::async_runtime::spawn(async move {
             // A failure leaves the old mode on, which the flyout shows.
-            let _ = crate::changes::send(Request::SwitchProfile { id, rev }).await;
+            let _ = switch_with_retry(
+                id,
+                rev,
+                |id, rev| crate::changes::send(Request::SwitchProfile { id, rev }),
+                crate::changes::get_snapshot,
+            )
+            .await;
         });
     }
 }
@@ -293,5 +329,65 @@ mod tests {
         for (keys, _) in CHOICES {
             assert!(keys.parse::<Shortcut>().is_ok(), "{keys}");
         }
+    }
+
+    #[test]
+    fn conflict_fetches_fresh_snapshot_and_retries_once() {
+        let mut config = snailnet_core::rules::Config::default();
+        let order: Vec<&str> = MODES.iter().map(|(id, _)| *id).collect();
+        config.active_profile = order[1].into();
+        let fresh = snailnet_ipc::Snapshot {
+            rev: 11,
+            state: snailnet_ipc::ServiceState::Shaping,
+            config,
+            apps: Vec::new(),
+            sites: Vec::new(),
+            prompts: Vec::new(),
+        };
+        let mut seen = Vec::new();
+        let mut fetched = false;
+        let res = tauri::async_runtime::block_on(switch_with_retry(
+            order[1].into(),
+            10,
+            |id, rev| {
+                seen.push((id, rev));
+                let call_no = seen.len();
+                async move {
+                    if call_no == 1 {
+                        Err(crate::SaveError::Conflict)
+                    } else {
+                        Ok(rev + 1)
+                    }
+                }
+            },
+            || {
+                fetched = true;
+                let s = fresh.clone();
+                async move { Some(s) }
+            },
+        ));
+        assert!(fetched);
+        assert!(matches!(res, Ok(12)));
+        assert_eq!(seen, vec![(order[1].into(), 10), (order[2].into(), 11)]);
+    }
+
+    #[test]
+    fn non_conflict_error_does_not_retry() {
+        let mut fetched = false;
+        let res = tauri::async_runtime::block_on(switch_with_retry(
+            "gaming".into(),
+            10,
+            |_, _| async {
+                Err(crate::SaveError::Failed {
+                    message: "offline".into(),
+                })
+            },
+            || {
+                fetched = true;
+                async { None }
+            },
+        ));
+        assert!(!fetched);
+        assert!(matches!(res, Err(crate::SaveError::Failed { .. })));
     }
 }

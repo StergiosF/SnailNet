@@ -470,5 +470,11 @@
   "share.idle": "idle",
   "share.row": "{name} · {pct}%",
   "share.spare.few": "{names} only use spare speed.",
-  "share.bar": "{name} {pct}%"
+  "share.bar": "{name} {pct}%",
+  "whatsNew.version": "Version {version}",
+  "whatsNew.title": "What's new in SnailNet",
+  "whatsNew.subtitle": "Updated and ready — here's what changed.",
+  "whatsNew.list": "Highlights in this update",
+  "whatsNew.done": "Got it",
+  "settings.about.whatsNew": "What's new"
 }

@@ -6,6 +6,7 @@
 //! (flushing what it holds) before we report Stopped.
 
 use std::ffi::OsString;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -14,7 +15,9 @@ use windows_service::service::{
     PowerEventParam, ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState,
     ServiceStatus, ServiceType,
 };
-use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
+use windows_service::service_control_handler::{
+    self, ServiceControlHandlerResult, ServiceStatusHandle,
+};
 use windows_service::{define_windows_service, service_dispatcher};
 
 use crate::hub::Hub;
@@ -68,11 +71,23 @@ fn status(
 
 fn run_service() -> Result<()> {
     let dir = DataDir::system();
-    let hub = Hub::new(dir.clone(), StopSignal::new());
-    let handler_hub = hub.clone();
+    let signal = StopSignal::new();
+    let hub_slot: Arc<OnceLock<Arc<Hub>>> = Arc::new(OnceLock::new());
+    let status_slot: Arc<OnceLock<ServiceStatusHandle>> = Arc::new(OnceLock::new());
+    let handler_signal = signal.clone();
+    let handler_hub = hub_slot.clone();
+    let handler_status = status_slot.clone();
     let handle = service_control_handler::register(SERVICE_NAME, move |control| match control {
         ServiceControl::Stop | ServiceControl::Shutdown => {
-            handler_hub.signal().request();
+            if let Some(h) = handler_status.get() {
+                let _ = h.set_service_status(status(
+                    ServiceState::StopPending,
+                    ServiceControlAccept::empty(),
+                    0,
+                    10,
+                ));
+            }
+            handler_signal.request();
             ServiceControlHandlerResult::NoError
         }
         // Sent on every resume from sleep. Under Modern Standby this
@@ -80,13 +95,16 @@ fn run_service() -> Result<()> {
         // is the signal that doesn't depend on one.
         ServiceControl::PowerEvent(PowerEventParam::ResumeAutomatic) => {
             info!("power: the PC woke up; restarting shaping");
-            handler_hub.route_changed();
+            if let Some(hub) = handler_hub.get() {
+                hub.route_changed();
+            }
             ServiceControlHandlerResult::NoError
         }
         ServiceControl::PowerEvent(_) => ServiceControlHandlerResult::NoError,
         ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
         _ => ServiceControlHandlerResult::NotImplemented,
     })?;
+    let _ = status_slot.set(handle);
     handle.set_service_status(status(
         ServiceState::StartPending,
         ServiceControlAccept::empty(),
@@ -100,6 +118,16 @@ fn run_service() -> Result<()> {
         .and_then(|()| logging::init(&dir.logs(), false))
         .and_then(|()| {
             logging::abort_on_panic();
+            // Initialise Hub after logging so startup warnings are captured.
+            let hub = Hub::new(dir.clone(), signal);
+            let _ = hub_slot.set(hub.clone());
+            // Bind the IPC pipe before reporting Running so clients connecting
+            // immediately after SCM reports Running find it listening.
+            // Shaping doesn't need the pipe: if it can't be created, log
+            // it and carry on (the app and CLI just can't connect).
+            let ipc = IpcServer::start(hub.clone(), snailnet_ipc::PIPE_NAME)
+                .inspect_err(|e| error!("{e:#}"))
+                .ok();
             handle.set_service_status(status(
                 ServiceState::Running,
                 ServiceControlAccept::STOP
@@ -108,11 +136,6 @@ fn run_service() -> Result<()> {
                 0,
                 0,
             ))?;
-            // Shaping doesn't need the pipe: if it can't be created, log
-            // it and carry on (the app and CLI just can't connect).
-            let ipc = IpcServer::start(hub.clone(), snailnet_ipc::PIPE_NAME)
-                .inspect_err(|e| error!("{e:#}"))
-                .ok();
             let ended = runner::run(
                 &hub,
                 &mut WinEngine::default(),

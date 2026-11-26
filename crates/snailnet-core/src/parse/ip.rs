@@ -18,6 +18,8 @@ pub struct PacketInfo {
     pub dst_port: u16,
     /// TCP payload bytes (0 for a pure control packet). `None` if not TCP.
     pub tcp_payload_len: Option<usize>,
+    /// TCP sequence number (host byte order). `None` if not TCP or header truncated.
+    pub tcp_seq: Option<u32>,
     /// Where the TCP/UDP payload starts in the packet. `None` if not
     /// TCP/UDP, a later fragment, or the transport header is cut off.
     pub payload_offset: Option<usize>,
@@ -114,6 +116,7 @@ fn finish(
         src_port: 0,
         dst_port: 0,
         tcp_payload_len: None,
+        tcp_seq: None,
         payload_offset: None,
     };
     let Some(t) = transport else { return info };
@@ -130,6 +133,7 @@ fn finish(
     info.src_port = u16::from_be_bytes([t[0], t[1]]);
     info.dst_port = u16::from_be_bytes([t[2], t[3]]);
     if protocol == PROTO_TCP {
+        info.tcp_seq = Some(u32::from_be_bytes([t[4], t[5], t[6], t[7]]));
         let data_off = ((t[12] >> 4) as usize) * 4;
         info.tcp_payload_len = Some(t.len().saturating_sub(data_off));
         if (20..=t.len()).contains(&data_off) {

@@ -169,22 +169,32 @@ struct Keys {
 
 impl Keys {
     fn client_initial(version: u32, dcid: &[u8]) -> Option<Keys> {
-        let (salt, prefix): (&[u8], &str) = match version {
-            VERSION_1 => (&SALT_V1, "quic"),
-            VERSION_2 => (&SALT_V2, "quicv2"),
+        let (salt, key_label, iv_label, hp_label): (&[u8], &[u8], &[u8], &[u8]) = match version {
+            VERSION_1 => (
+                &SALT_V1,
+                b"tls13 quic key",
+                b"tls13 quic iv",
+                b"tls13 quic hp",
+            ),
+            VERSION_2 => (
+                &SALT_V2,
+                b"tls13 quicv2 key",
+                b"tls13 quicv2 iv",
+                b"tls13 quicv2 hp",
+            ),
             _ => return None,
         };
         let (initial_secret, _) = Hkdf::<Sha256>::extract(Some(salt), dcid);
         let mut client = [0u8; 32];
-        expand_label(&initial_secret, "client in", &mut client)?;
+        expand_label(&initial_secret, b"tls13 client in", &mut client)?;
         let mut keys = Keys {
             key: [0; 16],
             iv: [0; 12],
             hp: [0; 16],
         };
-        expand_label(&client, &format!("{prefix} key"), &mut keys.key)?;
-        expand_label(&client, &format!("{prefix} iv"), &mut keys.iv)?;
-        expand_label(&client, &format!("{prefix} hp"), &mut keys.hp)?;
+        expand_label(&client, key_label, &mut keys.key)?;
+        expand_label(&client, iv_label, &mut keys.iv)?;
+        expand_label(&client, hp_label, &mut keys.hp)?;
         Some(keys)
     }
 
@@ -198,16 +208,22 @@ impl Keys {
 }
 
 /// TLS 1.3 HKDF-Expand-Label with an empty context (RFC 8446 §7.1).
-fn expand_label(secret: &[u8], label: &str, out: &mut [u8]) -> Option<()> {
-    let full = format!("tls13 {label}");
-    let mut info = Vec::with_capacity(4 + full.len());
-    info.extend_from_slice(&u16::try_from(out.len()).ok()?.to_be_bytes());
-    info.push(u8::try_from(full.len()).ok()?);
-    info.extend_from_slice(full.as_bytes());
-    info.push(0);
+/// `full_label` already carries the `"tls13 "` prefix.
+fn expand_label(secret: &[u8], full_label: &[u8], out: &mut [u8]) -> Option<()> {
+    let mut info = [0u8; 32];
+    let total = 4 + full_label.len();
+    if total > info.len() {
+        return None;
+    }
+    let len = u16::try_from(out.len()).ok()?.to_be_bytes();
+    info[0] = len[0];
+    info[1] = len[1];
+    info[2] = u8::try_from(full_label.len()).ok()?;
+    info[3..3 + full_label.len()].copy_from_slice(full_label);
+    info[3 + full_label.len()] = 0;
     Hkdf::<Sha256>::from_prk(secret)
         .ok()?
-        .expand(&info, out)
+        .expand(&info[..total], out)
         .ok()
 }
 

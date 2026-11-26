@@ -113,6 +113,17 @@ pub fn stop_plain() -> windows::core::Result<()> {
 /// ERROR_CANCELLED: the UAC prompt was declined.
 const ERROR_CANCELLED: u32 = 1223;
 
+/// Full path to `%SystemRoot%\System32\sc.exe`, avoiding PATH lookup when
+/// elevating via `ShellExecuteExW`.
+fn sc_exe_path() -> std::path::PathBuf {
+    std::env::var_os("SystemRoot")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
+        .join("System32")
+        .join("sc.exe")
+}
+
 #[tauri::command]
 pub async fn start_service() -> StartOutcome {
     tauri::async_runtime::spawn_blocking(|| {
@@ -122,12 +133,13 @@ pub async fn start_service() -> StartOutcome {
         if start_plain().is_ok() {
             return StartOutcome::Asked;
         }
+        let sc_path = HSTRING::from(sc_exe_path().as_os_str());
         let params = HSTRING::from(format!("start {SERVICE_NAME}"));
         let mut info = SHELLEXECUTEINFOW {
             cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
             fMask: SEE_MASK_NOCLOSEPROCESS,
             lpVerb: w!("runas"),
-            lpFile: w!("sc.exe"),
+            lpFile: PCWSTR(sc_path.as_ptr()),
             lpParameters: PCWSTR(params.as_ptr()),
             nShow: SW_HIDE.0,
             ..Default::default()
@@ -151,4 +163,21 @@ pub async fn start_service() -> StartOutcome {
     .unwrap_or_else(|e| StartOutcome::Failed {
         message: e.to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sc_path_is_absolute_in_system32() {
+        let p = sc_exe_path();
+        assert!(p.is_absolute(), "{p:?} should be absolute");
+        assert!(
+            p.to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with(r"\system32\sc.exe"),
+            "unexpected sc path: {p:?}"
+        );
+    }
 }

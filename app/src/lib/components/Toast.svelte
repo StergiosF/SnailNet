@@ -7,11 +7,12 @@
   import Glyph from "./Glyph.svelte";
 </script>
 
-<div class="slot" role="status" aria-live="polite">
+<div class="slot">
   {#if ui.toast}
     {@const toast = ui.toast}
-    <div class="toast">
-      <Glyph name="check" size={18} />
+    {@const isError = toast.kind === "error"}
+    <div class="toast" class:err={isError} role={isError ? "alert" : "status"}>
+      <Glyph name={isError ? "info" : "check"} size={18} />
       <span class="msg">{toast.message}</span>
       {#if toast.action}
         <button
@@ -60,6 +61,9 @@
   }
   .toast > :global(.glyph) {
     color: var(--shell-bright);
+  }
+  .toast.err > :global(.glyph) {
+    color: var(--critical);
   }
   .msg {
     min-width: 0;

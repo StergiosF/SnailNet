@@ -13,7 +13,7 @@
   import { firstChoiceOf, type FirstChoice } from "../firstChoice";
   import { t } from "../i18n";
   import { placeMenu } from "../popover";
-  import { addRule, sameTarget, setEnabled } from "../rules";
+  import { giveShare, sameTarget } from "../rules";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -36,9 +36,7 @@
   const hasShare = $derived(ui.rules.some((r) => r.enabled && r.share > 0 && sameTarget(r.target, target)));
   function give() {
     close();
-    const rules = ui.rules;
-    const i = rules.findIndex((r) => sameTarget(r.target, target));
-    ui.edit(i >= 0 ? setEnabled(rules, i, true) : addRule(rules, target));
+    ui.edit(giveShare(ui.rules, target));
     ui.open = `${target.kind}:${target.id.toLowerCase()}`;
     ui.go("split");
   }

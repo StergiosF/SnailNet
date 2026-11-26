@@ -11,12 +11,15 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString, c_void};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use snailnet_core::classify::{ProcessFacts, ProcessSource};
 use windows_sys::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation, ProcessCommandLineInformation,
 };
-use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, UNICODE_STRING};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, ERROR_INSUFFICIENT_BUFFER, FILETIME, GetLastError, HANDLE, UNICODE_STRING,
+};
 use windows_sys::Win32::Security::Cryptography::{
     CERT_FIND_SUBJECT_CERT, CERT_INFO, CERT_NAME_SIMPLE_DISPLAY_TYPE,
     CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, CERT_QUERY_FORMAT_FLAG_BINARY,
@@ -47,6 +50,19 @@ impl Process {
     }
 
     fn image_path(&self) -> Option<PathBuf> {
+        let mut stack = [0u16; 512];
+        let mut len = stack.len() as u32;
+        // SAFETY: `stack` is valid for `len` u16s and the handle is live.
+        let ok = unsafe {
+            QueryFullProcessImageNameW(self.0, PROCESS_NAME_WIN32, stack.as_mut_ptr(), &mut len)
+        };
+        if ok != 0 {
+            return Some(PathBuf::from(OsString::from_wide(&stack[..len as usize])));
+        }
+        // SAFETY: reads thread-local last error set by QueryFullProcessImageNameW.
+        if unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
+            return None;
+        }
         let mut buf = vec![0u16; 32 * 1024];
         let mut len = buf.len() as u32;
         // SAFETY: `buf` is valid for `len` u16s and the handle is live.
@@ -178,7 +194,9 @@ pub fn command_line(pid: u32) -> Option<String> {
 
 /// `%SystemRoot%`, normally `C:\Windows`.
 pub fn windows_dir() -> String {
-    std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into())
+    static DIR: OnceLock<String> = OnceLock::new();
+    DIR.get_or_init(|| std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()))
+        .clone()
 }
 
 fn wide(s: &OsStr) -> Vec<u16> {

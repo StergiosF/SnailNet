@@ -98,33 +98,50 @@ pub struct FlowTable {
 
 impl FlowTable {
     /// FLOW established: authoritative, replaces any SOCKET guess.
-    pub fn flow_established(&mut self, key: FlowKey, owner: Owner) {
+    /// Returns `true` if a previously known owner for `key` changed app.
+    pub fn flow_established(&mut self, key: FlowKey, owner: Owner) -> bool {
+        let changed = self
+            .lookup(&key)
+            .is_some_and(|(old, _)| old.app != owner.app);
         self.insert_flow(key, owner, Source::Flow, 0);
+        changed
     }
 
-    pub fn flow_deleted(&mut self, key: &FlowKey) {
-        self.flows.remove(key);
+    pub fn flow_deleted(&mut self, key: &FlowKey) -> bool {
+        self.flows.remove(key).is_some()
     }
 
     /// SOCKET connect / accept: the exact flow, before its first packet.
-    /// Never overrides a FLOW entry.
-    pub fn socket_connected(&mut self, key: FlowKey, owner: Owner, endpoint: u64) {
+    /// Never overrides a FLOW entry. Returns `true` if a previously known
+    /// owner for `key` changed app.
+    pub fn socket_connected(&mut self, key: FlowKey, owner: Owner, endpoint: u64) -> bool {
         if self
             .flows
             .get(&key)
             .is_some_and(|e| e.source == Source::Flow)
         {
-            return;
+            return false;
         }
+        let changed = self
+            .lookup(&key)
+            .is_some_and(|(old, _)| old.app != owner.app);
         self.insert_flow(key, owner, Source::Socket, endpoint);
+        changed
     }
 
     /// SOCKET bind / listen: only the local port is known.
-    pub fn socket_bound(&mut self, port: PortKey, owner: Owner, endpoint: u64) {
+    /// Returns `true` if a previously known owner for `port` changed app.
+    pub fn socket_bound(&mut self, port: PortKey, owner: Owner, endpoint: u64) -> bool {
         if self.endpoints.len() >= MAX_ENDPOINTS && !self.endpoints.contains_key(&port) {
             self.overflow += 1;
-            return;
+            return false;
         }
+        let prev_app = self
+            .endpoints
+            .get(&port)
+            .map(|e| e.owner.app)
+            .or_else(|| self.ports.get(&port).map(|o| o.app));
+        let changed = prev_app.is_some_and(|old| old != owner.app);
         let entry = Entry {
             owner,
             source: Source::Socket,
@@ -132,29 +149,42 @@ impl FlowTable {
             misses: 0,
         };
         self.endpoints.insert(port, entry);
+        changed
     }
 
     /// SOCKET close: forget what this endpoint told us. `key.remote` may be
-    /// unspecified (a socket that never connected).
-    pub fn socket_closed(&mut self, key: &FlowKey, endpoint: u64) {
+    /// unspecified (a socket that never connected). Returns `true` if any
+    /// entry was removed.
+    pub fn socket_closed(&mut self, key: &FlowKey, endpoint: u64) -> bool {
         let ours = |e: &Entry| e.source == Source::Socket && e.endpoint == endpoint;
+        let mut removed = false;
         if self.flows.get(key).is_some_and(ours) {
             self.flows.remove(key);
+            removed = true;
         }
         let port = (key.protocol, key.local.1);
         if self.endpoints.get(&port).is_some_and(ours) {
             self.endpoints.remove(&port);
+            removed = true;
         }
+        removed
     }
 
     /// Replace the port snapshot, and drop flow and endpoint entries whose
     /// local port has been gone for [`STALE_AFTER_SNAPSHOTS`] snapshots.
     /// A protocol with no rows at all is left alone (its table read may
-    /// have failed).
+    /// have failed). Non-TCP/UDP flows (which never appear in the TCP/UDP
+    /// port tables) age out after [`STALE_AFTER_SNAPSHOTS`] snapshots when
+    /// any snapshot succeeds so they cannot leak indefinitely.
     pub fn set_ports(&mut self, ports: HashMap<PortKey, Owner>) {
         let has_rows = |proto: u8| ports.keys().any(|&(p, _)| p == proto);
         let (tcp, udp) = (has_rows(PROTO_TCP), has_rows(PROTO_UDP));
-        let checked = |proto: u8| (proto == PROTO_TCP && tcp) || (proto == PROTO_UDP && udp);
+        let any_rows = tcp || udp;
+        let checked = |proto: u8| {
+            (proto == PROTO_TCP && tcp)
+                || (proto == PROTO_UDP && udp)
+                || (any_rows && proto != PROTO_TCP && proto != PROTO_UDP)
+        };
         let age = |port: PortKey, e: &mut Entry| {
             if !checked(port.0) || ports.contains_key(&port) {
                 e.misses = 0;
@@ -229,6 +259,7 @@ mod tests {
             src_port: if outbound { 50_000 } else { 443 },
             dst_port: if outbound { 443 } else { 50_000 },
             tcp_payload_len: Some(0),
+            tcp_seq: Some(0),
             payload_offset: Some(40),
         }
     }

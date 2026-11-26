@@ -50,6 +50,9 @@ pub struct Seen {
     pub windows: HashSet<String>,
     /// App ids (indexes into `apps`) in a live call now (§11.9).
     pub calls: Vec<u32>,
+    /// True when the seen-apps list has not changed since the previous sample;
+    /// `apps` and `windows` are then omitted and the hub keeps its last copy.
+    pub apps_unchanged: bool,
 }
 
 /// A process's app family (`None`: unknown), grouped as the user wants,
@@ -61,6 +64,9 @@ pub struct Hub {
     signal: StopSignal,
     started: Instant,
     events: broadcast::Sender<Event>,
+    /// Serialises config persistence (`store::save` fsync) without holding
+    /// `inner` across blocking disk I/O. Lock order: `save_lock` before `inner`.
+    save_lock: Mutex<()>,
     inner: Mutex<Inner>,
     /// Only asked when the window in front changes (debounced, rare).
     family_of: Mutex<FamilyOf>,
@@ -171,6 +177,7 @@ impl Hub {
             signal,
             started: Instant::now(),
             events: broadcast::channel(64).0,
+            save_lock: Mutex::new(()),
             inner: Mutex::new(Inner {
                 config: Config::default(),
                 rev: 0,
@@ -232,6 +239,7 @@ impl Hub {
 
     /// The runner loaded the config from disk.
     pub(crate) fn set_loaded(&self, config: Config) {
+        let _save = self.save_lock.lock().unwrap_or_else(|e| e.into_inner());
         let rev = {
             let mut i = self.lock();
             i.config = config;
@@ -270,6 +278,7 @@ impl Hub {
         };
         if first.focus && plan.shapes_anything() {
             plan.focus = i.focus.pids(&i.config.settings);
+            plan.focus_families = i.focus.families(&i.config.settings);
         }
         if plan.strict {
             // New apps waiting for an answer (§11.4).
@@ -325,26 +334,30 @@ impl Hub {
         if !boost && !pause {
             return false;
         }
-        let rev = self.rev();
-        match self.change(rev, |c| {
-            if boost {
+        // Re-check expiry atomically inside `mutate` (under `save_lock` + `inner`)
+        // so a concurrent client setting a fresh boost/pause is never cleared.
+        let mut ended_boost = false;
+        let mut ended_pause = false;
+        match self.mutate(|c| {
+            if c.boost.as_ref().is_some_and(|b| !b.is_on(now)) {
                 c.boost = None;
+                ended_boost = true;
             }
-            if pause {
+            if c.pause.as_ref().is_some_and(|p| !p.is_on(now)) {
                 c.pause = None;
+                ended_pause = true;
             }
             Ok(())
         }) {
             Ok(_) => {
-                if boost {
+                if ended_boost {
                     tracing::info!("the boost's time is up");
                 }
-                if pause {
+                if ended_pause {
                     tracing::info!("the pause is over");
                 }
-                true
+                ended_boost || ended_pause
             }
-            // A client changed something at the same moment: next time.
             Err(_) => false,
         }
     }
@@ -418,16 +431,18 @@ impl Hub {
         let mut i = self.lock();
         let mut names = None;
         if let Some(seen) = seen {
+            if !seen.apps_unchanged {
+                i.apps = seen.apps;
+                self.meet_apps(&mut i, &seen.windows);
+            }
             i.calls = seen
                 .calls
                 .iter()
-                .filter_map(|&a| seen.apps.get(a as usize))
+                .filter_map(|&a| i.apps.get(a as usize))
                 .map(|a| a.family.clone())
                 .collect();
-            i.apps = seen.apps;
             i.sites = seen.sites;
             names = seen.names;
-            self.meet_apps(&mut i, &seen.windows);
         }
         if i.last.as_ref().is_some_and(|l| at <= l.at) {
             return;
@@ -504,16 +519,79 @@ impl Hub {
     pub fn answer_prompt(&self, prompt_id: u64, action: &str) -> Result<u64, Refusal> {
         let action = PromptAction::parse(action)
             .ok_or_else(|| (ErrorCode::Invalid, format!("{action:?} isn't an answer")))?;
-        let prompt = self.lock().newcomers.answer(prompt_id).ok_or_else(|| {
-            (
-                ErrorCode::Invalid,
-                "that question was answered already".to_owned(),
-            )
-        })?;
-        tracing::info!("new app {}: {}", prompt.family, action.name());
         match action {
-            PromptAction::Block => self.set_blocked(&prompt.family, true, self.rev()),
+            PromptAction::Block => {
+                // Persist the block and remove the prompt atomically under
+                // `save_lock` so neither a concurrent client `rev` change nor a
+                // disk write error can lose the prompt.
+                let _save = self.save_lock.lock().unwrap_or_else(|e| e.into_inner());
+                let (family, c, unchanged) = {
+                    let i = self.lock();
+                    if i.rev == 0 {
+                        return Err((
+                            ErrorCode::Internal,
+                            "the service is still starting; try again".into(),
+                        ));
+                    }
+                    let prompt = i
+                        .newcomers
+                        .pending()
+                        .iter()
+                        .find(|p| p.prompt_id == prompt_id)
+                        .ok_or_else(|| {
+                            (
+                                ErrorCode::Invalid,
+                                "that question was answered already".to_owned(),
+                            )
+                        })?;
+                    let id = prompt.family.trim().to_lowercase();
+                    let mut c = i.config.clone();
+                    c.blocked.retain(|b| !b.eq_ignore_ascii_case(&id));
+                    c.blocked.push(id.clone());
+                    c.blocked.sort();
+                    c.validate()
+                        .and_then(|()| c.check_sites())
+                        .map_err(|e| (ErrorCode::Invalid, e.to_string()))?;
+                    let unchanged = c == i.config;
+                    (prompt.family.clone(), c, unchanged)
+                };
+                if !unchanged {
+                    store::save(&self.dir, &c).map_err(|e| {
+                        (
+                            ErrorCode::Internal,
+                            format!("could not save config.toml: {e}"),
+                        )
+                    })?;
+                }
+                let (new_rev, changed_config, held) = {
+                    let mut i = self.lock();
+                    let prompt = i.newcomers.answer(prompt_id);
+                    let held = prompt.as_ref().is_some_and(|p| p.held);
+                    if !unchanged {
+                        i.config = c;
+                        i.rev += 1;
+                    }
+                    (i.rev, !unchanged, held)
+                };
+                tracing::info!("new app {family}: {}", action.name());
+                if changed_config {
+                    tracing::info!("config changed; now revision {new_rev}");
+                    self.signal.request_reload();
+                    let _ = self.events.send(Event::ConfigChanged { rev: new_rev });
+                } else if held {
+                    self.signal.request_reload();
+                }
+                Ok(new_rev)
+            }
             PromptAction::Fine | PromptAction::Slice => {
+                let _save = self.save_lock.lock().unwrap_or_else(|e| e.into_inner());
+                let prompt = self.lock().newcomers.answer(prompt_id).ok_or_else(|| {
+                    (
+                        ErrorCode::Invalid,
+                        "that question was answered already".to_owned(),
+                    )
+                })?;
+                tracing::info!("new app {}: {}", prompt.family, action.name());
                 if prompt.held {
                     self.signal.request_reload();
                 }
@@ -529,6 +607,7 @@ impl Hub {
         i.tick = None;
         i.calls.clear();
         i.ping = None;
+        i.newcomers.reset_cursor();
     }
 
     /// The line's ping now (§11.10), from the runner each second.
@@ -697,9 +776,8 @@ impl Hub {
     /// A "with SnailNet" check (§11.10) is set up for it, run once shaping
     /// at the new speed has settled.
     pub fn record_measured(&self, m: Measured) -> Result<u64, Refusal> {
-        let rev = self.rev();
         let at = m.at;
-        let r = self.change(rev, |c| {
+        let r = self.mutate(|c| {
             c.line.down_mbps = Some(m.down_mbps);
             c.line.up_mbps = Some(m.up_mbps);
             c.line.measured = Some(m);
@@ -733,7 +811,7 @@ impl Hub {
     /// speed or another network wins). True if it was saved.
     pub fn record_check(&self, at: u64, with_ms: f64) -> Result<bool, Refusal> {
         let mut saved = false;
-        self.change(self.rev(), |c| {
+        self.mutate(|c| {
             if let Some(m) = c.line.measured.as_mut().filter(|m| m.at == at) {
                 m.with_ms = Some(with_ms);
                 saved = true;
@@ -781,7 +859,7 @@ impl Hub {
     /// network's (unknown: none yet), and the one left is kept.
     pub fn network_seen(&self, net: Network, now: u64) -> Result<Switch, Refusal> {
         let mut switch = Switch::Same;
-        self.change(self.rev(), |c| {
+        self.mutate(|c| {
             switch = c.switch_network(net, now);
             Ok(())
         })?;
@@ -837,20 +915,39 @@ impl Hub {
     }
 
     /// Apply `f` to a copy of the config at `rev`; validate, save, publish.
+    /// Disk persistence runs outside `self.inner` (serialised by `save_lock`)
+    /// so readers and stats publishing never block on `fsync`.
     pub fn change(
         &self,
         rev: u64,
         f: impl FnOnce(&mut Config) -> Result<(), String>,
     ) -> Result<u64, Refusal> {
-        let new_rev = {
-            let mut i = self.lock();
+        self.apply_change(Some(rev), f)
+    }
+
+    /// Internal service mutation (speed test result, ping check, network
+    /// switch) that never conflicts against a concurrent client revision.
+    fn mutate(&self, f: impl FnOnce(&mut Config) -> Result<(), String>) -> Result<u64, Refusal> {
+        self.apply_change(None, f)
+    }
+
+    fn apply_change(
+        &self,
+        expected_rev: Option<u64>,
+        f: impl FnOnce(&mut Config) -> Result<(), String>,
+    ) -> Result<u64, Refusal> {
+        let _save = self.save_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let c = {
+            let i = self.lock();
             if i.rev == 0 {
                 return Err((
                     ErrorCode::Internal,
                     "the service is still starting; try again".into(),
                 ));
             }
-            if rev != i.rev {
+            if let Some(rev) = expected_rev
+                && rev != i.rev
+            {
                 return Err((
                     ErrorCode::Conflict,
                     format!(
@@ -867,12 +964,16 @@ impl Hub {
             if c == i.config {
                 return Ok(i.rev);
             }
-            store::save(&self.dir, &c).map_err(|e| {
-                (
-                    ErrorCode::Internal,
-                    format!("could not save config.toml: {e}"),
-                )
-            })?;
+            c
+        };
+        store::save(&self.dir, &c).map_err(|e| {
+            (
+                ErrorCode::Internal,
+                format!("could not save config.toml: {e}"),
+            )
+        })?;
+        let new_rev = {
+            let mut i = self.lock();
             i.config = c;
             i.rev += 1;
             i.rev
@@ -1078,6 +1179,7 @@ mod tests {
             family: family.into(),
             name: family.to_uppercase(),
             exe: format!("{family}.exe"),
+            path: None,
         };
         let seen = Seen {
             apps: vec![app("brave"), app("hades"), app(r"c:\windows\x.exe")],
@@ -1139,6 +1241,7 @@ mod tests {
                 family: family.into(),
                 name: family.into(),
                 exe: format!("{family}.exe"),
+                path: None,
             }],
             ..Seen::default()
         };
@@ -1555,6 +1658,7 @@ mod tests {
             family: family.into(),
             name: family.into(),
             exe: format!("{family}.exe"),
+            path: None,
         };
         let base = Instant::now();
         let snap = |ms: u64| EngineSnapshot {
@@ -1595,6 +1699,7 @@ mod tests {
             family: family.into(),
             name: family.to_uppercase(),
             exe: exe.into(),
+            path: None,
         };
         let apps = vec![
             app("steam", "steam.exe"),
@@ -1659,6 +1764,7 @@ mod tests {
             family: family.into(),
             name: name.into(),
             exe: exe.into(),
+            path: None,
         };
         // Tags are indexes into this list.
         let apps = vec![
@@ -1725,6 +1831,7 @@ mod tests {
             family: family.into(),
             name: name.into(),
             exe: format!("{family}.exe"),
+            path: None,
         };
         let seen = |names: NameTick| {
             Some(Seen {
@@ -1842,6 +1949,7 @@ mod tests {
                 family: "brave".into(),
                 name: "Brave".into(),
                 exe: "brave.exe".into(),
+                path: None,
             }],
             ..Seen::default()
         };
@@ -1852,5 +1960,26 @@ mod tests {
         let d = t.down.unwrap();
         assert!(d.sites.is_empty());
         assert_eq!(d.families[0].bps, 80_000);
+    }
+
+    #[test]
+    fn end_expired_clears_expired_boost_but_keeps_active_ones() {
+        let (_t, hub) = hub();
+        let rev = hub
+            .boost(Target::family("steam"), Some(1), 1_000, 1)
+            .unwrap();
+        assert!(!hub.end_expired(1_059));
+        assert!(hub.config().boost.is_some());
+        // Replace with a longer boost at t=1050 (until 4650), then run end_expired at 1060.
+        hub.boost(Target::family("discord"), Some(60), 1_050, rev)
+            .unwrap();
+        assert!(!hub.end_expired(1_060));
+        assert_eq!(
+            hub.config().boost.as_ref().map(|b| b.target.clone()),
+            Some(Target::family("discord"))
+        );
+        // Once past 4650, end_expired clears it cleanly.
+        assert!(hub.end_expired(4_650));
+        assert_eq!(hub.config().boost, None);
     }
 }

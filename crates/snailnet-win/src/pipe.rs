@@ -13,13 +13,20 @@ use std::io;
 use std::os::windows::io::RawHandle;
 use std::path::{Path, PathBuf};
 
-use windows_sys::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HANDLE, LocalFree};
+#[cfg(debug_assertions)]
+use windows_sys::Win32::Foundation::CloseHandle;
+use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, LocalFree};
 use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
+#[cfg(debug_assertions)]
 use windows_sys::Win32::Security::{
-    EqualSid, GetTokenInformation, IsWellKnownSid, OWNER_SECURITY_INFORMATION, PSID, TOKEN_QUERY,
-    TOKEN_USER, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid,
+    EqualSid, GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser,
+};
+use windows_sys::Win32::Security::{
+    IsWellKnownSid, OWNER_SECURITY_INFORMATION, PSID, WinBuiltinAdministratorsSid,
+    WinLocalSystemSid,
 };
 use windows_sys::Win32::System::Pipes::{GetNamedPipeClientProcessId, GetNamedPipeServerProcessId};
+#[cfg(debug_assertions)]
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 /// Which end of the pipe to ask about.
@@ -85,8 +92,9 @@ pub fn in_my_folder(pid: u32) -> Result<PathBuf, String> {
     }
 }
 
-/// True if the object behind `handle` is owned by SYSTEM, Administrators or
-/// the user this process runs as. Needs `READ_CONTROL` on the handle.
+/// True if the object behind `handle` is owned by SYSTEM or Administrators
+/// (or, in debug builds for unprivileged testing, the current user).
+/// Needs `READ_CONTROL` on the handle.
 pub fn owner_is_trusted(handle: RawHandle) -> io::Result<bool> {
     let mut owner: PSID = std::ptr::null_mut();
     let mut sd = std::ptr::null_mut();
@@ -107,7 +115,7 @@ pub fn owner_is_trusted(handle: RawHandle) -> io::Result<bool> {
     if err != ERROR_SUCCESS {
         return Err(io::Error::from_raw_os_error(err as i32));
     }
-    let trusted = (|| {
+    let trusted = (|| -> io::Result<bool> {
         // SAFETY: `owner` is a valid SID inside `sd`.
         let well_known = unsafe {
             IsWellKnownSid(owner, WinLocalSystemSid) != 0
@@ -116,9 +124,16 @@ pub fn owner_is_trusted(handle: RawHandle) -> io::Result<bool> {
         if well_known {
             return Ok(true);
         }
-        let me = current_user_sid()?;
-        // SAFETY: both SIDs are valid for the duration of the call.
-        Ok(unsafe { EqualSid(owner, me.as_ptr()) } != 0)
+        #[cfg(debug_assertions)]
+        {
+            let me = current_user_sid()?;
+            // SAFETY: both SIDs are valid for the duration of the call.
+            Ok(unsafe { EqualSid(owner, me.as_ptr()) } != 0)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Ok(false)
+        }
     })();
     // SAFETY: `sd` came from GetSecurityInfo and is freed exactly once.
     unsafe { LocalFree(sd) };
@@ -126,8 +141,10 @@ pub fn owner_is_trusted(handle: RawHandle) -> io::Result<bool> {
 }
 
 /// This process's user SID, kept inside its `TOKEN_USER` buffer.
+#[cfg(debug_assertions)]
 struct UserSid(Vec<u64>);
 
+#[cfg(debug_assertions)]
 impl UserSid {
     fn as_ptr(&self) -> PSID {
         // SAFETY: the buffer holds a TOKEN_USER filled by GetTokenInformation.
@@ -135,6 +152,7 @@ impl UserSid {
     }
 }
 
+#[cfg(debug_assertions)]
 fn current_user_sid() -> io::Result<UserSid> {
     let mut token: HANDLE = std::ptr::null_mut();
     // SAFETY: the pseudo handle needs no closing; `token` is closed below.

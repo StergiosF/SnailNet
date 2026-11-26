@@ -48,6 +48,8 @@ struct Flow<P> {
     /// Packets CoDel dropped or marked, and hard limit drops, since `tag`
     /// took this bucket.
     acted: u64,
+    /// Whether this bucket's index is already recorded in `acted_buckets`.
+    in_acted: bool,
 }
 
 impl<P> Flow<P> {
@@ -61,6 +63,7 @@ impl<P> Flow<P> {
             list: List::None,
             tag: NO_TAG,
             acted: 0,
+            in_acted: false,
         }
     }
 }
@@ -72,6 +75,9 @@ pub(crate) struct FlowQueues<P> {
     old: VecDeque<u16>,
     bytes: u64,
     packets: usize,
+    /// Bucket indices that have ever recorded CoDel/hard-limit actions since
+    /// the last drain, so `pressure()` skips untouched buckets.
+    acted_buckets: Vec<u16>,
     /// `(tag, acted)` of flows whose bucket another tag took over.
     retired: Vec<(Tag, u64)>,
 }
@@ -96,6 +102,7 @@ impl<P: Packet> FlowQueues<P> {
             old: VecDeque::new(),
             bytes: 0,
             packets: 0,
+            acted_buckets: Vec::new(),
             retired: Vec::new(),
         }
     }
@@ -104,6 +111,7 @@ impl<P: Packet> FlowQueues<P> {
     fn allocate(&mut self) {
         if self.flows.is_empty() {
             self.flows.resize_with(BUCKETS, Flow::empty);
+            self.acted_buckets.reserve(64);
             self.retired.reserve_exact(RETIRED_SLOTS);
         }
     }
@@ -166,7 +174,14 @@ impl<P: Packet> FlowQueues<P> {
             let (bytes_before, packets_before) = (f.bytes, f.queue.len());
             let acted_before = v.dropped_packets + v.marked;
             let got = f.codel.dequeue(&mut f.queue, &mut f.bytes, now, v);
-            f.acted += v.dropped_packets + v.marked - acted_before;
+            let delta = v.dropped_packets + v.marked - acted_before;
+            if delta > 0 {
+                f.acted += delta;
+                if !f.in_acted {
+                    f.in_acted = true;
+                    self.acted_buckets.push(i);
+                }
+            }
             self.bytes -= bytes_before - f.bytes;
             self.packets -= packets_before - f.queue.len();
             match got {
@@ -204,6 +219,10 @@ impl<P: Packet> FlowQueues<P> {
         let len = e.packet.wire_len() as u64;
         f.bytes -= len;
         f.acted += 1;
+        if !f.in_acted {
+            f.in_acted = true;
+            self.acted_buckets.push(i);
+        }
         self.bytes -= len;
         self.packets -= 1;
         Some(len)
@@ -219,6 +238,7 @@ impl<P: Packet> FlowQueues<P> {
         }
         self.new.clear();
         self.old.clear();
+        self.acted_buckets.clear();
         self.bytes = 0;
         self.packets = 0;
     }
@@ -244,13 +264,31 @@ impl<P: Packet> FlowQueues<P> {
     /// Append `(tag, pressure)` for every flow with bytes queued or actions
     /// counted, and every retired count. Tags may repeat; the caller merges.
     pub fn pressure(&self, out: &mut Vec<(Tag, Pressure)>) {
-        for f in &self.flows {
+        if self.flows.is_empty() {
+            return;
+        }
+        for &i in self.new.iter().chain(self.old.iter()) {
+            let f = &self.flows[i as usize];
             if f.bytes > 0 || f.acted > 0 {
-                let p = Pressure {
-                    queued_bytes: f.bytes,
-                    acted: f.acted,
-                };
-                out.push((f.tag, p));
+                out.push((
+                    f.tag,
+                    Pressure {
+                        queued_bytes: f.bytes,
+                        acted: f.acted,
+                    },
+                ));
+            }
+        }
+        for &i in &self.acted_buckets {
+            let f = &self.flows[i as usize];
+            if f.list == List::None && f.acted > 0 {
+                out.push((
+                    f.tag,
+                    Pressure {
+                        queued_bytes: 0,
+                        acted: f.acted,
+                    },
+                ));
             }
         }
         out.extend(self.retired.iter().map(|&(tag, acted)| {

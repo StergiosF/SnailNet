@@ -16,6 +16,7 @@ pub mod family;
 pub mod flow;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::clock::{NANOS_PER_MILLI, NANOS_PER_SEC, Nanos};
@@ -61,26 +62,37 @@ pub enum Event {
 struct Apps {
     list: Vec<App>,
     shown: Vec<Arc<App>>,
-    index: HashMap<(String, String), AppId>,
+    /// family → `[(exe, AppId)]`: zero-allocation read lookup before taking a
+    /// write lock (most families only have 1–3 exes).
+    index: HashMap<String, Vec<(String, AppId)>>,
     families: Families,
 }
 
 impl Apps {
-    fn intern(&mut self, app: App) -> AppId {
-        let key = (app.family.clone(), app.exe.clone());
-        if let Some(&id) = self.index.get(&key) {
-            return id;
-        }
-        let id = self.list.len() as AppId;
-        self.shown.push(Arc::new(self.families.apply(app.clone())));
-        self.list.push(app);
-        self.index.insert(key, id);
-        id
+    fn get(&self, family: &str, exe: &str) -> Option<AppId> {
+        self.index
+            .get(family)?
+            .iter()
+            .find(|(e, _)| e == exe)
+            .map(|&(_, id)| id)
     }
 
-    fn set_families(&mut self, families: &Families) {
+    fn intern(&mut self, app: App) -> (AppId, bool) {
+        if let Some(id) = self.get(&app.family, &app.exe) {
+            return (id, false);
+        }
+        let id = self.list.len() as AppId;
+        let family = app.family.clone();
+        let exe = app.exe.clone();
+        self.shown.push(Arc::new(self.families.apply(app.clone())));
+        self.list.push(app);
+        self.index.entry(family).or_default().push((exe, id));
+        (id, true)
+    }
+
+    fn set_families(&mut self, families: &Families) -> bool {
         if *families == self.families {
-            return;
+            return false;
         }
         self.families = families.clone();
         self.shown = self
@@ -88,6 +100,7 @@ impl Apps {
             .iter()
             .map(|a| Arc::new(self.families.apply(a.clone())))
             .collect();
+        true
     }
 }
 
@@ -101,6 +114,10 @@ pub struct Attribution<S> {
     table: RwLock<FlowTable>,
     slow: Mutex<Slow<S>>,
     apps: RwLock<Apps>,
+    /// Bumped whenever a new app is interned or family groupings change.
+    apps_version: AtomicU64,
+    /// Bumped when flow/port ownership entries are removed or replaced.
+    table_epoch: AtomicU64,
     /// Every process resolved so far and its app (PID → key, app), for
     /// refusing a blocked app's connects by PID (PLAN.md §11.3).
     procs: Mutex<HashMap<u32, (ProcessKey, AppId)>>,
@@ -116,6 +133,8 @@ impl<S: ProcessSource> Attribution<S> {
             table: RwLock::new(FlowTable::default()),
             slow: Mutex::new(Slow { resolver, source }),
             apps: RwLock::new(Apps::default()),
+            apps_version: AtomicU64::new(0),
+            table_epoch: AtomicU64::new(0),
             procs: Mutex::new(HashMap::new()),
         }
     }
@@ -127,7 +146,23 @@ impl<S: ProcessSource> Attribution<S> {
             let Slow { resolver, source } = &mut *slow;
             resolver.resolve(pid, source)
         };
-        let app = self.apps.write().unwrap().intern(resolved.app);
+        let app = {
+            let existing = self
+                .apps
+                .read()
+                .unwrap()
+                .get(&resolved.app.family, &resolved.app.exe);
+            match existing {
+                Some(id) => id,
+                None => {
+                    let (id, added) = self.apps.write().unwrap().intern(resolved.app);
+                    if added {
+                        self.apps_version.fetch_add(1, Ordering::Release);
+                    }
+                    id
+                }
+            }
+        };
         if let Some(key) = resolved.process {
             let mut procs = self.procs.lock().unwrap();
             if procs.len() >= MAX_PROCS && !procs.contains_key(&pid) {
@@ -141,10 +176,10 @@ impl<S: ProcessSource> Attribution<S> {
     /// Apply one FLOW/SOCKET event. Resolves the process first, outside the
     /// table lock, so the rx threads are never held up by it.
     pub fn apply(&self, event: Event) {
-        match event {
+        let changed = match event {
             Event::FlowEstablished { key, pid } => {
                 let owner = self.owner_of(pid);
-                self.table.write().unwrap().flow_established(key, owner);
+                self.table.write().unwrap().flow_established(key, owner)
             }
             Event::FlowDeleted { key } => self.table.write().unwrap().flow_deleted(&key),
             Event::Connected { key, pid, endpoint } => {
@@ -152,7 +187,7 @@ impl<S: ProcessSource> Attribution<S> {
                 self.table
                     .write()
                     .unwrap()
-                    .socket_connected(key, owner, endpoint);
+                    .socket_connected(key, owner, endpoint)
             }
             Event::Bound { key, pid, endpoint } => {
                 let owner = self.owner_of(pid);
@@ -160,11 +195,14 @@ impl<S: ProcessSource> Attribution<S> {
                 self.table
                     .write()
                     .unwrap()
-                    .socket_bound(port, owner, endpoint);
+                    .socket_bound(port, owner, endpoint)
             }
             Event::Closed { key, endpoint } => {
-                self.table.write().unwrap().socket_closed(&key, endpoint);
+                self.table.write().unwrap().socket_closed(&key, endpoint)
             }
+        };
+        if changed {
+            self.table_epoch.fetch_add(1, Ordering::Release);
         }
     }
 
@@ -181,6 +219,7 @@ impl<S: ProcessSource> Attribution<S> {
             })
             .collect();
         self.table.write().unwrap().set_ports(ports);
+        self.table_epoch.fetch_add(1, Ordering::Release);
     }
 
     pub fn lookup(&self, key: &FlowKey) -> Option<(Owner, Source)> {
@@ -195,7 +234,19 @@ impl<S: ProcessSource> Attribution<S> {
     /// Group apps as the user wants from now on (PLAN.md §11.6). Ids stay;
     /// callers caching per-id results (classes, blocks) must drop them.
     pub fn set_families(&self, families: &Families) {
-        self.apps.write().unwrap().set_families(families);
+        if self.apps.write().unwrap().set_families(families) {
+            self.apps_version.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Monotonic version of the seen-apps list and user family groupings.
+    pub fn apps_version(&self) -> u64 {
+        self.apps_version.load(Ordering::Acquire)
+    }
+
+    /// Monotonic epoch bumped whenever flow/port table entries are removed or replaced.
+    pub fn table_epoch(&self) -> u64 {
+        self.table_epoch.load(Ordering::Acquire)
     }
 
     /// (flows, socket endpoints, snapshot ports, skipped because full).
@@ -463,5 +514,41 @@ mod tests {
         assert_eq!(p.len(), PENDING_CAP);
         p.miss(key(1, 4), PENDING_FORGET + 1);
         assert_eq!(p.len(), 1);
+    }
+
+    #[test]
+    fn table_epoch_bumps_when_owner_changes_but_not_on_fresh_flow() {
+        let a = attribution();
+        let e0 = a.table_epoch();
+        // Brand-new flow: nothing cached could be invalidated.
+        a.apply(Event::FlowEstablished {
+            key: key(8000, 443),
+            pid: 10,
+        });
+        assert_eq!(a.table_epoch(), e0);
+
+        // Stale port snapshot claims port 8001 belongs to Brave (pid 20).
+        a.set_ports(&HashMap::from([((6, 8001), 20)]));
+        let e1 = a.table_epoch();
+        assert!(e1 > e0);
+
+        // FlowEstablished overrides port 8001 with Steam (pid 10) -> must bump epoch
+        // so rx-thread flow caches drop the stale Brave attribution immediately.
+        a.apply(Event::FlowEstablished {
+            key: key(8001, 443),
+            pid: 10,
+        });
+        let e2 = a.table_epoch();
+        assert!(e2 > e1, "owner override must advance table_epoch");
+
+        // Socket Bound overriding a port with a different app also bumps epoch.
+        a.set_ports(&HashMap::from([((6, 8002), 20)]));
+        let e3 = a.table_epoch();
+        a.apply(Event::Bound {
+            key: key(8002, 0),
+            pid: 10,
+            endpoint: 55,
+        });
+        assert!(a.table_epoch() > e3);
     }
 }

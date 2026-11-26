@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use snailnet_ipc::{
-    CAP_NEW_APPS, ClientMsg, ErrorCode, Event, FrameError, GameWhy, MIN_PROTOCOL, PIPE_SDDL,
-    PROTOCOL, Reply, Request, ServerMsg, decode, encode, frame_len, parse_len,
+    CAP_NEW_APPS, CAP_NO_EVENTS, ClientMsg, ErrorCode, Event, FrameError, GameWhy, MIN_PROTOCOL,
+    PIPE_SDDL, PROTOCOL, Reply, Request, ServerMsg, decode, encode, frame_len, parse_len,
 };
 use snailnet_win::fs::SecurityAttributes;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -157,22 +157,31 @@ async fn accept_loop(
                     debug!("IPC: a client failed to connect: {e}");
                     continue;
                 }
-                match verify_client(&client) {
-                    Ok(exe) => debug!("IPC: client {}", exe.display()),
-                    Err(why) => {
-                        warn!("IPC: refused a client: {why}");
-                        continue;
-                    }
-                }
                 if clients.load(Ordering::Relaxed) >= MAX_CLIENTS {
                     warn!("IPC: more than {MAX_CLIENTS} clients; turning one away");
                     continue;
                 }
+                let pid = snailnet_win::pipe::peer_pid(
+                    client.as_raw_handle(),
+                    snailnet_win::pipe::End::Client,
+                );
                 clients.fetch_add(1, Ordering::Relaxed);
                 let (hub, shutdown, clients) = (hub.clone(), shutdown.clone(), clients.clone());
                 tokio::spawn(async move {
-                    if let Err(e) = serve(client, &hub, shutdown).await {
-                        debug!("IPC: client gone: {e}");
+                    let verified = match pid {
+                        Ok(pid) => tokio::task::spawn_blocking(move || verify_client(pid))
+                            .await
+                            .unwrap_or_else(|e| Err(format!("verify task failed: {e}"))),
+                        Err(e) => Err(format!("can't tell which process it is: {e}")),
+                    };
+                    match verified {
+                        Ok(exe) => {
+                            debug!("IPC: client {}", exe.display());
+                            if let Err(e) = serve(client, hub, shutdown).await {
+                                debug!("IPC: client gone: {e}");
+                            }
+                        }
+                        Err(why) => warn!("IPC: refused a client: {why}"),
                     }
                     clients.fetch_sub(1, Ordering::Relaxed);
                 });
@@ -184,11 +193,8 @@ async fn accept_loop(
 }
 
 /// Only programs installed next to the service may talk to it.
-fn verify_client(pipe: &NamedPipeServer) -> Result<PathBuf, String> {
-    use snailnet_win::pipe::{End, in_my_folder, peer_pid};
-    let pid = peer_pid(pipe.as_raw_handle(), End::Client)
-        .map_err(|e| format!("can't tell which process it is: {e}"))?;
-    in_my_folder(pid)
+fn verify_client(pid: u32) -> Result<PathBuf, String> {
+    snailnet_win::pipe::in_my_folder(pid)
 }
 
 async fn read_msg<R: AsyncRead + Unpin>(r: &mut R) -> Result<ClientMsg, FrameError> {
@@ -230,11 +236,13 @@ struct Session {
     ticker: Option<Interval>,
     /// Said in Hello that it understands [`Event::NewApp`].
     new_apps: bool,
+    /// Receives unsolicited broadcast [`Event`] frames (opted out via [`CAP_NO_EVENTS`]).
+    events: bool,
 }
 
 async fn serve(
     pipe: NamedPipeServer,
-    hub: &Hub,
+    hub: Arc<Hub>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), FrameError> {
     let (mut rd, mut wr) = tokio::io::split(pipe);
@@ -254,6 +262,7 @@ async fn serve(
         hello: false,
         ticker: None,
         new_apps: false,
+        events: true,
     };
     let result = loop {
         tokio::select! {
@@ -264,7 +273,7 @@ async fn serve(
                     None => break Ok(()),
                 };
                 let stop = s.hello && matches!(msg.req, Request::Stop);
-                let reply = handle(hub, &mut s, msg.req);
+                let reply = handle(&hub, &mut s, msg.req).await;
                 let bye = stop || matches!(reply, Reply::Error { code: ErrorCode::Handshake, .. });
                 if let Err(e) = write_msg(&mut wr, &ServerMsg::Reply { id: msg.id, reply }).await {
                     if stop {
@@ -286,7 +295,7 @@ async fn serve(
             }
             ev = events.recv() => match ev {
                 Ok(Event::NewApp(_)) if !s.new_apps => {}
-                Ok(ev) if s.hello => {
+                Ok(ev) if s.hello && s.events => {
                     if let Err(e) = write_msg(&mut wr, &ServerMsg::Event(ev)).await {
                         break Err(e);
                     }
@@ -315,7 +324,7 @@ fn ack(r: Result<u64, (ErrorCode, String)>) -> Reply {
     }
 }
 
-fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
+async fn handle(hub: &Arc<Hub>, s: &mut Session, req: Request) -> Reply {
     if !s.hello && !matches!(req, Request::Hello { .. }) {
         return err(ErrorCode::Handshake, "say Hello first");
     }
@@ -337,6 +346,7 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             debug!("IPC: hello from client {client_version}");
             s.hello = true;
             s.new_apps = ui_capabilities.iter().any(|c| c == CAP_NEW_APPS);
+            s.events = !ui_capabilities.iter().any(|c| c == CAP_NO_EVENTS);
             Reply::Welcome {
                 service_version: env!("CARGO_PKG_VERSION").into(),
                 protocol: PROTOCOL,
@@ -355,6 +365,25 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             s.ticker = None;
             Reply::Ack { rev: hub.rev() }
         }
+        Request::RunSpeedTest => ack(hub.request_speedtest()),
+        Request::Stop => {
+            info!("IPC: stop requested by client");
+            Reply::Ack { rev: hub.rev() }
+        }
+        // Requests that perform disk fsync or Win32 process/Authenticode I/O
+        // run on Tokio's blocking pool so the single-threaded IPC loop stays
+        // responsive for all other clients and stats ticks.
+        blocking_req => {
+            let hub = hub.clone();
+            tokio::task::spawn_blocking(move || handle_blocking(&hub, blocking_req))
+                .await
+                .unwrap_or_else(|e| err(ErrorCode::Internal, format!("worker failed: {e}")))
+        }
+    }
+}
+
+fn handle_blocking(hub: &Hub, req: Request) -> Reply {
+    match req {
         Request::SetRules {
             profile_id,
             rules,
@@ -380,7 +409,6 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             blocked,
             rev,
         } => ack(hub.set_blocked(&family_id, blocked, rev)),
-        Request::RunSpeedTest => ack(hub.request_speedtest()),
         Request::SetSettings { settings, rev } => ack(hub.set_settings(settings, rev)),
         Request::SetFamilies { families, rev } => ack(hub.set_families(families, rev)),
         Request::FocusChanged {
@@ -391,10 +419,12 @@ fn handle(hub: &Hub, s: &mut Session, req: Request) -> Reply {
             ack(Ok(hub.rev()))
         }
         Request::AnswerPrompt { prompt_id, action } => ack(hub.answer_prompt(prompt_id, &action)),
-        Request::Stop => {
-            info!("IPC: stop requested by client");
-            Reply::Ack { rev: hub.rev() }
-        }
+        Request::Hello { .. }
+        | Request::GetSnapshot
+        | Request::Subscribe { .. }
+        | Request::Unsubscribe
+        | Request::RunSpeedTest
+        | Request::Stop => unreachable!("handled inline above"),
     }
 }
 
@@ -779,6 +809,36 @@ mod tests {
         let mut c = Client::connect(&pipe, "t").unwrap();
         assert_eq!(c.call(Request::Stop).unwrap(), Reply::Ack { rev: 1 });
         assert!(hub.signal().is_requested());
+        server.stop();
+    }
+
+    #[test]
+    fn no_events_client_skips_unsolicited_broadcasts() {
+        let (_t, _hub, server, pipe) = setup("no-events");
+        let mut quiet = Client::connect_with(&pipe, "quiet", &[CAP_NO_EVENTS]).unwrap();
+        let mut noisy = Client::connect(&pipe, "noisy").unwrap();
+
+        // Mutate config on `noisy` to trigger ConfigChanged broadcast.
+        assert_eq!(
+            noisy
+                .call(Request::SwitchProfile {
+                    id: "gaming".into(),
+                    rev: 1,
+                })
+                .unwrap(),
+            Reply::Ack { rev: 2 }
+        );
+        // `noisy` receives the broadcast event.
+        assert!(matches!(
+            noisy.recv().unwrap(),
+            ServerMsg::Event(Event::ConfigChanged { rev: 2 })
+        ));
+        // `quiet` calls GetSnapshot and must not accumulate any event in its backlog.
+        assert!(matches!(
+            quiet.call(Request::GetSnapshot).unwrap(),
+            Reply::Snapshot(_)
+        ));
+        assert_eq!(quiet.backlog_len(), 0);
         server.stop();
     }
 }

@@ -15,7 +15,7 @@
   import { t } from "../i18n";
   import type { Ledger } from "../ledger";
   import { isOwnMode, modeName } from "../modes";
-  import { addRule, sameTarget, setEnabled } from "../rules";
+  import { giveShare } from "../rules";
   import { service } from "../service.svelte";
   import type { Target } from "../types";
   import { ui } from "../ui.svelte";
@@ -46,9 +46,7 @@
   );
 
   function give(target: Target) {
-    const rules = ui.rules;
-    const i = rules.findIndex((r) => sameTarget(r.target, target));
-    ui.edit(i >= 0 ? setEnabled(rules, i, true) : addRule(rules, target));
+    ui.edit(giveShare(ui.rules, target));
     ui.open = `${target.kind}:${target.id.toLowerCase()}`;
   }
 

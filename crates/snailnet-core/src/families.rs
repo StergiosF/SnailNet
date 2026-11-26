@@ -133,6 +133,7 @@ mod tests {
             family: family.into(),
             name: name.into(),
             exe: exe.into(),
+            path: None,
             how: How::Pack,
         }
     }

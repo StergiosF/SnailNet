@@ -399,6 +399,20 @@ impl Target {
     /// Does this target cover `app`? (Site targets never do: they match
     /// flows, see [`Plan::site_class`].)
     pub fn matches(&self, app: &App) -> bool {
+        if self.id.is_ascii() {
+            return match self.kind {
+                TargetKind::Family => app.family.eq_ignore_ascii_case(&self.id),
+                TargetKind::Exe => {
+                    !app.exe.is_empty()
+                        && (app.exe.eq_ignore_ascii_case(&self.id)
+                            || app
+                                .exe
+                                .strip_suffix(".exe")
+                                .is_some_and(|s| s.eq_ignore_ascii_case(&self.id)))
+                }
+                TargetKind::Site => false,
+            };
+        }
         let id = self.id.to_lowercase();
         match self.kind {
             TargetKind::Family => app.family == id,
@@ -736,6 +750,7 @@ impl Config {
                 shape_lan: !self.settings.lan_exempt,
                 custom_sites: self.sites.clone(),
                 focus: Vec::new(),
+                focus_families: Vec::new(),
                 calls_first: false,
                 never_first: Vec::new(),
             };
@@ -792,6 +807,7 @@ impl Config {
             shape_lan: !self.settings.lan_exempt,
             custom_sites: self.sites.clone(),
             focus: Vec::new(),
+            focus_families: Vec::new(),
             calls_first: self.first().calls,
             never_first: self
                 .settings
@@ -868,6 +884,9 @@ pub struct Plan {
     /// the app in front and running games (PLAN.md §11.5). Not from the
     /// config; the service fills it in.
     pub focus: Vec<u32>,
+    /// Pre-resolved app family ids corresponding to `focus`, so the packet
+    /// RX thread never resolves PIDs or touches disk/Win32 APIs.
+    pub focus_families: Vec<String>,
     /// Live calls go first (PLAN.md §11.9), from `Settings::calls_first`.
     pub calls_first: bool,
     /// Lowercase family ids that never go first, calls included.
@@ -980,6 +999,7 @@ name = "Gaming"
             family: family.into(),
             name: String::new(),
             exe: exe.into(),
+            path: None,
             how: How::Pack,
         }
     }

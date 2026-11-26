@@ -14,12 +14,11 @@
   import { wasShare } from "../draft";
   import { statusText, type Member, type Slice } from "../ledger";
   import {
-    addRule,
     canStep,
     clampLimit,
+    giveShare,
     parseLimit,
     removeRule,
-    sameTarget,
     setCeiling,
     setEnabled,
     setPriority,
@@ -71,8 +70,7 @@
   const members = $derived(all ? slice.members : slice.members.slice(0, MEMBERS_SHOWN));
 
   function give(m: Member) {
-    const i = rules.findIndex((r) => sameTarget(r.target, m.target));
-    ui.edit(i >= 0 ? setEnabled(rules, i, true) : addRule(rules, m.target));
+    ui.edit(giveShare(rules, m.target));
     ui.open = `${m.target.kind}:${m.target.id.toLowerCase()}`;
   }
 
@@ -85,10 +83,11 @@
   const showLimits = $derived(limitsAsked || limits.down !== null || limits.up !== null);
   let units = $state<Record<"down" | "up", Limit["unit"]>>({ down: "mbps", up: "mbps" });
 
-  function setLimit(dir: "down" | "up", text: string, unit: Limit["unit"]) {
+  function setLimit(dir: "down" | "up", text: string, unit: Limit["unit"]): Limit | null {
     const v = Number(text);
     const limit = text.trim() !== "" && Number.isFinite(v) && v > 0 ? clampLimit({ unit, value: v }) : null;
     ui.edit(setCeiling(rules, slice.rule, dir, limit));
+    return limit;
   }
 
   const priorities: { value: Priority; label: string }[] = [
@@ -231,7 +230,10 @@
                     value={lim?.value ?? ""}
                     disabled={!rule.enabled}
                     aria-label={t("editor.ceiling.value", { dir: dirLabel })}
-                    onchange={(e) => setLimit(dir, e.currentTarget.value, unit)}
+                    onchange={(e) => {
+                      const limit = setLimit(dir, e.currentTarget.value, unit);
+                      e.currentTarget.value = limit ? String(limit.value) : "";
+                    }}
                   />
                   <Segmented
                     name="{uid}-unit-{dir}"
