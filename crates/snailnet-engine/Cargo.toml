@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 crossbeam-channel = "0.5.17"
 libloading = "0.9.1"
-snailnet-core = { version = "0.0.11", path = "../snailnet-core" }
+snailnet-core = { version = "0.0.12", path = "../snailnet-core" }
 thiserror = "2.0.21"
 
 [lints]

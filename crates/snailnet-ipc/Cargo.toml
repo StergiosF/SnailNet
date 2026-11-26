@@ -9,8 +9,8 @@ publish.workspace = true
 [dependencies]
 rmp-serde = "1.3.1"
 serde = { version = "1.0.229", features = ["derive"] }
-snailnet-core = { version = "0.0.11", path = "../snailnet-core" }
-snailnet-win = { version = "0.0.11", path = "../snailnet-win" }
+snailnet-core = { version = "0.0.12", path = "../snailnet-core" }
+snailnet-win = { version = "0.0.12", path = "../snailnet-win" }
 thiserror = "2.0.21"
 
 [lints]
